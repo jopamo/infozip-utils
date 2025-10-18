@@ -56,17 +56,16 @@
 
   ---------------------------------------------------------------------------*/
 
-
-#define __FILEIO_C      /* identifies this source module */
+#define __FILEIO_C /* identifies this source module */
 #define UNZIP_INTERNAL
 #include "unzip.h"
 #ifdef WINDLL
-#  ifdef POCKET_UNZIP
-#    include "wince/intrface.h"
-#  else
-#    include "windll/windll.h"
-#  endif
-#  include <setjmp.h>
+#ifdef POCKET_UNZIP
+#include "wince/intrface.h"
+#else
+#include "windll/windll.h"
+#endif
+#include <setjmp.h>
 #endif
 #include "crc32.h"
 #include "crypt.h"
@@ -74,15 +73,14 @@
 
 /* setup of codepage conversion for decryption passwords */
 #if CRYPT
-#  if (defined(CRYP_USES_ISO2OEM) && !defined(IZ_ISO2OEM_ARRAY))
-#    define IZ_ISO2OEM_ARRAY            /* pull in iso2oem[] table */
-#  endif
-#  if (defined(CRYP_USES_OEM2ISO) && !defined(IZ_OEM2ISO_ARRAY))
-#    define IZ_OEM2ISO_ARRAY            /* pull in oem2iso[] table */
-#  endif
+#if (defined(CRYP_USES_ISO2OEM) && !defined(IZ_ISO2OEM_ARRAY))
+#define IZ_ISO2OEM_ARRAY /* pull in iso2oem[] table */
 #endif
-#include "ebcdic.h"   /* definition/initialization of ebcdic[] */
-
+#if (defined(CRYP_USES_OEM2ISO) && !defined(IZ_OEM2ISO_ARRAY))
+#define IZ_OEM2ISO_ARRAY /* pull in oem2iso[] table */
+#endif
+#endif
+#include "ebcdic.h" /* definition/initialization of ebcdic[] */
 
 /*
    Note: Under Windows, the maximum size of the buffer that can be used
@@ -92,16 +90,13 @@
    buffers are that big).
 */
 #ifdef WINDLL
-#  define WriteError(buf,len,strm) \
-   (win_fprintf(pG, strm, (extent)len, (char far *)buf) != (int)(len))
+#define WriteError(buf, len, strm) (win_fprintf(pG, strm, (extent)len, (char far*)buf) != (int)(len))
 #else /* !WINDLL */
-#  ifdef USE_FWRITE
-#    define WriteError(buf,len,strm) \
-     ((extent)fwrite((char *)(buf),1,(extent)(len),strm) != (extent)(len))
-#  else
-#    define WriteError(buf,len,strm) \
-     ((extent)write(fileno(strm),(char *)(buf),(extent)(len)) != (extent)(len))
-#  endif
+#ifdef USE_FWRITE
+#define WriteError(buf, len, strm) ((extent)fwrite((char*)(buf), 1, (extent)(len), strm) != (extent)(len))
+#else
+#define WriteError(buf, len, strm) ((extent)write(fileno(strm), (char*)(buf), (extent)(len)) != (extent)(len))
+#endif
 #endif /* ?WINDLL */
 
 /*
@@ -125,100 +120,80 @@
    out a record (only) when it sees a newline.
 */
 #ifdef VMS
-#  define WriteTxtErr(buf,len,strm) \
-   ((extent)fprintf(strm, "%.*s", len, buf) != (extent)(len))
+#define WriteTxtErr(buf, len, strm) ((extent)fprintf(strm, "%.*s", len, buf) != (extent)(len))
 #else
-#  define WriteTxtErr(buf,len,strm)  WriteError(buf,len,strm)
+#define WriteTxtErr(buf, len, strm) WriteError(buf, len, strm)
 #endif
 
 #if (defined(USE_DEFLATE64) && defined(__16BIT__))
-static int partflush OF((__GPRO__ uch *rawbuf, ulg size, int unshrink));
+static int partflush OF((__GPRO__ uch * rawbuf, ulg size, int unshrink));
 #endif
 #ifdef VMS_TEXT_CONV
-static int is_vms_varlen_txt OF((__GPRO__ uch *ef_buf, unsigned ef_len));
+static int is_vms_varlen_txt OF((__GPRO__ uch * ef_buf, unsigned ef_len));
 #endif
 static int disk_error OF((__GPRO));
-
 
 /****************************/
 /* Strings used in fileio.c */
 /****************************/
 
-static ZCONST char Far CannotOpenZipfile[] =
-  "error:  cannot open zipfile [ %s ]\n        %s\n";
+static ZCONST char Far CannotOpenZipfile[] = "error:  cannot open zipfile [ %s ]\n        %s\n";
 
 #if (!defined(VMS) && !defined(AOS_VS) && !defined(CMS_MVS) && !defined(MACOS))
 #if (!defined(TANDEM))
 #if (defined(ATH_BEO_THS_UNX) || defined(DOS_FLX_NLM_OS2_W32))
-   static ZCONST char Far CannotDeleteOldFile[] =
-     "error:  cannot delete old %s\n        %s\n";
+static ZCONST char Far CannotDeleteOldFile[] = "error:  cannot delete old %s\n        %s\n";
 #ifdef UNIXBACKUP
-   static ZCONST char Far CannotRenameOldFile[] =
-     "error:  cannot rename old %s\n        %s\n";
-   static ZCONST char Far BackupSuffix[] = "~";
+static ZCONST char Far CannotRenameOldFile[] = "error:  cannot rename old %s\n        %s\n";
+static ZCONST char Far BackupSuffix[] = "~";
 #endif
 #endif /* ATH_BEO_THS_UNX || DOS_FLX_NLM_OS2_W32 */
 #ifdef NOVELL_BUG_FAILSAFE
-   static ZCONST char Far NovellBug[] =
-     "error:  %s: stat() says does not exist, but fopen() found anyway\n";
+static ZCONST char Far NovellBug[] = "error:  %s: stat() says does not exist, but fopen() found anyway\n";
 #endif
-   static ZCONST char Far CannotCreateFile[] =
-     "error:  cannot create %s\n        %s\n";
+static ZCONST char Far CannotCreateFile[] = "error:  cannot create %s\n        %s\n";
 #endif /* !TANDEM */
 #endif /* !VMS && !AOS_VS && !CMS_MVS && !MACOS */
 
 static ZCONST char Far ReadError[] = "error:  zipfile read error\n";
-static ZCONST char Far FilenameTooLongTrunc[] =
-  "warning:  filename too long--truncating.\n";
+static ZCONST char Far FilenameTooLongTrunc[] = "warning:  filename too long--truncating.\n";
 #ifdef UNICODE_SUPPORT
-   static ZCONST char Far UFilenameTooLongTrunc[] =
-     "warning:  Converted unicode filename too long--truncating.\n";
+static ZCONST char Far UFilenameTooLongTrunc[] = "warning:  Converted unicode filename too long--truncating.\n";
 #endif
-static ZCONST char Far ExtraFieldTooLong[] =
-  "warning:  extra field too long (%d).  Ignoring...\n";
+static ZCONST char Far ExtraFieldTooLong[] = "warning:  extra field too long (%d).  Ignoring...\n";
 
 #ifdef WINDLL
-   static ZCONST char Far DiskFullQuery[] =
-     "%s:  write error (disk full?).\n";
+static ZCONST char Far DiskFullQuery[] = "%s:  write error (disk full?).\n";
 #else
-   static ZCONST char Far DiskFullQuery[] =
-     "%s:  write error (disk full?).  Continue? (y/n/^C) ";
-   static ZCONST char Far ZipfileCorrupt[] =
-     "error:  zipfile probably corrupt (%s)\n";
-#  ifdef SYMLINKS
-     static ZCONST char Far FileIsSymLink[] =
-       "%s exists and is a symbolic link%s.\n";
-#  endif
-#  ifdef MORE
-     static ZCONST char Far MorePrompt[] = "--More--(%lu)";
-#  endif
-   static ZCONST char Far QuitPrompt[] =
-     "--- Press `Q' to quit, or any other key to continue ---";
-   static ZCONST char Far HidePrompt[] = /* "\r                       \r"; */
-     "\r                                                         \r";
-#  if CRYPT
-#    ifdef MACOS
-       /* SPC: are names on MacOS REALLY so much longer than elsewhere ??? */
-       static ZCONST char Far PasswPrompt[] = "[%s]\n %s password: ";
-#    else
-       static ZCONST char Far PasswPrompt[] = "[%s] %s password: ";
-#    endif
-     static ZCONST char Far PasswPrompt2[] = "Enter password: ";
-     static ZCONST char Far PasswRetry[] = "password incorrect--reenter: ";
-#  endif /* CRYPT */
+static ZCONST char Far DiskFullQuery[] = "%s:  write error (disk full?).  Continue? (y/n/^C) ";
+static ZCONST char Far ZipfileCorrupt[] = "error:  zipfile probably corrupt (%s)\n";
+#ifdef SYMLINKS
+static ZCONST char Far FileIsSymLink[] = "%s exists and is a symbolic link%s.\n";
+#endif
+#ifdef MORE
+static ZCONST char Far MorePrompt[] = "--More--(%lu)";
+#endif
+static ZCONST char Far QuitPrompt[] = "--- Press `Q' to quit, or any other key to continue ---";
+static ZCONST char Far HidePrompt[] = /* "\r                       \r"; */
+    "\r                                                         \r";
+#if CRYPT
+#ifdef MACOS
+/* SPC: are names on MacOS REALLY so much longer than elsewhere ??? */
+static ZCONST char Far PasswPrompt[] = "[%s]\n %s password: ";
+#else
+static ZCONST char Far PasswPrompt[] = "[%s] %s password: ";
+#endif
+static ZCONST char Far PasswPrompt2[] = "Enter password: ";
+static ZCONST char Far PasswRetry[] = "password incorrect--reenter: ";
+#endif /* CRYPT */
 #endif /* !WINDLL */
-
-
-
-
 
 /******************************/
 /* Function open_input_file() */
 /******************************/
 
-int open_input_file(__G)    /* return 1 if open failed */
-    __GDEF
-{
+int open_input_file(__G) /* return 1 if open failed */
+    __GDEF {
     /*
      *  open the zipfile for reading and in BINARY mode to prevent cr/lf
      *  translation, which would corrupt the bitstreams
@@ -235,7 +210,7 @@ int open_input_file(__G)    /* return 1 if open failed */
 #else /* !CMS_MVS */
 #ifdef USE_STRM_INPUT
     G.zipfd = fopen(G.zipfn, FOPR);
-#else /* !USE_STRM_INPUT */
+#else  /* !USE_STRM_INPUT */
     G.zipfd = open(G.zipfn, O_RDONLY | O_BINARY);
 #endif /* ?USE_STRM_INPUT */
 #endif /* ?CMS_MVS */
@@ -245,20 +220,16 @@ int open_input_file(__G)    /* return 1 if open failed */
 #ifdef USE_STRM_INPUT
     if (G.zipfd == NULL)
 #else
-    /* if (G.zipfd < 0) */  /* no good for Windows CE port */
+    /* if (G.zipfd < 0) */ /* no good for Windows CE port */
     if (G.zipfd == -1)
 #endif
     {
-        Info(slide, 0x401, ((char *)slide, LoadFarString(CannotOpenZipfile),
-          G.zipfn, strerror(errno)));
+        Info(slide, 0x401, ((char*)slide, LoadFarString(CannotOpenZipfile), G.zipfn, strerror(errno)));
         return 1;
     }
     return 0;
 
 } /* end function open_input_file() */
-
-
-
 
 #if (!defined(VMS) && !defined(AOS_VS) && !defined(CMS_MVS) && !defined(MACOS))
 #if (!defined(TANDEM))
@@ -267,9 +238,8 @@ int open_input_file(__G)    /* return 1 if open failed */
 /* Function open_outfile() */
 /***************************/
 
-int open_outfile(__G)           /* return 1 if fail */
-    __GDEF
-{
+int open_outfile(__G) /* return 1 if fail */
+    __GDEF {
 #ifdef DLL
     if (G.redirect_data)
         return (redirect_outfile(__G) == FALSE);
@@ -282,48 +252,48 @@ int open_outfile(__G)           /* return 1 if fail */
     /* Borland 5.0's stat() barfs if the filename has no extension and the
      * file doesn't exist. */
     if (access(G.filename, 0) == -1) {
-        FILE *tmp = fopen(G.filename, "wb+");
+        FILE* tmp = fopen(G.filename, "wb+");
 
         /* file doesn't exist, so create a dummy file to keep stat() from
          * failing (will be over-written anyway) */
-        fputc('0', tmp);  /* just to have something in the file */
+        fputc('0', tmp); /* just to have something in the file */
         fclose(tmp);
     }
 #endif /* BORLAND_STAT_BUG */
 #ifdef SYMLINKS
-    if (SSTAT(G.filename, &G.statbuf) == 0 ||
-        lstat(G.filename, &G.statbuf) == 0)
+    if (SSTAT(G.filename, &G.statbuf) == 0 || lstat(G.filename, &G.statbuf) == 0)
 #else
     if (SSTAT(G.filename, &G.statbuf) == 0)
 #endif /* ?SYMLINKS */
     {
-        Trace((stderr, "open_outfile:  stat(%s) returns 0:  file exists\n",
-          FnFilter1(G.filename)));
+        Trace((stderr, "open_outfile:  stat(%s) returns 0:  file exists\n", FnFilter1(G.filename)));
 #ifdef UNIXBACKUP
-        if (uO.B_flag) {    /* do backup */
-            char *tname;
+        if (uO.B_flag) { /* do backup */
+            char* tname;
             z_stat tmpstat;
             int blen, flen, tlen;
 
             blen = strlen(BackupSuffix);
             flen = strlen(G.filename);
-            tlen = flen + blen + 6;    /* includes space for 5 digits */
-            if (tlen >= FILNAMSIZ) {   /* in case name is too long, truncate */
-                tname = (char *)malloc(FILNAMSIZ);
+            tlen = flen + blen + 6;  /* includes space for 5 digits */
+            if (tlen >= FILNAMSIZ) { /* in case name is too long, truncate */
+                tname = (char*)malloc(FILNAMSIZ);
                 if (tname == NULL)
-                    return 1;                 /* in case we run out of space */
+                    return 1; /* in case we run out of space */
                 tlen = FILNAMSIZ - 1 - blen;
-                strcpy(tname, G.filename);    /* make backup name */
+                strcpy(tname, G.filename); /* make backup name */
                 tname[tlen] = '\0';
-                if (flen > tlen) flen = tlen;
+                if (flen > tlen)
+                    flen = tlen;
                 tlen = FILNAMSIZ;
-            } else {
-                tname = (char *)malloc(tlen);
-                if (tname == NULL)
-                    return 1;                 /* in case we run out of space */
-                strcpy(tname, G.filename);    /* make backup name */
             }
-            strcpy(tname+flen, BackupSuffix);
+            else {
+                tname = (char*)malloc(tlen);
+                if (tname == NULL)
+                    return 1;              /* in case we run out of space */
+                strcpy(tname, G.filename); /* make backup name */
+            }
+            strcpy(tname + flen, BackupSuffix);
 
             if (IS_OVERWRT_ALL) {
                 /* If there is a previous backup file, delete it,
@@ -331,50 +301,56 @@ int open_outfile(__G)           /* return 1 if fail */
                  */
                 if (SSTAT(tname, &tmpstat) == 0)
                     unlink(tname);
-            } else {
+            }
+            else {
                 /* Check if backupname exists, and, if it's true, try
                  * appending numbers of up to 5 digits (or the maximum
                  * "unsigned int" number on 16-bit systems) to the
                  * BackupSuffix, until an unused name is found.
                  */
                 unsigned maxtail, i;
-                char *numtail = tname + flen + blen;
+                char* numtail = tname + flen + blen;
 
                 /* take account of the "unsigned" limit on 16-bit systems: */
-                maxtail = ( ((~0) >= 99999L) ? 99999 : (~0) );
+                maxtail = (((~0) >= 99999L) ? 99999 : (~0));
                 switch (tlen - flen - blen - 1) {
-                    case 4: maxtail = 9999; break;
-                    case 3: maxtail = 999; break;
-                    case 2: maxtail = 99; break;
-                    case 1: maxtail = 9; break;
-                    case 0: maxtail = 0; break;
+                    case 4:
+                        maxtail = 9999;
+                        break;
+                    case 3:
+                        maxtail = 999;
+                        break;
+                    case 2:
+                        maxtail = 99;
+                        break;
+                    case 1:
+                        maxtail = 9;
+                        break;
+                    case 0:
+                        maxtail = 0;
+                        break;
                 }
                 /* while filename exists */
                 for (i = 0; (i < maxtail) && (SSTAT(tname, &tmpstat) == 0);)
-                    sprintf(numtail,"%u", ++i);
+                    sprintf(numtail, "%u", ++i);
             }
 
-            if (rename(G.filename, tname) != 0) {   /* move file */
-                Info(slide, 0x401, ((char *)slide,
-                  LoadFarString(CannotRenameOldFile),
-                  FnFilter1(G.filename), strerror(errno)));
+            if (rename(G.filename, tname) != 0) { /* move file */
+                Info(slide, 0x401, ((char*)slide, LoadFarString(CannotRenameOldFile), FnFilter1(G.filename), strerror(errno)));
                 free(tname);
                 return 1;
             }
-            Trace((stderr, "open_outfile:  %s now renamed into %s\n",
-              FnFilter1(G.filename), FnFilter2(tname)));
+            Trace((stderr, "open_outfile:  %s now renamed into %s\n", FnFilter1(G.filename), FnFilter2(tname)));
             free(tname);
-        } else
+        }
+        else
 #endif /* UNIXBACKUP */
         {
 #ifdef DOS_FLX_OS2_W32
             if (!(G.statbuf.st_mode & S_IWRITE)) {
-                Trace((stderr,
-                  "open_outfile:  existing file %s is read-only\n",
-                  FnFilter1(G.filename)));
+                Trace((stderr, "open_outfile:  existing file %s is read-only\n", FnFilter1(G.filename)));
                 chmod(G.filename, S_IREAD | S_IWRITE);
-                Trace((stderr, "open_outfile:  %s now writable\n",
-                  FnFilter1(G.filename)));
+                Trace((stderr, "open_outfile:  %s now writable\n", FnFilter1(G.filename)));
             }
 #endif /* DOS_FLX_OS2_W32 */
 #ifdef NLM
@@ -382,34 +358,29 @@ int open_outfile(__G)           /* return 1 if fail */
             chmod(G.filename, 0);
 #endif /* NLM */
             if (unlink(G.filename) != 0) {
-                Info(slide, 0x401, ((char *)slide,
-                  LoadFarString(CannotDeleteOldFile),
-                  FnFilter1(G.filename), strerror(errno)));
+                Info(slide, 0x401, ((char*)slide, LoadFarString(CannotDeleteOldFile), FnFilter1(G.filename), strerror(errno)));
                 return 1;
             }
-            Trace((stderr, "open_outfile:  %s now deleted\n",
-              FnFilter1(G.filename)));
+            Trace((stderr, "open_outfile:  %s now deleted\n", FnFilter1(G.filename)));
         }
     }
 #endif /* DOS_FLX_NLM_OS2_W32 || ATH_BEO_THS_UNX */
 #ifdef RISCOS
-    if (SWI_OS_File_7(G.filename,0xDEADDEAD,0xDEADDEAD,G.lrec.ucsize)!=NULL) {
-        Info(slide, 1, ((char *)slide, LoadFarString(CannotCreateFile),
-          FnFilter1(G.filename), strerror(errno)));
+    if (SWI_OS_File_7(G.filename, 0xDEADDEAD, 0xDEADDEAD, G.lrec.ucsize) != NULL) {
+        Info(slide, 1, ((char*)slide, LoadFarString(CannotCreateFile), FnFilter1(G.filename), strerror(errno)));
         return 1;
     }
 #endif /* RISCOS */
 #ifdef TOPS20
-    char *tfilnam;
+    char* tfilnam;
 
-    if ((tfilnam = (char *)malloc(2*strlen(G.filename)+1)) == (char *)NULL)
+    if ((tfilnam = (char*)malloc(2 * strlen(G.filename) + 1)) == (char*)NULL)
         return 1;
     strcpy(tfilnam, G.filename);
     upper(tfilnam);
     enquote(tfilnam);
-    if ((G.outfile = fopen(tfilnam, FOPW)) == (FILE *)NULL) {
-        Info(slide, 1, ((char *)slide, LoadFarString(CannotCreateFile),
-          tfilnam, strerror(errno)));
+    if ((G.outfile = fopen(tfilnam, FOPW)) == (FILE*)NULL) {
+        Info(slide, 1, ((char*)slide, LoadFarString(CannotCreateFile), tfilnam, strerror(errno)));
         free(tfilnam);
         return 1;
     }
@@ -420,36 +391,28 @@ int open_outfile(__G)           /* return 1 if fail */
         G.outfile = zfopen(G.filename, FOPWT);
     else
         G.outfile = zfopen(G.filename, FOPW);
-    if (G.outfile == (FILE *)NULL) {
-        Info(slide, 1, ((char *)slide, LoadFarString(CannotCreateFile),
-          FnFilter1(G.filename), strerror(errno)));
+    if (G.outfile == (FILE*)NULL) {
+        Info(slide, 1, ((char*)slide, LoadFarString(CannotCreateFile), FnFilter1(G.filename), strerror(errno)));
         return 1;
     }
 #else /* !MTS */
 #ifdef DEBUG
-    Info(slide, 1, ((char *)slide,
-      "open_outfile:  doing fopen(%s) for reading\n", FnFilter1(G.filename)));
-    if ((G.outfile = zfopen(G.filename, FOPR)) == (FILE *)NULL)
-        Info(slide, 1, ((char *)slide,
-          "open_outfile:  fopen(%s) for reading failed:  does not exist\n",
-          FnFilter1(G.filename)));
+    Info(slide, 1, ((char*)slide, "open_outfile:  doing fopen(%s) for reading\n", FnFilter1(G.filename)));
+    if ((G.outfile = zfopen(G.filename, FOPR)) == (FILE*)NULL)
+        Info(slide, 1, ((char*)slide, "open_outfile:  fopen(%s) for reading failed:  does not exist\n", FnFilter1(G.filename)));
     else {
-        Info(slide, 1, ((char *)slide,
-          "open_outfile:  fopen(%s) for reading succeeded:  file exists\n",
-          FnFilter1(G.filename)));
+        Info(slide, 1, ((char*)slide, "open_outfile:  fopen(%s) for reading succeeded:  file exists\n", FnFilter1(G.filename)));
         fclose(G.outfile);
     }
 #endif /* DEBUG */
 #ifdef NOVELL_BUG_FAILSAFE
-    if (G.dne && ((G.outfile = zfopen(G.filename, FOPR)) != (FILE *)NULL)) {
-        Info(slide, 0x401, ((char *)slide, LoadFarString(NovellBug),
-          FnFilter1(G.filename)));
+    if (G.dne && ((G.outfile = zfopen(G.filename, FOPR)) != (FILE*)NULL)) {
+        Info(slide, 0x401, ((char*)slide, LoadFarString(NovellBug), FnFilter1(G.filename)));
         fclose(G.outfile);
-        return 1;   /* with "./" fix in checkdir(), should never reach here */
+        return 1; /* with "./" fix in checkdir(), should never reach here */
     }
 #endif /* NOVELL_BUG_FAILSAFE */
-    Trace((stderr, "open_outfile:  doing fopen(%s) for writing\n",
-      FnFilter1(G.filename)));
+    Trace((stderr, "open_outfile:  doing fopen(%s) for writing\n", FnFilter1(G.filename)));
     {
 #if defined(ATH_BE_UNX) || defined(AOS_VS) || defined(QDOS) || defined(TANDEM)
         mode_t umask_sav = umask(0077);
@@ -466,26 +429,24 @@ int open_outfile(__G)           /* return 1 if fail */
         umask(umask_sav);
 #endif
     }
-    if (G.outfile == (FILE *)NULL) {
-        Info(slide, 0x401, ((char *)slide, LoadFarString(CannotCreateFile),
-          FnFilter1(G.filename), strerror(errno)));
+    if (G.outfile == (FILE*)NULL) {
+        Info(slide, 0x401, ((char*)slide, LoadFarString(CannotCreateFile), FnFilter1(G.filename), strerror(errno)));
         return 1;
     }
-    Trace((stderr, "open_outfile:  fopen(%s) for writing succeeded\n",
-      FnFilter1(G.filename)));
+    Trace((stderr, "open_outfile:  fopen(%s) for writing succeeded\n", FnFilter1(G.filename)));
 #endif /* !MTS */
 #endif /* !TOPS20 */
 
 #ifdef USE_FWRITE
 #ifdef DOS_NLM_OS2_W32
     /* 16-bit MSC: buffer size must be strictly LESS than 32K (WSIZE):  bogus */
-    setbuf(G.outfile, (char *)NULL);   /* make output unbuffered */
-#else /* !DOS_NLM_OS2_W32 */
+    setbuf(G.outfile, (char*)NULL); /* make output unbuffered */
+#else                               /* !DOS_NLM_OS2_W32 */
 #ifndef RISCOS
-#ifdef _IOFBF  /* make output fully buffered (works just about like write()) */
-    setvbuf(G.outfile, (char *)slide, _IOFBF, WSIZE);
+#ifdef _IOFBF /* make output fully buffered (works just about like write()) */
+    setvbuf(G.outfile, (char*)slide, _IOFBF, WSIZE);
 #else
-    setbuf(G.outfile, (char *)slide);
+    setbuf(G.outfile, (char*)slide);
 #endif
 #endif /* !RISCOS */
 #endif /* ?DOS_NLM_OS2_W32 */
@@ -500,10 +461,6 @@ int open_outfile(__G)           /* return 1 if fail */
 
 #endif /* !TANDEM */
 #endif /* !VMS && !AOS_VS && !CMS_MVS && !MACOS */
-
-
-
-
 
 /*
  * These functions allow NEXTBYTE to function without needing two bounds
@@ -520,9 +477,7 @@ int open_outfile(__G)           /* return 1 if fail */
 /* function undefer_input() */
 /****************************/
 
-void undefer_input(__G)
-    __GDEF
-{
+void undefer_input(__G) __GDEF {
     if (G.incnt > 0)
         G.csize += G.incnt;
     if (G.incnt_leftover > 0) {
@@ -537,21 +492,16 @@ void undefer_input(__G)
         G.incnt = G.incnt_leftover + (int)G.csize;
         G.inptr = G.inptr_leftover - (int)G.csize;
         G.incnt_leftover = 0;
-    } else if (G.incnt < 0)
+    }
+    else if (G.incnt < 0)
         G.incnt = 0;
 } /* end function undefer_input() */
-
-
-
-
 
 /***********************************/
 /* function defer_leftover_input() */
 /***********************************/
 
-void defer_leftover_input(__G)
-    __GDEF
-{
+void defer_leftover_input(__G) __GDEF {
     if ((zoff_t)G.incnt > G.csize) {
         /* (G.csize < MAXINT), we can safely cast it to int !! */
         if (G.csize < 0L)
@@ -559,23 +509,20 @@ void defer_leftover_input(__G)
         G.inptr_leftover = G.inptr + (int)G.csize;
         G.incnt_leftover = G.incnt - (int)G.csize;
         G.incnt = (int)G.csize;
-    } else
+    }
+    else
         G.incnt_leftover = 0;
     G.csize -= G.incnt;
 } /* end function defer_leftover_input() */
-
-
-
-
 
 /**********************/
 /* Function readbuf() */
 /**********************/
 
-unsigned readbuf(__G__ buf, size)   /* return number of bytes read into buf */
-    __GDEF
-    char *buf;
-    register unsigned size;
+unsigned readbuf(__G__ buf, size) /* return number of bytes read into buf */
+__GDEF
+char* buf;
+register unsigned size;
 {
     register unsigned count;
     unsigned n;
@@ -583,14 +530,13 @@ unsigned readbuf(__G__ buf, size)   /* return number of bytes read into buf */
     n = size;
     while (size) {
         if (G.incnt <= 0) {
-            if ((G.incnt = read(G.zipfd, (char *)G.inbuf, INBUFSIZ)) == 0)
-                return (n-size);
+            if ((G.incnt = read(G.zipfd, (char*)G.inbuf, INBUFSIZ)) == 0)
+                return (n - size);
             else if (G.incnt < 0) {
                 /* another hack, but no real harm copying same thing twice */
-                (*G.message)((zvoid *)&G,
-                  (uch *)LoadFarString(ReadError),  /* CANNOT use slide */
-                  (ulg)strlen(LoadFarString(ReadError)), 0x401);
-                return 0;  /* discarding some data; better than lock-up */
+                (*G.message)((zvoid*)&G, (uch*)LoadFarString(ReadError), /* CANNOT use slide */
+                             (ulg)strlen(LoadFarString(ReadError)), 0x401);
+                return 0; /* discarding some data; better than lock-up */
             }
             /* buffer ALWAYS starts on a block boundary:  */
             G.cur_zipfile_bufstart += INBUFSIZ;
@@ -607,55 +553,49 @@ unsigned readbuf(__G__ buf, size)   /* return number of bytes read into buf */
 
 } /* end function readbuf() */
 
-
-
-
-
 /***********************/
 /* Function readbyte() */
 /***********************/
 
-int readbyte(__G)   /* refill inbuf and return a byte if available, else EOF */
-    __GDEF
-{
+int readbyte(__G) /* refill inbuf and return a byte if available, else EOF */
+    __GDEF {
     if (G.mem_mode)
         return EOF;
     if (G.csize <= 0) {
-        G.csize--;             /* for tests done after exploding */
+        G.csize--; /* for tests done after exploding */
         G.incnt = 0;
         return EOF;
     }
     if (G.incnt <= 0) {
-        if ((G.incnt = read(G.zipfd, (char *)G.inbuf, INBUFSIZ)) == 0) {
+        if ((G.incnt = read(G.zipfd, (char*)G.inbuf, INBUFSIZ)) == 0) {
             return EOF;
-        } else if (G.incnt < 0) {  /* "fail" (abort, retry, ...) returns this */
+        }
+        else if (G.incnt < 0) { /* "fail" (abort, retry, ...) returns this */
             /* another hack, but no real harm copying same thing twice */
-            (*G.message)((zvoid *)&G,
-              (uch *)LoadFarString(ReadError),
-              (ulg)strlen(LoadFarString(ReadError)), 0x401);
+            (*G.message)((zvoid*)&G, (uch*)LoadFarString(ReadError), (ulg)strlen(LoadFarString(ReadError)), 0x401);
             echon();
 #ifdef WINDLL
             longjmp(dll_error_return, 1);
 #else
             DESTROYGLOBALS();
-            EXIT(PK_BADERR);    /* totally bailing; better than lock-up */
+            EXIT(PK_BADERR); /* totally bailing; better than lock-up */
 #endif
         }
         G.cur_zipfile_bufstart += INBUFSIZ; /* always starts on block bndry */
         G.inptr = G.inbuf;
-        defer_leftover_input(__G);           /* decrements G.csize */
+        defer_leftover_input(__G); /* decrements G.csize */
     }
 
 #if CRYPT
     if (G.pInfo->encrypted) {
-        uch *p;
+        uch* p;
         int n;
 
         /* This was previously set to decrypt one byte beyond G.csize, when
          * incnt reached that far.  GRR said, "but it's required:  why?"  This
          * was a bug in fillinbuf() -- was it also a bug here?
          */
-        for (n = G.incnt, p = G.inptr;  n--;  p++)
+        for (n = G.incnt, p = G.inptr; n--; p++)
             zdecode(*p);
     }
 #endif /* CRYPT */
@@ -665,10 +605,6 @@ int readbyte(__G)   /* refill inbuf and return a byte if available, else EOF */
 
 } /* end function readbyte() */
 
-
-
-
-
 #if defined(USE_ZLIB) || defined(USE_BZIP2)
 
 /************************/
@@ -676,21 +612,19 @@ int readbyte(__G)   /* refill inbuf and return a byte if available, else EOF */
 /************************/
 
 int fillinbuf(__G) /* like readbyte() except returns number of bytes in inbuf */
-    __GDEF
-{
-    if (G.mem_mode ||
-                  (G.incnt = read(G.zipfd, (char *)G.inbuf, INBUFSIZ)) <= 0)
+    __GDEF {
+    if (G.mem_mode || (G.incnt = read(G.zipfd, (char*)G.inbuf, INBUFSIZ)) <= 0)
         return 0;
-    G.cur_zipfile_bufstart += INBUFSIZ;  /* always starts on a block boundary */
+    G.cur_zipfile_bufstart += INBUFSIZ; /* always starts on a block boundary */
     G.inptr = G.inbuf;
-    defer_leftover_input(__G);           /* decrements G.csize */
+    defer_leftover_input(__G); /* decrements G.csize */
 
 #if CRYPT
     if (G.pInfo->encrypted) {
-        uch *p;
+        uch* p;
         int n;
 
-        for (n = G.incnt, p = G.inptr;  n--;  p++)
+        for (n = G.incnt, p = G.inptr; n--; p++)
             zdecode(*p);
     }
 #endif /* CRYPT */
@@ -701,90 +635,73 @@ int fillinbuf(__G) /* like readbyte() except returns number of bytes in inbuf */
 
 #endif /* USE_ZLIB || USE_BZIP2 */
 
-
-
-
-
 /************************/
 /* Function seek_zipf() */
 /************************/
 
-int seek_zipf(__G__ abs_offset)
-    __GDEF
-    zoff_t abs_offset;
+int seek_zipf(__G__ abs_offset) __GDEF zoff_t abs_offset;
 {
-/*
- *  Seek to the block boundary of the block which includes abs_offset,
- *  then read block into input buffer and set pointers appropriately.
- *  If block is already in the buffer, just set the pointers.  This function
- *  is used by do_seekable (process.c), extract_or_test_entrylist (extract.c)
- *  and do_string (fileio.c).  Also, a slightly modified version is embedded
- *  within extract_or_test_entrylist (extract.c).  readbyte() and readbuf()
- *  (fileio.c) are compatible.  NOTE THAT abs_offset is intended to be the
- *  "proper offset" (i.e., if there were no extra bytes prepended);
- *  cur_zipfile_bufstart contains the corrected offset.
- *
- *  Since seek_zipf() is never used during decompression, it is safe to
- *  use the slide[] buffer for the error message.
- *
- * returns PK error codes:
- *  PK_BADERR if effective offset in zipfile is negative
- *  PK_EOF if seeking past end of zipfile
- *  PK_OK when seek was successful
- */
+    /*
+     *  Seek to the block boundary of the block which includes abs_offset,
+     *  then read block into input buffer and set pointers appropriately.
+     *  If block is already in the buffer, just set the pointers.  This function
+     *  is used by do_seekable (process.c), extract_or_test_entrylist (extract.c)
+     *  and do_string (fileio.c).  Also, a slightly modified version is embedded
+     *  within extract_or_test_entrylist (extract.c).  readbyte() and readbuf()
+     *  (fileio.c) are compatible.  NOTE THAT abs_offset is intended to be the
+     *  "proper offset" (i.e., if there were no extra bytes prepended);
+     *  cur_zipfile_bufstart contains the corrected offset.
+     *
+     *  Since seek_zipf() is never used during decompression, it is safe to
+     *  use the slide[] buffer for the error message.
+     *
+     * returns PK error codes:
+     *  PK_BADERR if effective offset in zipfile is negative
+     *  PK_EOF if seeking past end of zipfile
+     *  PK_OK when seek was successful
+     */
     zoff_t request = abs_offset + G.extra_bytes;
     zoff_t inbuf_offset = request % INBUFSIZ;
     zoff_t bufstart = request - inbuf_offset;
 
     if (request < 0) {
-        Info(slide, 1, ((char *)slide, LoadFarStringSmall(SeekMsg),
-             G.zipfn, LoadFarString(ReportMsg)));
-        return(PK_BADERR);
-    } else if (bufstart != G.cur_zipfile_bufstart) {
-        Trace((stderr,
-          "fpos_zip: abs_offset = %s, G.extra_bytes = %s\n",
-          FmZofft(abs_offset, NULL, NULL),
-          FmZofft(G.extra_bytes, NULL, NULL)));
+        Info(slide, 1, ((char*)slide, LoadFarStringSmall(SeekMsg), G.zipfn, LoadFarString(ReportMsg)));
+        return (PK_BADERR);
+    }
+    else if (bufstart != G.cur_zipfile_bufstart) {
+        Trace((stderr, "fpos_zip: abs_offset = %s, G.extra_bytes = %s\n", FmZofft(abs_offset, NULL, NULL), FmZofft(G.extra_bytes, NULL, NULL)));
 #ifdef USE_STRM_INPUT
         zfseeko(G.zipfd, bufstart, SEEK_SET);
         G.cur_zipfile_bufstart = zftello(G.zipfd);
-#else /* !USE_STRM_INPUT */
+#else  /* !USE_STRM_INPUT */
         G.cur_zipfile_bufstart = zlseek(G.zipfd, bufstart, SEEK_SET);
 #endif /* ?USE_STRM_INPUT */
-        Trace((stderr,
-          "       request = %s, (abs+extra) = %s, inbuf_offset = %s\n",
-          FmZofft(request, NULL, NULL),
-          FmZofft((abs_offset+G.extra_bytes), NULL, NULL),
-          FmZofft(inbuf_offset, NULL, NULL)));
-        Trace((stderr, "       bufstart = %s, cur_zipfile_bufstart = %s\n",
-          FmZofft(bufstart, NULL, NULL),
-          FmZofft(G.cur_zipfile_bufstart, NULL, NULL)));
-        if ((G.incnt = read(G.zipfd, (char *)G.inbuf, INBUFSIZ)) <= 0)
-            return(PK_EOF);
+        Trace(
+            (stderr, "       request = %s, (abs+extra) = %s, inbuf_offset = %s\n", FmZofft(request, NULL, NULL), FmZofft((abs_offset + G.extra_bytes), NULL, NULL), FmZofft(inbuf_offset, NULL, NULL)));
+        Trace((stderr, "       bufstart = %s, cur_zipfile_bufstart = %s\n", FmZofft(bufstart, NULL, NULL), FmZofft(G.cur_zipfile_bufstart, NULL, NULL)));
+        if ((G.incnt = read(G.zipfd, (char*)G.inbuf, INBUFSIZ)) <= 0)
+            return (PK_EOF);
         G.incnt -= (int)inbuf_offset;
         G.inptr = G.inbuf + (int)inbuf_offset;
-    } else {
-        G.incnt += (G.inptr-G.inbuf) - (int)inbuf_offset;
+    }
+    else {
+        G.incnt += (G.inptr - G.inbuf) - (int)inbuf_offset;
         G.inptr = G.inbuf + (int)inbuf_offset;
     }
-    return(PK_OK);
+    return (PK_OK);
 } /* end function seek_zipf() */
 
-
-
-
-
-#ifndef VMS  /* for VMS use code in vms.c */
+#ifndef VMS /* for VMS use code in vms.c */
 
 /********************/
-/* Function flush() */   /* returns PK error codes: */
-/********************/   /* if tflag => always 0; PK_DISK if write error */
+/* Function flush() */ /* returns PK error codes: */
+/********************/ /* if tflag => always 0; PK_DISK if write error */
 
 int flush(__G__ rawbuf, size, unshrink)
-    __GDEF
-    uch *rawbuf;
-    ulg size;
-    int unshrink;
+__GDEF
+uch* rawbuf;
+ulg size;
+int unshrink;
 #if (defined(USE_DEFLATE64) && defined(__16BIT__))
 {
     int ret;
@@ -803,126 +720,122 @@ int flush(__G__ rawbuf, size, unshrink)
     return partflush(__G__ rawbuf, size, unshrink);
 } /* end function flush() */
 
-
 /************************/
-/* Function partflush() */  /* returns PK error codes: */
-/************************/  /* if tflag => always 0; PK_DISK if write error */
+/* Function partflush() */ /* returns PK error codes: */
+/************************/ /* if tflag => always 0; PK_DISK if write error */
 
 static int partflush(__G__ rawbuf, size, unshrink)
-    __GDEF
-    uch *rawbuf;        /* cannot be ZCONST, gets passed to (*G.message)() */
-    ulg size;
-    int unshrink;
+__GDEF
+uch* rawbuf; /* cannot be ZCONST, gets passed to (*G.message)() */
+ulg size;
+int unshrink;
 #endif /* USE_DEFLATE64 && __16BIT__ */
 {
-    register uch *p;
-    register uch *q;
-    uch *transbuf;
+    register uch* p;
+    register uch* q;
+    uch* transbuf;
 #if (defined(SMALL_MEM) || defined(MED_MEM) || defined(VMS_TEXT_CONV))
     ulg transbufsiz;
 #endif
     /* static int didCRlast = FALSE;    moved to globals.h */
 
-
-/*---------------------------------------------------------------------------
-    Compute the CRC first; if testing or if disk is full, that's it.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Compute the CRC first; if testing or if disk is full, that's it.
+      ---------------------------------------------------------------------------*/
 
     G.crc32val = crc32(G.crc32val, rawbuf, (extent)size);
 
 #ifdef DLL
-    if ((G.statreportcb != NULL) &&
-        (*G.statreportcb)(__G__ UZ_ST_IN_PROGRESS, G.zipfn, G.filename, NULL))
-        return IZ_CTRLC;        /* cancel operation by user request */
+    if ((G.statreportcb != NULL) && (*G.statreportcb)(__G__ UZ_ST_IN_PROGRESS, G.zipfn, G.filename, NULL))
+        return IZ_CTRLC; /* cancel operation by user request */
 #endif
 
-    if (uO.tflag || size == 0L)  /* testing or nothing to write:  all done */
+    if (uO.tflag || size == 0L) /* testing or nothing to write:  all done */
         return PK_OK;
 
     if (G.disk_full)
-        return PK_DISK;         /* disk already full:  ignore rest of file */
+        return PK_DISK; /* disk already full:  ignore rest of file */
 
-/*---------------------------------------------------------------------------
-    Write the bytes rawbuf[0..size-1] to the output device, first converting
-    end-of-lines and ASCII/EBCDIC as needed.  If SMALL_MEM or MED_MEM are NOT
-    defined, outbuf is assumed to be at least as large as rawbuf and is not
-    necessarily checked for overflow.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Write the bytes rawbuf[0..size-1] to the output device, first converting
+        end-of-lines and ASCII/EBCDIC as needed.  If SMALL_MEM or MED_MEM are NOT
+        defined, outbuf is assumed to be at least as large as rawbuf and is not
+        necessarily checked for overflow.
+      ---------------------------------------------------------------------------*/
 
-    if (!G.pInfo->textmode) {   /* write raw binary data */
-        /* GRR:  note that for standard MS-DOS compilers, size argument to
-         * fwrite() can never be more than 65534, so WriteError macro will
-         * have to be rewritten if size can ever be that large.  For now,
-         * never more than 32K.  Also note that write() returns an int, which
-         * doesn't necessarily limit size to 32767 bytes if write() is used
-         * on 16-bit systems but does make it more of a pain; however, because
-         * at least MSC 5.1 has a lousy implementation of fwrite() (as does
-         * DEC Ultrix cc), write() is used anyway.
-         */
+    if (!G.pInfo->textmode) { /* write raw binary data */
+                              /* GRR:  note that for standard MS-DOS compilers, size argument to
+                               * fwrite() can never be more than 65534, so WriteError macro will
+                               * have to be rewritten if size can ever be that large.  For now,
+                               * never more than 32K.  Also note that write() returns an int, which
+                               * doesn't necessarily limit size to 32767 bytes if write() is used
+                               * on 16-bit systems but does make it more of a pain; however, because
+                               * at least MSC 5.1 has a lousy implementation of fwrite() (as does
+                               * DEC Ultrix cc), write() is used anyway.
+                               */
 #ifdef DLL
         if (G.redirect_data) {
 #ifdef NO_SLIDE_REDIR
-            if (writeToMemory(__G__ rawbuf, (extent)size)) return PK_ERR;
+            if (writeToMemory(__G__ rawbuf, (extent)size))
+                return PK_ERR;
 #else
             writeToMemory(__G__ rawbuf, (extent)size);
 #endif
-        } else
+        }
+        else
 #endif
-        if (!uO.cflag && WriteError(rawbuf, size, G.outfile))
+            if (!uO.cflag && WriteError(rawbuf, size, G.outfile))
             return disk_error(__G);
-        else if (uO.cflag && (*G.message)((zvoid *)&G, rawbuf, size, 0))
+        else if (uO.cflag && (*G.message)((zvoid*)&G, rawbuf, size, 0))
             return PK_OK;
-    } else {   /* textmode:  aflag is true */
+    }
+    else { /* textmode:  aflag is true */
         if (unshrink) {
             /* rawbuf = outbuf */
             transbuf = G.outbuf2;
 #if (defined(SMALL_MEM) || defined(MED_MEM) || defined(VMS_TEXT_CONV))
             transbufsiz = TRANSBUFSIZ;
 #endif
-        } else {
+        }
+        else {
             /* rawbuf = slide */
             transbuf = G.outbuf;
 #if (defined(SMALL_MEM) || defined(MED_MEM) || defined(VMS_TEXT_CONV))
             transbufsiz = OUTBUFSIZ;
-            Trace((stderr, "\ntransbufsiz = OUTBUFSIZ = %u\n",
-                   (unsigned)OUTBUFSIZ));
+            Trace((stderr, "\ntransbufsiz = OUTBUFSIZ = %u\n", (unsigned)OUTBUFSIZ));
 #endif
         }
         if (G.newfile) {
 #ifdef VMS_TEXT_CONV
-            if (G.pInfo->hostnum == VMS_ && G.extra_field &&
-                is_vms_varlen_txt(__G__ G.extra_field,
-                                  G.lrec.extra_field_length))
-                G.VMS_line_state = 0;    /* 0: ready to read line length */
+            if (G.pInfo->hostnum == VMS_ && G.extra_field && is_vms_varlen_txt(__G__ G.extra_field, G.lrec.extra_field_length))
+                G.VMS_line_state = 0; /* 0: ready to read line length */
             else
-                G.VMS_line_state = -1;   /* -1: don't treat as VMS text */
+                G.VMS_line_state = -1; /* -1: don't treat as VMS text */
 #endif
-            G.didCRlast = FALSE;         /* no previous buffers written */
+            G.didCRlast = FALSE; /* no previous buffers written */
             G.newfile = FALSE;
         }
 
 #ifdef VMS_TEXT_CONV
-        if (G.VMS_line_state >= 0)
-        {
+        if (G.VMS_line_state >= 0) {
             p = rawbuf;
             q = transbuf;
-            while ((extent)(p-rawbuf) < (extent)size) {
+            while ((extent)(p - rawbuf) < (extent)size) {
                 switch (G.VMS_line_state) {
-
                     /* 0: ready to read line length */
                     case 0:
                         G.VMS_line_length = 0;
-                        if ((extent)(p-rawbuf) == (extent)size-1) {
+                        if ((extent)(p - rawbuf) == (extent)size - 1) {
                             /* last char */
                             G.VMS_line_length = (unsigned)(*p++);
                             G.VMS_line_state = 1;
-                        } else {
+                        }
+                        else {
                             G.VMS_line_length = makeword(p);
                             p += 2;
                             G.VMS_line_state = 2;
                         }
-                        G.VMS_line_pad =
-                               ((G.VMS_line_length & 1) != 0); /* odd */
+                        G.VMS_line_pad = ((G.VMS_line_length & 1) != 0); /* odd */
                         break;
 
                     /* 1: read one byte of length, need second */
@@ -932,62 +845,56 @@ static int partflush(__G__ rawbuf, size, unshrink)
                         break;
 
                     /* 2: ready to read VMS_line_length chars */
-                    case 2:
-                        {
-                            extent remaining = (extent)size+(rawbuf-p);
-                            extent outroom;
+                    case 2: {
+                        extent remaining = (extent)size + (rawbuf - p);
+                        extent outroom;
 
-                            if (G.VMS_line_length < remaining) {
-                                remaining = G.VMS_line_length;
-                                G.VMS_line_state = 3;
-                            }
-
-                            outroom = transbuf+(extent)transbufsiz-q;
-                            if (remaining >= outroom) {
-                                remaining -= outroom;
-                                for (;outroom > 0; p++, outroom--)
-                                    *q++ = native(*p);
-#ifdef DLL
-                                if (G.redirect_data) {
-                                    if (writeToMemory(__G__ transbuf,
-                                          (extent)(q-transbuf))) return PK_ERR;
-                                } else
-#endif
-                                if (!uO.cflag && WriteError(transbuf,
-                                    (extent)(q-transbuf), G.outfile))
-                                    return disk_error(__G);
-                                else if (uO.cflag && (*G.message)((zvoid *)&G,
-                                         transbuf, (ulg)(q-transbuf), 0))
-                                    return PK_OK;
-                                q = transbuf;
-                                /* fall through to normal case */
-                            }
-                            G.VMS_line_length -= remaining;
-                            for (;remaining > 0; p++, remaining--)
-                                *q++ = native(*p);
+                        if (G.VMS_line_length < remaining) {
+                            remaining = G.VMS_line_length;
+                            G.VMS_line_state = 3;
                         }
-                        break;
+
+                        outroom = transbuf + (extent)transbufsiz - q;
+                        if (remaining >= outroom) {
+                            remaining -= outroom;
+                            for (; outroom > 0; p++, outroom--)
+                                *q++ = native(*p);
+#ifdef DLL
+                            if (G.redirect_data) {
+                                if (writeToMemory(__G__ transbuf, (extent)(q - transbuf)))
+                                    return PK_ERR;
+                            }
+                            else
+#endif
+                                if (!uO.cflag && WriteError(transbuf, (extent)(q - transbuf), G.outfile))
+                                return disk_error(__G);
+                            else if (uO.cflag && (*G.message)((zvoid*)&G, transbuf, (ulg)(q - transbuf), 0))
+                                return PK_OK;
+                            q = transbuf;
+                            /* fall through to normal case */
+                        }
+                        G.VMS_line_length -= remaining;
+                        for (; remaining > 0; p++, remaining--)
+                            *q++ = native(*p);
+                    } break;
 
                     /* 3: ready to PutNativeEOL */
                     case 3:
-                        if (q > transbuf+(extent)transbufsiz-lenEOL) {
+                        if (q > transbuf + (extent)transbufsiz - lenEOL) {
 #ifdef DLL
                             if (G.redirect_data) {
-                                if (writeToMemory(__G__ transbuf,
-                                      (extent)(q-transbuf))) return PK_ERR;
-                            } else
+                                if (writeToMemory(__G__ transbuf, (extent)(q - transbuf)))
+                                    return PK_ERR;
+                            }
+                            else
 #endif
-                            if (!uO.cflag &&
-                                WriteError(transbuf, (extent)(q-transbuf),
-                                  G.outfile))
+                                if (!uO.cflag && WriteError(transbuf, (extent)(q - transbuf), G.outfile))
                                 return disk_error(__G);
-                            else if (uO.cflag && (*G.message)((zvoid *)&G,
-                                     transbuf, (ulg)(q-transbuf), 0))
+                            else if (uO.cflag && (*G.message)((zvoid*)&G, transbuf, (ulg)(q - transbuf), 0))
                                 return PK_OK;
                             q = transbuf;
                         }
-                        PutNativeEOL
-                        G.VMS_line_state = G.VMS_line_pad ? 4 : 0;
+                        PutNativeEOL G.VMS_line_state = G.VMS_line_pad ? 4 : 0;
                         break;
 
                     /* 4: ready to read pad byte */
@@ -997,51 +904,46 @@ static int partflush(__G__ rawbuf, size, unshrink)
                         break;
                 }
             } /* end while */
-
-        } else
+        }
+        else
 #endif /* VMS_TEXT_CONV */
 
-    /*-----------------------------------------------------------------------
-        Algorithm:  CR/LF => native; lone CR => native; lone LF => native.
-        This routine is only for non-raw-VMS, non-raw-VM/CMS files (i.e.,
-        stream-oriented files, not record-oriented).
-      -----------------------------------------------------------------------*/
+        /*-----------------------------------------------------------------------
+            Algorithm:  CR/LF => native; lone CR => native; lone LF => native.
+            This routine is only for non-raw-VMS, non-raw-VM/CMS files (i.e.,
+            stream-oriented files, not record-oriented).
+          -----------------------------------------------------------------------*/
 
         /* else not VMS text */ {
             p = rawbuf;
             if (*p == LF && G.didCRlast)
                 ++p;
             G.didCRlast = FALSE;
-            for (q = transbuf;  (extent)(p-rawbuf) < (extent)size;  ++p) {
-                if (*p == CR) {           /* lone CR or CR/LF: treat as EOL  */
-                    PutNativeEOL
-                    if ((extent)(p-rawbuf) == (extent)size-1)
+            for (q = transbuf; (extent)(p - rawbuf) < (extent)size; ++p) {
+                if (*p == CR) { /* lone CR or CR/LF: treat as EOL  */
+                    PutNativeEOL if ((extent)(p - rawbuf) == (extent)size - 1)
                         /* last char in buffer */
                         G.didCRlast = TRUE;
-                    else if (p[1] == LF)  /* get rid of accompanying LF */
-                        ++p;
-                } else if (*p == LF)      /* lone LF */
-                    PutNativeEOL
-                else
+                    else if (p[1] == LF) /* get rid of accompanying LF */
+                        ++ p;
+                }
+                else if (*p == LF) /* lone LF */
+                    PutNativeEOL else
 #ifndef DOS_FLX_OS2_W32
-                if (*p != CTRLZ)          /* lose all ^Z's */
+                        if (*p != CTRLZ) /* lose all ^Z's */
 #endif
-                    *q++ = native(*p);
+                            * q++ = native(*p);
 
 #if (defined(SMALL_MEM) || defined(MED_MEM))
-# if (lenEOL == 1)   /* don't check unshrink:  both buffers small but equal */
+#if (lenEOL == 1) /* don't check unshrink:  both buffers small but equal */
                 if (!unshrink)
-# endif
+#endif
                     /* check for danger of buffer overflow and flush */
-                    if (q > transbuf+(extent)transbufsiz-lenEOL) {
-                        Trace((stderr,
-                          "p - rawbuf = %u   q-transbuf = %u   size = %lu\n",
-                          (unsigned)(p-rawbuf), (unsigned)(q-transbuf), size));
-                        if (!uO.cflag && WriteError(transbuf,
-                            (extent)(q-transbuf), G.outfile))
+                    if (q > transbuf + (extent)transbufsiz - lenEOL) {
+                        Trace((stderr, "p - rawbuf = %u   q-transbuf = %u   size = %lu\n", (unsigned)(p - rawbuf), (unsigned)(q - transbuf), size));
+                        if (!uO.cflag && WriteError(transbuf, (extent)(q - transbuf), G.outfile))
                             return disk_error(__G);
-                        else if (uO.cflag && (*G.message)((zvoid *)&G,
-                                 transbuf, (ulg)(q-transbuf), 0))
+                        else if (uO.cflag && (*G.message)((zvoid*)&G, transbuf, (ulg)(q - transbuf), 0))
                             return PK_OK;
                         q = transbuf;
                         continue;
@@ -1050,24 +952,22 @@ static int partflush(__G__ rawbuf, size, unshrink)
             }
         }
 
-    /*-----------------------------------------------------------------------
-        Done translating:  write whatever we've got to file (or screen).
-      -----------------------------------------------------------------------*/
+        /*-----------------------------------------------------------------------
+            Done translating:  write whatever we've got to file (or screen).
+          -----------------------------------------------------------------------*/
 
-        Trace((stderr, "p - rawbuf = %u   q-transbuf = %u   size = %lu\n",
-          (unsigned)(p-rawbuf), (unsigned)(q-transbuf), size));
+        Trace((stderr, "p - rawbuf = %u   q-transbuf = %u   size = %lu\n", (unsigned)(p - rawbuf), (unsigned)(q - transbuf), size));
         if (q > transbuf) {
 #ifdef DLL
             if (G.redirect_data) {
-                if (writeToMemory(__G__ transbuf, (extent)(q-transbuf)))
+                if (writeToMemory(__G__ transbuf, (extent)(q - transbuf)))
                     return PK_ERR;
-            } else
+            }
+            else
 #endif
-            if (!uO.cflag && WriteError(transbuf, (extent)(q-transbuf),
-                G.outfile))
+                if (!uO.cflag && WriteError(transbuf, (extent)(q - transbuf), G.outfile))
                 return disk_error(__G);
-            else if (uO.cflag && (*G.message)((zvoid *)&G, transbuf,
-                (ulg)(q-transbuf), 0))
+            else if (uO.cflag && (*G.message)((zvoid*)&G, transbuf, (ulg)(q - transbuf), 0))
                 return PK_OK;
         }
     }
@@ -1076,10 +976,6 @@ static int partflush(__G__ rawbuf, size, unshrink)
 
 } /* end function flush() [resp. partflush() for 16-bit Deflate64 support] */
 
-
-
-
-
 #ifdef VMS_TEXT_CONV
 
 /********************************/
@@ -1087,28 +983,28 @@ static int partflush(__G__ rawbuf, size, unshrink)
 /********************************/
 
 static int is_vms_varlen_txt(__G__ ef_buf, ef_len)
-    __GDEF
-    uch *ef_buf;        /* buffer containing extra field */
-    unsigned ef_len;    /* total length of extra field */
+__GDEF
+uch* ef_buf;     /* buffer containing extra field */
+unsigned ef_len; /* total length of extra field */
 {
     unsigned eb_id;
     unsigned eb_len;
-    uch *eb_data;
+    uch* eb_data;
     unsigned eb_datlen;
-#define VMSREC_C_UNDEF  0
-#define VMSREC_C_VAR    2
+#define VMSREC_C_UNDEF 0
+#define VMSREC_C_VAR 2
     uch vms_rectype = VMSREC_C_UNDEF;
- /* uch vms_fileorg = 0; */ /* currently, fileorg is not used... */
+    /* uch vms_fileorg = 0; */ /* currently, fileorg is not used... */
 
-#define VMSPK_ITEMID            0
-#define VMSPK_ITEMLEN           2
-#define VMSPK_ITEMHEADSZ        4
+#define VMSPK_ITEMID 0
+#define VMSPK_ITEMLEN 2
+#define VMSPK_ITEMHEADSZ 4
 
-#define VMSATR_C_RECATTR        4
-#define VMS_FABSIG              0x42414656      /* "VFAB" */
+#define VMSATR_C_RECATTR 4
+#define VMS_FABSIG 0x42414656 /* "VFAB" */
 /* offsets of interesting fields in VMS fabdef structure */
-#define VMSFAB_B_RFM            31      /* record format byte */
-#define VMSFAB_B_ORG            29      /* file organization byte */
+#define VMSFAB_B_RFM 31 /* record format byte */
+#define VMSFAB_B_ORG 29 /* file organization byte */
 
     if (ef_len == 0 || ef_buf == NULL)
         return FALSE;
@@ -1119,79 +1015,69 @@ static int is_vms_varlen_txt(__G__ ef_buf, ef_len)
 
         if (eb_len > (ef_len - EB_HEADSIZE)) {
             /* discovered some extra field inconsistency! */
-            Trace((stderr,
-              "is_vms_varlen_txt: block length %u > rest ef_size %u\n", eb_len,
-              ef_len - EB_HEADSIZE));
+            Trace((stderr, "is_vms_varlen_txt: block length %u > rest ef_size %u\n", eb_len, ef_len - EB_HEADSIZE));
             break;
         }
 
         switch (eb_id) {
-          case EF_PKVMS:
-            /* The PKVMS e.f. raw data part consists of:
-             * a) 4 bytes CRC checksum
-             * b) list of uncompressed variable-length data items
-             * Each data item is introduced by a fixed header
-             *  - 2 bytes data type ID
-             *  - 2 bytes <size> of data
-             *  - <size> bytes of actual attribute data
-             */
+            case EF_PKVMS:
+                /* The PKVMS e.f. raw data part consists of:
+                 * a) 4 bytes CRC checksum
+                 * b) list of uncompressed variable-length data items
+                 * Each data item is introduced by a fixed header
+                 *  - 2 bytes data type ID
+                 *  - 2 bytes <size> of data
+                 *  - <size> bytes of actual attribute data
+                 */
 
-            /* get pointer to start of data and its total length */
-            eb_data = ef_buf+(EB_HEADSIZE+4);
-            eb_datlen = eb_len-4;
+                /* get pointer to start of data and its total length */
+                eb_data = ef_buf + (EB_HEADSIZE + 4);
+                eb_datlen = eb_len - 4;
 
-            /* test the CRC checksum */
-            if (makelong(ef_buf+EB_HEADSIZE) !=
-                crc32(CRCVAL_INITIAL, eb_data, (extent)eb_datlen))
-            {
-                Info(slide, 1, ((char *)slide,
-                  "[Warning: CRC error, discarding PKWARE extra field]\n"));
-                /* skip over the data analysis code */
+                /* test the CRC checksum */
+                if (makelong(ef_buf + EB_HEADSIZE) != crc32(CRCVAL_INITIAL, eb_data, (extent)eb_datlen)) {
+                    Info(slide, 1, ((char*)slide, "[Warning: CRC error, discarding PKWARE extra field]\n"));
+                    /* skip over the data analysis code */
+                    break;
+                }
+
+                /* scan through the attribute data items */
+                while (eb_datlen > 4) {
+                    unsigned fldsize = makeword(&eb_data[VMSPK_ITEMLEN]);
+
+                    /* check the item type word */
+                    switch (makeword(&eb_data[VMSPK_ITEMID])) {
+                        case VMSATR_C_RECATTR:
+                            /* we have found the (currently only) interesting
+                             * data item */
+                            if (fldsize >= 1) {
+                                vms_rectype = eb_data[VMSPK_ITEMHEADSZ] & 15;
+                                /* vms_fileorg = eb_data[VMSPK_ITEMHEADSZ] >> 4; */
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    /* skip to next data item */
+                    eb_datlen -= fldsize + VMSPK_ITEMHEADSZ;
+                    eb_data += fldsize + VMSPK_ITEMHEADSZ;
+                }
                 break;
-            }
 
-            /* scan through the attribute data items */
-            while (eb_datlen > 4)
-            {
-                unsigned fldsize = makeword(&eb_data[VMSPK_ITEMLEN]);
-
-                /* check the item type word */
-                switch (makeword(&eb_data[VMSPK_ITEMID])) {
-                  case VMSATR_C_RECATTR:
-                    /* we have found the (currently only) interesting
-                     * data item */
-                    if (fldsize >= 1) {
-                        vms_rectype = eb_data[VMSPK_ITEMHEADSZ] & 15;
-                     /* vms_fileorg = eb_data[VMSPK_ITEMHEADSZ] >> 4; */
+            case EF_IZVMS:
+                if (makelong(ef_buf + EB_HEADSIZE) == VMS_FABSIG) {
+                    if ((eb_data = extract_izvms_block(__G__ ef_buf + EB_HEADSIZE, eb_len, &eb_datlen, NULL, 0)) != NULL) {
+                        if (eb_datlen >= VMSFAB_B_RFM + 1) {
+                            vms_rectype = eb_data[VMSFAB_B_RFM] & 15;
+                            /* vms_fileorg = eb_data[VMSFAB_B_ORG] >> 4; */
+                        }
+                        free(eb_data);
                     }
-                    break;
-                  default:
-                    break;
                 }
-                /* skip to next data item */
-                eb_datlen -= fldsize + VMSPK_ITEMHEADSZ;
-                eb_data += fldsize + VMSPK_ITEMHEADSZ;
-            }
-            break;
+                break;
 
-          case EF_IZVMS:
-            if (makelong(ef_buf+EB_HEADSIZE) == VMS_FABSIG) {
-                if ((eb_data = extract_izvms_block(__G__
-                                                   ef_buf+EB_HEADSIZE, eb_len,
-                                                   &eb_datlen, NULL, 0))
-                    != NULL)
-                {
-                    if (eb_datlen >= VMSFAB_B_RFM+1) {
-                        vms_rectype = eb_data[VMSFAB_B_RFM] & 15;
-                     /* vms_fileorg = eb_data[VMSFAB_B_ORG] >> 4; */
-                    }
-                    free(eb_data);
-                }
-            }
-            break;
-
-          default:
-            break;
+            default:
+                break;
         }
 
         /* Skip this extra field block */
@@ -1205,27 +1091,21 @@ static int is_vms_varlen_txt(__G__ ef_buf, ef_len)
 
 #endif /* VMS_TEXT_CONV */
 
-
-
-
 /*************************/
 /* Function disk_error() */
 /*************************/
 
-static int disk_error(__G)
-    __GDEF
-{
+static int disk_error(__G) __GDEF {
     /* OK to use slide[] here because this file is finished regardless */
-    Info(slide, 0x4a1, ((char *)slide, LoadFarString(DiskFullQuery),
-      FnFilter1(G.filename)));
+    Info(slide, 0x4a1, ((char*)slide, LoadFarString(DiskFullQuery), FnFilter1(G.filename)));
 
 #ifndef WINDLL
     fgets(G.answerbuf, sizeof(G.answerbuf), stdin);
-    if (*G.answerbuf == 'y')   /* stop writing to this file */
-        G.disk_full = 1;       /*  (outfile bad?), but new OK */
+    if (*G.answerbuf == 'y') /* stop writing to this file */
+        G.disk_full = 1;     /*  (outfile bad?), but new OK */
     else
 #endif
-        G.disk_full = 2;       /* no:  exit program */
+        G.disk_full = 2; /* no:  exit program */
 
     return PK_DISK;
 
@@ -1233,19 +1113,15 @@ static int disk_error(__G)
 
 #endif /* !VMS */
 
-
-
-
-
 /*****************************/
 /* Function UzpMessagePrnt() */
 /*****************************/
 
 int UZ_EXP UzpMessagePrnt(pG, buf, size, flag)
-    zvoid *pG;   /* globals struct:  always passed */
-    uch *buf;    /* preformatted string to be printed */
-    ulg size;    /* length of string (may include nulls) */
-    int flag;    /* flag bits */
+zvoid* pG; /* globals struct:  always passed */
+uch* buf;  /* preformatted string to be printed */
+ulg size;  /* length of string (may include nulls) */
+int flag;  /* flag bits */
 {
     /* IMPORTANT NOTE:
      *    The name of the first parameter of UzpMessagePrnt(), which passes
@@ -1255,27 +1131,26 @@ int UZ_EXP UzpMessagePrnt(pG, buf, size, flag)
      *    (in the SMALL_MEM case) !!!
      */
     int error;
-    uch *q=buf, *endbuf=buf+(unsigned)size;
+    uch *q = buf, *endbuf = buf + (unsigned)size;
 #ifdef MORE
-    uch *p=buf;
+    uch* p = buf;
 #if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
     int islinefeed = FALSE;
 #endif
 #endif
-    FILE *outfp;
+    FILE* outfp;
 
-
-/*---------------------------------------------------------------------------
-    These tests are here to allow fine-tuning of UnZip's output messages,
-    but none of them will do anything without setting the appropriate bit
-    in the flag argument of every Info() statement which is to be turned
-    *off*.  That is, all messages are currently turned on for all ports.
-    To turn off *all* messages, use the UzpMessageNull() function instead
-    of this one.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        These tests are here to allow fine-tuning of UnZip's output messages,
+        but none of them will do anything without setting the appropriate bit
+        in the flag argument of every Info() statement which is to be turned
+        *off*.  That is, all messages are currently turned on for all ports.
+        To turn off *all* messages, use the UzpMessageNull() function instead
+        of this one.
+      ---------------------------------------------------------------------------*/
 
 #if (defined(OS2) && defined(DLL))
-    if (MSG_NO_DLL2(flag))  /* if OS/2 DLL bit is set, do NOT print this msg */
+    if (MSG_NO_DLL2(flag)) /* if OS/2 DLL bit is set, do NOT print this msg */
         return 0;
 #endif
 #ifdef WINDLL
@@ -1292,183 +1167,170 @@ int UZ_EXP UzpMessagePrnt(pG, buf, size, flag)
         return 0;
 #endif
  */
-#ifdef DLL                 /* don't display message if data is redirected */
-    if (((Uz_Globs *)pG)->redirect_data &&
-        !((Uz_Globs *)pG)->redirect_text)
+#ifdef DLL /* don't display message if data is redirected */
+    if (((Uz_Globs*)pG)->redirect_data && !((Uz_Globs*)pG)->redirect_text)
         return 0;
 #endif
 
-    if (MSG_STDERR(flag) && !((Uz_Globs *)pG)->UzO.tflag)
-        outfp = (FILE *)stderr;
+    if (MSG_STDERR(flag) && !((Uz_Globs*)pG)->UzO.tflag)
+        outfp = (FILE*)stderr;
     else
-        outfp = (FILE *)stdout;
+        outfp = (FILE*)stdout;
 
 #ifdef QUERY_TRNEWLN
     /* some systems require termination of query prompts with '\n' to force
      * immediate display */
-    if (MSG_MNEWLN(flag)) {   /* assumes writable buffer (e.g., slide[]) */
-        *endbuf++ = '\n';     /*  with room for one more char at end of buf */
-        ++size;               /*  (safe assumption:  only used for four */
-    }                         /*  short queries in extract.c and fileio.c) */
+    if (MSG_MNEWLN(flag)) { /* assumes writable buffer (e.g., slide[]) */
+        *endbuf++ = '\n';   /*  with room for one more char at end of buf */
+        ++size;             /*  (safe assumption:  only used for four */
+    } /*  short queries in extract.c and fileio.c) */
 #endif
 
-    if (MSG_TNEWLN(flag)) {   /* again assumes writable buffer:  fragile... */
-        if ((!size && !((Uz_Globs *)pG)->sol) ||
-            (size && (endbuf[-1] != '\n')))
-        {
+    if (MSG_TNEWLN(flag)) { /* again assumes writable buffer:  fragile... */
+        if ((!size && !((Uz_Globs*)pG)->sol) || (size && (endbuf[-1] != '\n'))) {
             *endbuf++ = '\n';
             ++size;
         }
     }
 
 #ifdef MORE
-# ifdef SCREENSIZE
+#ifdef SCREENSIZE
     /* room for --More-- and one line of overlap: */
-#  if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
-    SCREENSIZE(&((Uz_Globs *)pG)->height, &((Uz_Globs *)pG)->width);
-#  else
-    SCREENSIZE(&((Uz_Globs *)pG)->height, (int *)NULL);
-#  endif
-    ((Uz_Globs *)pG)->height -= 2;
-# else
+#if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
+    SCREENSIZE(&((Uz_Globs*)pG)->height, &((Uz_Globs*)pG)->width);
+#else
+    SCREENSIZE(&((Uz_Globs*)pG)->height, (int*)NULL);
+#endif
+    ((Uz_Globs*)pG)->height -= 2;
+#else
     /* room for --More-- and one line of overlap: */
-    ((Uz_Globs *)pG)->height = SCREENLINES - 2;
-#  if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
-    ((Uz_Globs *)pG)->width = SCREENWIDTH;
-#  endif
-# endif
+    ((Uz_Globs*)pG)->height = SCREENLINES - 2;
+#if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
+    ((Uz_Globs*)pG)->width = SCREENWIDTH;
+#endif
+#endif
 #endif /* MORE */
 
-    if (MSG_LNEWLN(flag) && !((Uz_Globs *)pG)->sol) {
+    if (MSG_LNEWLN(flag) && !((Uz_Globs*)pG)->sol) {
         /* not at start of line:  want newline */
 #ifdef OS2DLL
-        if (!((Uz_Globs *)pG)->redirect_text) {
+        if (!((Uz_Globs*)pG)->redirect_text) {
 #endif
             putc('\n', outfp);
             fflush(outfp);
 #ifdef MORE
-            if (((Uz_Globs *)pG)->M_flag)
-            {
+            if (((Uz_Globs*)pG)->M_flag) {
 #if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
-                ((Uz_Globs *)pG)->chars = 0;
+                ((Uz_Globs*)pG)->chars = 0;
 #endif
-                ++((Uz_Globs *)pG)->numlines;
-                ++((Uz_Globs *)pG)->lines;
-                if (((Uz_Globs *)pG)->lines >= ((Uz_Globs *)pG)->height)
-                    (*((Uz_Globs *)pG)->mpause)((zvoid *)pG,
-                      LoadFarString(MorePrompt), 1);
+                ++((Uz_Globs*)pG)->numlines;
+                ++((Uz_Globs*)pG)->lines;
+                if (((Uz_Globs*)pG)->lines >= ((Uz_Globs*)pG)->height)
+                    (*((Uz_Globs*)pG)->mpause)((zvoid*)pG, LoadFarString(MorePrompt), 1);
             }
 #endif /* MORE */
-            if (MSG_STDERR(flag) && ((Uz_Globs *)pG)->UzO.tflag &&
-                !isatty(1) && isatty(2))
-            {
+            if (MSG_STDERR(flag) && ((Uz_Globs*)pG)->UzO.tflag && !isatty(1) && isatty(2)) {
                 /* error output from testing redirected:  also send to stderr */
                 putc('\n', stderr);
                 fflush(stderr);
             }
 #ifdef OS2DLL
-        } else
-           REDIRECTC('\n');
+        }
+        else
+            REDIRECTC('\n');
 #endif
-        ((Uz_Globs *)pG)->sol = TRUE;
+        ((Uz_Globs*)pG)->sol = TRUE;
     }
 
     /* put zipfile name, filename and/or error/warning keywords here */
 
 #ifdef MORE
-    if (((Uz_Globs *)pG)->M_flag
+    if (((Uz_Globs*)pG)->M_flag
 #ifdef OS2DLL
-         && !((Uz_Globs *)pG)->redirect_text
+        && !((Uz_Globs*)pG)->redirect_text
 #endif
-                                                 )
-    {
+    ) {
         while (p < endbuf) {
             if (*p == '\n') {
 #if (defined(SCREENWIDTH) && defined(SCREENLWRAP))
                 islinefeed = TRUE;
-            } else if (SCREENLWRAP) {
+            }
+            else if (SCREENLWRAP) {
                 if (*p == '\r') {
-                    ((Uz_Globs *)pG)->chars = 0;
-                } else {
-#  ifdef TABSIZE
+                    ((Uz_Globs*)pG)->chars = 0;
+                }
+                else {
+#ifdef TABSIZE
                     if (*p == '\t')
-                        ((Uz_Globs *)pG)->chars +=
-                            (TABSIZE - (((Uz_Globs *)pG)->chars % TABSIZE));
+                        ((Uz_Globs*)pG)->chars += (TABSIZE - (((Uz_Globs*)pG)->chars % TABSIZE));
                     else
-#  endif
-                        ++((Uz_Globs *)pG)->chars;
+#endif
+                        ++((Uz_Globs*)pG)->chars;
 
-                    if (((Uz_Globs *)pG)->chars >= ((Uz_Globs *)pG)->width)
+                    if (((Uz_Globs*)pG)->chars >= ((Uz_Globs*)pG)->width)
                         islinefeed = TRUE;
                 }
             }
             if (islinefeed) {
                 islinefeed = FALSE;
-                ((Uz_Globs *)pG)->chars = 0;
+                ((Uz_Globs*)pG)->chars = 0;
 #endif /* (SCREENWIDTH && SCREEN_LWRAP) */
-                ++((Uz_Globs *)pG)->numlines;
-                ++((Uz_Globs *)pG)->lines;
-                if (((Uz_Globs *)pG)->lines >= ((Uz_Globs *)pG)->height)
-                {
-                    if ((error = WriteTxtErr(q, p-q+1, outfp)) != 0)
+                ++((Uz_Globs*)pG)->numlines;
+                ++((Uz_Globs*)pG)->lines;
+                if (((Uz_Globs*)pG)->lines >= ((Uz_Globs*)pG)->height) {
+                    if ((error = WriteTxtErr(q, p - q + 1, outfp)) != 0)
                         return error;
                     fflush(outfp);
-                    ((Uz_Globs *)pG)->sol = TRUE;
+                    ((Uz_Globs*)pG)->sol = TRUE;
                     q = p + 1;
-                    (*((Uz_Globs *)pG)->mpause)((zvoid *)pG,
-                      LoadFarString(MorePrompt), 1);
+                    (*((Uz_Globs*)pG)->mpause)((zvoid*)pG, LoadFarString(MorePrompt), 1);
                 }
             }
             INCSTR(p);
         } /* end while */
-        size = (ulg)(p - q);   /* remaining text */
+        size = (ulg)(p - q); /* remaining text */
     }
 #endif /* MORE */
 
     if (size) {
 #ifdef OS2DLL
-        if (!((Uz_Globs *)pG)->redirect_text) {
+        if (!((Uz_Globs*)pG)->redirect_text) {
 #endif
             if ((error = WriteTxtErr(q, size, outfp)) != 0)
                 return error;
-#ifndef VMS     /* 2005-09-16 SMS.  See note at "WriteTxtErr()", above. */
+#ifndef VMS /* 2005-09-16 SMS.  See note at "WriteTxtErr()", above. */
             fflush(outfp);
 #endif
-            if (MSG_STDERR(flag) && ((Uz_Globs *)pG)->UzO.tflag &&
-                !isatty(1) && isatty(2))
-            {
+            if (MSG_STDERR(flag) && ((Uz_Globs*)pG)->UzO.tflag && !isatty(1) && isatty(2)) {
                 /* error output from testing redirected:  also send to stderr */
                 if ((error = WriteTxtErr(q, size, stderr)) != 0)
                     return error;
                 fflush(stderr);
             }
 #ifdef OS2DLL
-        } else {                /* GRR:  this is ugly:  hide with macro */
+        }
+        else { /* GRR:  this is ugly:  hide with macro */
             if ((error = REDIRECTPRINT(q, size)) != 0)
                 return error;
         }
 #endif /* OS2DLL */
-        ((Uz_Globs *)pG)->sol = (endbuf[-1] == '\n');
+        ((Uz_Globs*)pG)->sol = (endbuf[-1] == '\n');
     }
     return 0;
 
 } /* end function UzpMessagePrnt() */
 
-
-
-
-
 #ifdef DLL
 
 /*****************************/
-/* Function UzpMessageNull() */  /* convenience routine for no output at all */
+/* Function UzpMessageNull() */ /* convenience routine for no output at all */
 /*****************************/
 
 int UZ_EXP UzpMessageNull(pG, buf, size, flag)
-    zvoid *pG;    /* globals struct:  always passed */
-    uch *buf;     /* preformatted string to be printed */
-    ulg size;     /* length of string (may include nulls) */
-    int flag;     /* flag bits */
+zvoid* pG; /* globals struct:  always passed */
+uch* buf;  /* preformatted string to be printed */
+ulg size;  /* length of string (may include nulls) */
+int flag;  /* flag bits */
 {
     return 0;
 
@@ -1476,31 +1338,25 @@ int UZ_EXP UzpMessageNull(pG, buf, size, flag)
 
 #endif /* DLL */
 
-
-
-
-
 /***********************/
-/* Function UzpInput() */   /* GRR:  this is a placeholder for now */
+/* Function UzpInput() */ /* GRR:  this is a placeholder for now */
 /***********************/
 
 int UZ_EXP UzpInput(pG, buf, size, flag)
-    zvoid *pG;    /* globals struct:  always passed */
-    uch *buf;     /* preformatted string to be printed */
-    int *size;    /* (address of) size of buf and of returned string */
-    int flag;     /* flag bits (bit 0: no echo) */
+zvoid* pG; /* globals struct:  always passed */
+uch* buf;  /* preformatted string to be printed */
+int* size; /* (address of) size of buf and of returned string */
+int flag;  /* flag bits (bit 0: no echo) */
 {
     /* tell picky compilers to shut up about "unused variable" warnings */
-    (void)pG; (void)buf; (void)flag;
+    (void)pG;
+    (void)buf;
+    (void)flag;
 
     *size = 0;
     return 0;
 
 } /* end function UzpInput() */
-
-
-
-
 
 #if (!defined(WINDLL) && !defined(MACOS))
 
@@ -1509,31 +1365,32 @@ int UZ_EXP UzpInput(pG, buf, size, flag)
 /***************************/
 
 void UZ_EXP UzpMorePause(pG, prompt, flag)
-    zvoid *pG;            /* globals struct:  always passed */
-    ZCONST char *prompt;  /* "--More--" prompt */
-    int flag;             /* 0 = any char OK; 1 = accept only '\n', ' ', q */
+zvoid* pG;           /* globals struct:  always passed */
+ZCONST char* prompt; /* "--More--" prompt */
+int flag;            /* 0 = any char OK; 1 = accept only '\n', ' ', q */
 {
     uch c;
 
-/*---------------------------------------------------------------------------
-    Print a prompt and wait for the user to press a key, then erase prompt
-    if possible.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Print a prompt and wait for the user to press a key, then erase prompt
+        if possible.
+      ---------------------------------------------------------------------------*/
 
-    if (!((Uz_Globs *)pG)->sol)
+    if (!((Uz_Globs*)pG)->sol)
         fprintf(stderr, "\n");
     /* numlines may or may not be used: */
-    fprintf(stderr, prompt, ((Uz_Globs *)pG)->numlines);
+    fprintf(stderr, prompt, ((Uz_Globs*)pG)->numlines);
     fflush(stderr);
     if (flag & 1) {
         do {
             c = (uch)FGETCH(0);
         } while (
 #ifdef THEOS
-                 c != 17 &&     /* standard QUIT key */
+            c != 17 && /* standard QUIT key */
 #endif
-                 c != '\r' && c != '\n' && c != ' ' && c != 'q' && c != 'Q');
-    } else
+            c != '\r' && c != '\n' && c != ' ' && c != 'q' && c != 'Q');
+    }
+    else
         c = (uch)FGETCH(0);
 
     /* newline was not echoed, so cover up prompt line */
@@ -1542,27 +1399,24 @@ void UZ_EXP UzpMorePause(pG, prompt, flag)
 
     if (
 #ifdef THEOS
-        (c == 17) ||            /* standard QUIT key */
+        (c == 17) || /* standard QUIT key */
 #endif
         (ToLower(c) == 'q')) {
         DESTROYGLOBALS();
         EXIT(PK_COOL);
     }
 
-    ((Uz_Globs *)pG)->sol = TRUE;
+    ((Uz_Globs*)pG)->sol = TRUE;
 
 #ifdef MORE
     /* space for another screen, enter for another line. */
     if ((flag & 1) && c == ' ')
-        ((Uz_Globs *)pG)->lines = 0;
+        ((Uz_Globs*)pG)->lines = 0;
 #endif /* MORE */
 
 } /* end function UzpMorePause() */
 
 #endif /* !WINDLL && !MACOS */
-
-
-
 
 #ifndef WINDLL
 
@@ -1570,20 +1424,20 @@ void UZ_EXP UzpMorePause(pG, prompt, flag)
 /* Function UzpPassword() */
 /**************************/
 
-int UZ_EXP UzpPassword (pG, rcnt, pwbuf, size, zfn, efn)
-    zvoid *pG;         /* pointer to UnZip's internal global vars */
-    int *rcnt;         /* retry counter */
-    char *pwbuf;       /* buffer for password */
-    int size;          /* size of password buffer */
-    ZCONST char *zfn;  /* name of zip archive */
-    ZCONST char *efn;  /* name of archive entry being processed */
+int UZ_EXP UzpPassword(pG, rcnt, pwbuf, size, zfn, efn)
+zvoid* pG;        /* pointer to UnZip's internal global vars */
+int* rcnt;        /* retry counter */
+char* pwbuf;      /* buffer for password */
+int size;         /* size of password buffer */
+ZCONST char* zfn; /* name of zip archive */
+ZCONST char* efn; /* name of archive entry being processed */
 {
 #if CRYPT
     int r = IZ_PW_ENTERED;
-    char *m;
-    char *prompt;
-    char *zfnf;
-    char *efnf;
+    char* m;
+    char* prompt;
+    char* zfnf;
+    char* efnf;
     size_t zfnfl;
     int isOverflow;
 
@@ -1592,33 +1446,33 @@ int UZ_EXP UzpPassword (pG, rcnt, pwbuf, size, zfn, efn)
     (void)pG;
 #endif
 
-    if (*rcnt == 0) {           /* First call for current entry */
+    if (*rcnt == 0) { /* First call for current entry */
         *rcnt = 2;
         zfnf = FnFilter1(zfn);
         efnf = FnFilter2(efn);
         zfnfl = strlen(zfnf);
         isOverflow = TRUE;
-        if (2*FILNAMSIZ >= zfnfl && (2*FILNAMSIZ - zfnfl) >= strlen(efnf))
-        {
-		isOverflow = FALSE;
+        if (2 * FILNAMSIZ >= zfnfl && (2 * FILNAMSIZ - zfnfl) >= strlen(efnf)) {
+            isOverflow = FALSE;
         }
-        if ((isOverflow == FALSE) && ((prompt = (char *)malloc(2*FILNAMSIZ + 15)) != (char *)NULL)) {
-            sprintf(prompt, LoadFarString(PasswPrompt),
-                    FnFilter1(zfn), FnFilter2(efn));
+        if ((isOverflow == FALSE) && ((prompt = (char*)malloc(2 * FILNAMSIZ + 15)) != (char*)NULL)) {
+            sprintf(prompt, LoadFarString(PasswPrompt), FnFilter1(zfn), FnFilter2(efn));
             m = prompt;
-        } else
-            m = (char *)LoadFarString(PasswPrompt2);
-    } else {                    /* Retry call, previous password was wrong */
+        }
+        else
+            m = (char*)LoadFarString(PasswPrompt2);
+    }
+    else { /* Retry call, previous password was wrong */
         (*rcnt)--;
         prompt = NULL;
-        m = (char *)LoadFarString(PasswRetry);
+        m = (char*)LoadFarString(PasswRetry);
     }
 
     m = getp(__G__ m, pwbuf, size);
-    if (prompt != (char *)NULL) {
+    if (prompt != (char*)NULL) {
         free(prompt);
     }
-    if (m == (char *)NULL) {
+    if (m == (char*)NULL) {
         r = IZ_PW_ERROR;
     }
     else if (*pwbuf == '\0') {
@@ -1626,38 +1480,38 @@ int UZ_EXP UzpPassword (pG, rcnt, pwbuf, size, zfn, efn)
     }
     return r;
 
-#else /* !CRYPT */
+#else  /* !CRYPT */
     /* tell picky compilers to shut up about "unused variable" warnings */
-    (void)pG; (void)rcnt; (void)pwbuf; (void)size; (void)zfn; (void)efn;
+    (void)pG;
+    (void)rcnt;
+    (void)pwbuf;
+    (void)size;
+    (void)zfn;
+    (void)efn;
 
-    return IZ_PW_ERROR;  /* internal error; function should never get called */
+    return IZ_PW_ERROR; /* internal error; function should never get called */
 #endif /* ?CRYPT */
 
 } /* end function UzpPassword() */
-
-
-
-
 
 /**********************/
 /* Function handler() */
 /**********************/
 
-void handler(signal)   /* upon interrupt, turn on echo and exit cleanly */
+void handler(signal) /* upon interrupt, turn on echo and exit cleanly */
     int signal;
 {
     GETGLOBALS();
 
-#if !(defined(SIGBUS) || defined(SIGSEGV))      /* add a newline if not at */
-    (*G.message)((zvoid *)&G, slide, 0L, 0x41); /*  start of line (to stderr; */
-#endif                                          /*  slide[] should be safe) */
+#if !(defined(SIGBUS) || defined(SIGSEGV))     /* add a newline if not at */
+    (*G.message)((zvoid*)&G, slide, 0L, 0x41); /*  start of line (to stderr; */
+#endif                                         /*  slide[] should be safe) */
 
     echon();
 
 #ifdef SIGBUS
     if (signal == SIGBUS) {
-        Info(slide, 0x421, ((char *)slide, LoadFarString(ZipfileCorrupt),
-          "bus error"));
+        Info(slide, 0x421, ((char*)slide, LoadFarString(ZipfileCorrupt), "bus error"));
         DESTROYGLOBALS();
         EXIT(PK_BADERR);
     }
@@ -1665,8 +1519,7 @@ void handler(signal)   /* upon interrupt, turn on echo and exit cleanly */
 
 #ifdef SIGILL
     if (signal == SIGILL) {
-        Info(slide, 0x421, ((char *)slide, LoadFarString(ZipfileCorrupt),
-          "illegal instruction"));
+        Info(slide, 0x421, ((char*)slide, LoadFarString(ZipfileCorrupt), "illegal instruction"));
         DESTROYGLOBALS();
         EXIT(PK_BADERR);
     }
@@ -1674,8 +1527,7 @@ void handler(signal)   /* upon interrupt, turn on echo and exit cleanly */
 
 #ifdef SIGSEGV
     if (signal == SIGSEGV) {
-        Info(slide, 0x421, ((char *)slide, LoadFarString(ZipfileCorrupt),
-          "segmentation violation"));
+        Info(slide, 0x421, ((char*)slide, LoadFarString(ZipfileCorrupt), "segmentation violation"));
         DESTROYGLOBALS();
         EXIT(PK_BADERR);
     }
@@ -1686,21 +1538,17 @@ void handler(signal)   /* upon interrupt, turn on echo and exit cleanly */
 #if defined(AMIGA) && defined(__SASC)
     _abort();
 #endif
-    EXIT(IZ_CTRLC);       /* was EXIT(0), then EXIT(PK_ERR) */
+    EXIT(IZ_CTRLC); /* was EXIT(0), then EXIT(PK_ERR) */
 }
 
 #endif /* !WINDLL */
-
-
-
 
 #if (!defined(VMS) && !defined(CMS_MVS))
 #if (!defined(OS2) || defined(TIMESTAMP))
 
 #if (!defined(HAVE_MKTIME) || defined(WIN32))
 /* also used in amiga/filedate.c and win32/win32.c */
-ZCONST ush ydays[] =
-    { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 };
+ZCONST ush ydays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
 #endif
 
 /*******************************/
@@ -1708,51 +1556,51 @@ ZCONST ush ydays[] =
 /*******************************/
 
 time_t dos_to_unix_time(dosdatetime)
-    ulg dosdatetime;
+ulg dosdatetime;
 {
     time_t m_time;
 
 #ifdef HAVE_MKTIME
 
     ZCONST time_t now = time(NULL);
-    struct tm *tm;
-#   define YRBASE  1900
+    struct tm* tm;
+#define YRBASE 1900
 
     tm = localtime(&now);
-    tm->tm_isdst = -1;          /* let mktime determine if DST is in effect */
+    tm->tm_isdst = -1; /* let mktime determine if DST is in effect */
 
     /* dissect date */
     tm->tm_year = ((int)(dosdatetime >> 25) & 0x7f) + (1980 - YRBASE);
-    tm->tm_mon  = ((int)(dosdatetime >> 21) & 0x0f) - 1;
+    tm->tm_mon = ((int)(dosdatetime >> 21) & 0x0f) - 1;
     tm->tm_mday = ((int)(dosdatetime >> 16) & 0x1f);
 
     /* dissect time */
     tm->tm_hour = (int)((unsigned)dosdatetime >> 11) & 0x1f;
-    tm->tm_min  = (int)((unsigned)dosdatetime >> 5) & 0x3f;
-    tm->tm_sec  = (int)((unsigned)dosdatetime << 1) & 0x3e;
+    tm->tm_min = (int)((unsigned)dosdatetime >> 5) & 0x3f;
+    tm->tm_sec = (int)((unsigned)dosdatetime << 1) & 0x3e;
 
     m_time = mktime(tm);
-    NATIVE_TO_TIMET(m_time)     /* NOP unless MSC 7.0 or Macintosh */
+    NATIVE_TO_TIMET(m_time) /* NOP unless MSC 7.0 or Macintosh */
     TTrace((stderr, "  final m_time  =       %lu\n", (ulg)m_time));
 
 #else /* !HAVE_MKTIME */
 
     int yr, mo, dy, hh, mm, ss;
 #ifdef TOPS20
-#   define YRBASE  1900
-    struct tmx *tmx;
+#define YRBASE 1900
+    struct tmx* tmx;
     char temp[20];
 #else /* !TOPS20 */
-#   define YRBASE  1970
+#define YRBASE 1970
     int leap;
     unsigned days;
-    struct tm *tm;
+    struct tm* tm;
 #if (!defined(MACOS) && !defined(RISCOS) && !defined(QDOS) && !defined(TANDEM))
 #ifdef WIN32
     TIME_ZONE_INFORMATION tzinfo;
     DWORD res;
-#else /* ! WIN32 */
-#ifndef BSD4_4   /* GRR:  change to !defined(MODERN) ? */
+#else          /* ! WIN32 */
+#ifndef BSD4_4 /* GRR:  change to !defined(MODERN) ? */
 #if (defined(BSD) || defined(MTS) || defined(__GO32__))
     struct timeb tbp;
 #else /* !(BSD || MTS || __GO32__) */
@@ -1765,7 +1613,6 @@ time_t dos_to_unix_time(dosdatetime)
 #endif /* !MACOS && !RISCOS && !QDOS && !TANDEM */
 #endif /* ?TOPS20 */
 
-
     /* dissect date */
     yr = ((int)(dosdatetime >> 25) & 0x7f) + (1980 - YRBASE);
     mo = ((int)(dosdatetime >> 21) & 0x0f) - 1;
@@ -1777,92 +1624,87 @@ time_t dos_to_unix_time(dosdatetime)
     ss = (int)((unsigned)dosdatetime & 0x1f) * 2;
 
 #ifdef TOPS20
-    tmx = (struct tmx *)malloc(sizeof(struct tmx));
-    sprintf (temp, "%02d/%02d/%02d %02d:%02d:%02d", mo+1, dy+1, yr, hh, mm, ss);
-    time_parse(temp, tmx, (char *)0);
+    tmx = (struct tmx*)malloc(sizeof(struct tmx));
+    sprintf(temp, "%02d/%02d/%02d %02d:%02d:%02d", mo + 1, dy + 1, yr, hh, mm, ss);
+    time_parse(temp, tmx, (char*)0);
     m_time = time_make(tmx);
     free(tmx);
 
 #else /* !TOPS20 */
 
-/*---------------------------------------------------------------------------
-    Calculate the number of seconds since the epoch, usually 1 January 1970.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Calculate the number of seconds since the epoch, usually 1 January 1970.
+      ---------------------------------------------------------------------------*/
 
     /* leap = # of leap yrs from YRBASE up to but not including current year */
-    leap = ((yr + YRBASE - 1) / 4);   /* leap year base factor */
+    leap = ((yr + YRBASE - 1) / 4); /* leap year base factor */
 
     /* calculate days from BASE to this year and add expired days this year */
     days = (yr * 365) + (leap - 492) + ydays[mo];
 
     /* if year is a leap year and month is after February, add another day */
-    if ((mo > 1) && ((yr+YRBASE)%4 == 0) && ((yr+YRBASE) != 2100))
-        ++days;                 /* OK through 2199 */
+    if ((mo > 1) && ((yr + YRBASE) % 4 == 0) && ((yr + YRBASE) != 2100))
+        ++days; /* OK through 2199 */
 
     /* convert date & time to seconds relative to 00:00:00, 01/01/YRBASE */
-    m_time = (time_t)((unsigned long)(days + dy) * 86400L +
-                      (unsigned long)hh * 3600L +
-                      (unsigned long)(mm * 60 + ss));
-      /* - 1;   MS-DOS times always rounded up to nearest even second */
+    m_time = (time_t)((unsigned long)(days + dy) * 86400L + (unsigned long)hh * 3600L + (unsigned long)(mm * 60 + ss));
+    /* - 1;   MS-DOS times always rounded up to nearest even second */
     TTrace((stderr, "dos_to_unix_time:\n"));
     TTrace((stderr, "  m_time before timezone = %lu\n", (ulg)m_time));
 
-/*---------------------------------------------------------------------------
-    Adjust for local standard timezone offset.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Adjust for local standard timezone offset.
+      ---------------------------------------------------------------------------*/
 
 #if (!defined(MACOS) && !defined(RISCOS) && !defined(QDOS) && !defined(TANDEM))
 #ifdef WIN32
     /* account for timezone differences */
     res = GetTimeZoneInformation(&tzinfo);
-    if (res != TIME_ZONE_ID_INVALID)
-    {
-    m_time += 60*(tzinfo.Bias);
+    if (res != TIME_ZONE_ID_INVALID) {
+        m_time += 60 * (tzinfo.Bias);
 #else /* !WIN32 */
 #if (defined(BSD) || defined(MTS) || defined(__GO32__))
 #ifdef BSD4_4
-    if ( (dosdatetime >= DOSTIME_2038_01_18) &&
-         (m_time < (time_t)0x70000000L) )
-        m_time = U_TIME_T_MAX;  /* saturate in case of (unsigned) overflow */
-    if (m_time < (time_t)0L)    /* a converted DOS time cannot be negative */
-        m_time = S_TIME_T_MAX;  /*  -> saturate at max signed time_t value */
-    if ((tm = localtime(&m_time)) != (struct tm *)NULL)
-        m_time -= tm->tm_gmtoff;                /* sec. EAST of GMT: subtr. */
-#else /* !(BSD4_4 */
-    ftime(&tbp);                                /* get `timezone' */
-    m_time += tbp.timezone * 60L;               /* seconds WEST of GMT:  add */
-#endif /* ?(BSD4_4 || __EMX__) */
-#else /* !(BSD || MTS || __GO32__) */
+    if ((dosdatetime >= DOSTIME_2038_01_18) && (m_time < (time_t)0x70000000L))
+        m_time = U_TIME_T_MAX; /* saturate in case of (unsigned) overflow */
+    if (m_time < (time_t)0L)   /* a converted DOS time cannot be negative */
+        m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
+    if ((tm = localtime(&m_time)) != (struct tm*)NULL)
+        m_time -= tm->tm_gmtoff; /* sec. EAST of GMT: subtr. */
+#else            /* !(BSD4_4 */
+    ftime(&tbp);                  /* get `timezone' */
+    m_time += tbp.timezone * 60L; /* seconds WEST of GMT:  add */
+#endif           /* ?(BSD4_4 || __EMX__) */
+#else            /* !(BSD || MTS || __GO32__) */
     /* tzset was already called at start of process_zipfiles() */
-    /* tzset(); */              /* set `timezone' variable */
-#ifndef __BEOS__                /* BeOS DR8 has no timezones... */
-    m_time += timezone;         /* seconds WEST of GMT:  add */
+    /* tzset(); */ /* set `timezone' variable */
+#ifndef __BEOS__ /* BeOS DR8 has no timezones... */
+    m_time += timezone; /* seconds WEST of GMT:  add */
 #endif
 #endif /* ?(BSD || MTS || __GO32__) */
 #endif /* ?WIN32 */
-    TTrace((stderr, "  m_time after timezone =  %lu\n", (ulg)m_time));
+        TTrace((stderr, "  m_time after timezone =  %lu\n", (ulg)m_time));
 
-/*---------------------------------------------------------------------------
-    Adjust for local daylight savings (summer) time.
-  ---------------------------------------------------------------------------*/
+        /*---------------------------------------------------------------------------
+            Adjust for local daylight savings (summer) time.
+          ---------------------------------------------------------------------------*/
 
-#ifndef BSD4_4  /* (DST already added to tm_gmtoff, so skip tm_isdst) */
-    if ( (dosdatetime >= DOSTIME_2038_01_18) &&
-         (m_time < (time_t)0x70000000L) )
-        m_time = U_TIME_T_MAX;  /* saturate in case of (unsigned) overflow */
-    if (m_time < (time_t)0L)    /* a converted DOS time cannot be negative */
-        m_time = S_TIME_T_MAX;  /*  -> saturate at max signed time_t value */
-    TIMET_TO_NATIVE(m_time)     /* NOP unless MSC 7.0 or Macintosh */
-    if (((tm = localtime((time_t *)&m_time)) != NULL) && tm->tm_isdst)
+#ifndef BSD4_4 /* (DST already added to tm_gmtoff, so skip tm_isdst) */
+        if ((dosdatetime >= DOSTIME_2038_01_18) && (m_time < (time_t)0x70000000L))
+            m_time = U_TIME_T_MAX; /* saturate in case of (unsigned) overflow */
+        if (m_time < (time_t)0L)   /* a converted DOS time cannot be negative */
+            m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
+        TIMET_TO_NATIVE(m_time)    /* NOP unless MSC 7.0 or Macintosh */
+        if (((tm = localtime((time_t*)&m_time)) != NULL) && tm->tm_isdst)
 #ifdef WIN32
-        m_time += 60L * tzinfo.DaylightBias;    /* adjust with DST bias */
-    else
-        m_time += 60L * tzinfo.StandardBias;    /* add StdBias (normally 0) */
+            m_time += 60L * tzinfo.DaylightBias; /* adjust with DST bias */
+        else
+            m_time += 60L * tzinfo.StandardBias; /* add StdBias (normally 0) */
 #else
-        m_time -= 60L * 60L;    /* adjust for daylight savings time */
+            m_time -= 60L * 60L; /* adjust for daylight savings time */
 #endif
-    NATIVE_TO_TIMET(m_time)     /* NOP unless MSC 7.0 or Macintosh */
-    TTrace((stderr, "  m_time after DST =       %lu\n", (ulg)m_time));
+        NATIVE_TO_TIMET(m_time) /* NOP unless MSC 7.0 or Macintosh */
+        TTrace((stderr, "  m_time after DST =       %lu\n", (ulg)m_time));
 #endif /* !BSD4_4 */
 #ifdef WIN32
     }
@@ -1872,11 +1714,10 @@ time_t dos_to_unix_time(dosdatetime)
 
 #endif /* ?HAVE_MKTIME */
 
-    if ( (dosdatetime >= DOSTIME_2038_01_18) &&
-         (m_time < (time_t)0x70000000L) )
-        m_time = U_TIME_T_MAX;  /* saturate in case of (unsigned) overflow */
-    if (m_time < (time_t)0L)    /* a converted DOS time cannot be negative */
-        m_time = S_TIME_T_MAX;  /*  -> saturate at max signed time_t value */
+    if ((dosdatetime >= DOSTIME_2038_01_18) && (m_time < (time_t)0x70000000L))
+        m_time = U_TIME_T_MAX; /* saturate in case of (unsigned) overflow */
+    if (m_time < (time_t)0L)   /* a converted DOS time cannot be negative */
+        m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
 
     return m_time;
 
@@ -1885,25 +1726,22 @@ time_t dos_to_unix_time(dosdatetime)
 #endif /* !OS2 || TIMESTAMP */
 #endif /* !VMS && !CMS_MVS */
 
-
-
 #if (!defined(VMS) && !defined(OS2) && !defined(CMS_MVS))
 
 /******************************/
-/* Function check_for_newer() */  /* used for overwriting/freshening/updating */
+/* Function check_for_newer() */ /* used for overwriting/freshening/updating */
 /******************************/
 
-int check_for_newer(__G__ filename)  /* return 1 if existing file is newer */
-    __GDEF                           /*  or equal; 0 if older; -1 if doesn't */
-    char *filename;                  /*  exist yet */
+int check_for_newer(__G__ filename) /* return 1 if existing file is newer */
+    __GDEF                          /*  or equal; 0 if older; -1 if doesn't */
+    char* filename;                 /*  exist yet */
 {
     time_t existing, archive;
 #ifdef USE_EF_UT_TIME
     iztimes z_utime;
 #endif
 #ifdef AOS_VS
-    long    dyy, dmm, ddd, dhh, dmin, dss;
-
+    long dyy, dmm, ddd, dhh, dmin, dss;
 
     dyy = (lrec.last_mod_dos_datetime >> 25) + 1980;
     dmm = (lrec.last_mod_dos_datetime >> 21) & 0x0f;
@@ -1917,48 +1755,38 @@ int check_for_newer(__G__ filename)  /* return 1 if existing file is newer */
      * it here - we delete it later & re-create it, whether or not
      * it exists now.
      */
-    if (!zvs_create(filename, (((ulg)dgdate(dmm, ddd, dyy)) << 16) |
-        (dhh*1800L + dmin*30L + dss/2L), -1L, -1L, (char *) -1, -1, -1, -1))
+    if (!zvs_create(filename, (((ulg)dgdate(dmm, ddd, dyy)) << 16) | (dhh * 1800L + dmin * 30L + dss / 2L), -1L, -1L, (char*)-1, -1, -1, -1))
         return DOES_NOT_EXIST;
 #endif /* AOS_VS */
 
     Trace((stderr, "check_for_newer:  doing stat(%s)\n", FnFilter1(filename)));
     if (SSTAT(filename, &G.statbuf)) {
-        Trace((stderr,
-          "check_for_newer:  stat(%s) returns %d:  file does not exist\n",
-          FnFilter1(filename), SSTAT(filename, &G.statbuf)));
+        Trace((stderr, "check_for_newer:  stat(%s) returns %d:  file does not exist\n", FnFilter1(filename), SSTAT(filename, &G.statbuf)));
 #ifdef SYMLINKS
-        Trace((stderr, "check_for_newer:  doing lstat(%s)\n",
-          FnFilter1(filename)));
+        Trace((stderr, "check_for_newer:  doing lstat(%s)\n", FnFilter1(filename)));
         /* GRR OPTION:  could instead do this test ONLY if G.symlnk is true */
         if (lstat(filename, &G.statbuf) == 0) {
-            Trace((stderr,
-              "check_for_newer:  lstat(%s) returns 0:  symlink does exist\n",
-              FnFilter1(filename)));
+            Trace((stderr, "check_for_newer:  lstat(%s) returns 0:  symlink does exist\n", FnFilter1(filename)));
             if (QCOND2 && !IS_OVERWRT_ALL)
-                Info(slide, 0, ((char *)slide, LoadFarString(FileIsSymLink),
-                  FnFilter1(filename), " with no real file"));
-            return EXISTS_AND_OLDER;   /* symlink dates are meaningless */
+                Info(slide, 0, ((char*)slide, LoadFarString(FileIsSymLink), FnFilter1(filename), " with no real file"));
+            return EXISTS_AND_OLDER; /* symlink dates are meaningless */
         }
 #endif /* SYMLINKS */
         return DOES_NOT_EXIST;
     }
-    Trace((stderr, "check_for_newer:  stat(%s) returns 0:  file exists\n",
-      FnFilter1(filename)));
+    Trace((stderr, "check_for_newer:  stat(%s) returns 0:  file exists\n", FnFilter1(filename)));
 
 #ifdef SYMLINKS
     /* GRR OPTION:  could instead do this test ONLY if G.symlnk is true */
     if (lstat(filename, &G.statbuf) == 0 && S_ISLNK(G.statbuf.st_mode)) {
-        Trace((stderr, "check_for_newer:  %s is a symbolic link\n",
-          FnFilter1(filename)));
+        Trace((stderr, "check_for_newer:  %s is a symbolic link\n", FnFilter1(filename)));
         if (QCOND2 && !IS_OVERWRT_ALL)
-            Info(slide, 0, ((char *)slide, LoadFarString(FileIsSymLink),
-              FnFilter1(filename), ""));
-        return EXISTS_AND_OLDER;   /* symlink dates are meaningless */
+            Info(slide, 0, ((char*)slide, LoadFarString(FileIsSymLink), FnFilter1(filename), ""));
+        return EXISTS_AND_OLDER; /* symlink dates are meaningless */
     }
 #endif /* SYMLINKS */
 
-    NATIVE_TO_TIMET(G.statbuf.st_mtime)   /* NOP unless MSC 7.0 or Macintosh */
+    NATIVE_TO_TIMET(G.statbuf.st_mtime) /* NOP unless MSC 7.0 or Macintosh */
 
 #ifdef USE_EF_UT_TIME
     /* The `Unix extra field mtime' should be used for comparison with the
@@ -1969,34 +1797,27 @@ int check_for_newer(__G__ filename)  /* return 1 if existing file is newer */
 #ifdef IZ_CHECK_TZ
         G.tz_is_valid &&
 #endif
-        (ef_scan_for_izux(G.extra_field, G.lrec.extra_field_length, 0,
-                          G.lrec.last_mod_dos_datetime, &z_utime, NULL)
-         & EB_UT_FL_MTIME))
-    {
+        (ef_scan_for_izux(G.extra_field, G.lrec.extra_field_length, 0, G.lrec.last_mod_dos_datetime, &z_utime, NULL) & EB_UT_FL_MTIME)) {
         TTrace((stderr, "check_for_newer:  using Unix extra field mtime\n"));
         existing = G.statbuf.st_mtime;
-        archive  = z_utime.mtime;
-    } else {
+        archive = z_utime.mtime;
+    }
+    else {
         /* round up existing filetime to nearest 2 seconds for comparison,
          * but saturate in case of arithmetic overflow
          */
-        existing = ((G.statbuf.st_mtime & 1) &&
-                    (G.statbuf.st_mtime + 1 > G.statbuf.st_mtime)) ?
-                   G.statbuf.st_mtime + 1 : G.statbuf.st_mtime;
-        archive  = dos_to_unix_time(G.lrec.last_mod_dos_datetime);
+        existing = ((G.statbuf.st_mtime & 1) && (G.statbuf.st_mtime + 1 > G.statbuf.st_mtime)) ? G.statbuf.st_mtime + 1 : G.statbuf.st_mtime;
+        archive = dos_to_unix_time(G.lrec.last_mod_dos_datetime);
     }
-#else /* !USE_EF_UT_TIME */
+#else  /* !USE_EF_UT_TIME */
     /* round up existing filetime to nearest 2 seconds for comparison,
      * but saturate in case of arithmetic overflow
      */
-    existing = ((G.statbuf.st_mtime & 1) &&
-                (G.statbuf.st_mtime + 1 > G.statbuf.st_mtime)) ?
-               G.statbuf.st_mtime + 1 : G.statbuf.st_mtime;
-    archive  = dos_to_unix_time(G.lrec.last_mod_dos_datetime);
+    existing = ((G.statbuf.st_mtime & 1) && (G.statbuf.st_mtime + 1 > G.statbuf.st_mtime)) ? G.statbuf.st_mtime + 1 : G.statbuf.st_mtime;
+    archive = dos_to_unix_time(G.lrec.last_mod_dos_datetime);
 #endif /* ?USE_EF_UT_TIME */
 
-    TTrace((stderr, "check_for_newer:  existing %lu, archive %lu, e-a %ld\n",
-      (ulg)existing, (ulg)archive, (long)(existing-archive)));
+    TTrace((stderr, "check_for_newer:  existing %lu, archive %lu, e-a %ld\n", (ulg)existing, (ulg)archive, (long)(existing - archive)));
 
     return (existing >= archive);
 
@@ -2004,409 +1825,391 @@ int check_for_newer(__G__ filename)  /* return 1 if existing file is newer */
 
 #endif /* !VMS && !OS2 && !CMS_MVS */
 
-
-
-
-
 /************************/
 /* Function do_string() */
 /************************/
 
-int do_string(__G__ length, option)   /* return PK-type error code */
-    __GDEF
-    unsigned int length;        /* without prototype, ush converted to this */
-    int option;
+int do_string(__G__ length, option) /* return PK-type error code */
+__GDEF
+unsigned int length; /* without prototype, ush converted to this */
+int option;
 {
     unsigned comment_bytes_left;
     unsigned int block_len;
-    int error=PK_OK;
+    int error = PK_OK;
 #ifdef AMIGA
-    char tmp_fnote[2 * AMIGA_FILENOTELEN];   /* extra room for squozen chars */
+    char tmp_fnote[2 * AMIGA_FILENOTELEN]; /* extra room for squozen chars */
 #endif
 
+    /*---------------------------------------------------------------------------
+        This function processes arbitrary-length (well, usually) strings.  Four
+        major options are allowed:  SKIP, wherein the string is skipped (pretty
+        logical, eh?); DISPLAY, wherein the string is printed to standard output
+        after undergoing any necessary or unnecessary character conversions;
+        DS_FN, wherein the string is put into the filename[] array after under-
+        going appropriate conversions (including case-conversion, if that is
+        indicated: see the global variable pInfo->lcflag); and EXTRA_FIELD,
+        wherein the `string' is assumed to be an extra field and is copied to
+        the (freshly malloced) buffer G.extra_field.  The third option should
+        be OK since filename is dimensioned at 1025, but we check anyway.
 
-/*---------------------------------------------------------------------------
-    This function processes arbitrary-length (well, usually) strings.  Four
-    major options are allowed:  SKIP, wherein the string is skipped (pretty
-    logical, eh?); DISPLAY, wherein the string is printed to standard output
-    after undergoing any necessary or unnecessary character conversions;
-    DS_FN, wherein the string is put into the filename[] array after under-
-    going appropriate conversions (including case-conversion, if that is
-    indicated: see the global variable pInfo->lcflag); and EXTRA_FIELD,
-    wherein the `string' is assumed to be an extra field and is copied to
-    the (freshly malloced) buffer G.extra_field.  The third option should
-    be OK since filename is dimensioned at 1025, but we check anyway.
-
-    The string, by the way, is assumed to start at the current file-pointer
-    position; its length is given by 'length'.  So start off by checking the
-    length of the string:  if zero, we're already done.
-  ---------------------------------------------------------------------------*/
+        The string, by the way, is assumed to start at the current file-pointer
+        position; its length is given by 'length'.  So start off by checking the
+        length of the string:  if zero, we're already done.
+      ---------------------------------------------------------------------------*/
 
     if (!length)
         return PK_COOL;
 
     switch (option) {
-
 #if (defined(SFX) && defined(CHEAP_SFX_AUTORUN))
-    /*
-     * Special case: See if the comment begins with an autorun command line.
-     * Save that and display (or skip) the remainder.
-     */
+            /*
+             * Special case: See if the comment begins with an autorun command line.
+             * Save that and display (or skip) the remainder.
+             */
 
-    case CHECK_AUTORUN:
-    case CHECK_AUTORUN_Q:
-        comment_bytes_left = length;
-        if (length >= 10)
-        {
-            block_len = readbuf(__G__ (char *)G.outbuf, 10);
-            if (block_len == 0)
-                return PK_EOF;
-            comment_bytes_left -= block_len;
-            G.outbuf[block_len] = '\0';
-            if (!strcmp((char *)G.outbuf, "$AUTORUN$>")) {
-                char *eol;
-                length -= 10;
-                block_len = readbuf(__G__ G.autorun_command,
-                                    MIN(length, sizeof(G.autorun_command)-1));
+        case CHECK_AUTORUN:
+        case CHECK_AUTORUN_Q:
+            comment_bytes_left = length;
+            if (length >= 10) {
+                block_len = readbuf(__G__(char*) G.outbuf, 10);
                 if (block_len == 0)
                     return PK_EOF;
                 comment_bytes_left -= block_len;
-                G.autorun_command[block_len] = '\0';
-                A_TO_N(G.autorun_command);
-                eol = strchr(G.autorun_command, '\n');
-                if (!eol)
-                    eol = G.autorun_command + strlen(G.autorun_command) - 1;
-                length -= eol + 1 - G.autorun_command;
-                while (eol >= G.autorun_command && isspace(*eol))
-                    *eol-- = '\0';
+                G.outbuf[block_len] = '\0';
+                if (!strcmp((char*)G.outbuf, "$AUTORUN$>")) {
+                    char* eol;
+                    length -= 10;
+                    block_len = readbuf(__G__ G.autorun_command, MIN(length, sizeof(G.autorun_command) - 1));
+                    if (block_len == 0)
+                        return PK_EOF;
+                    comment_bytes_left -= block_len;
+                    G.autorun_command[block_len] = '\0';
+                    A_TO_N(G.autorun_command);
+                    eol = strchr(G.autorun_command, '\n');
+                    if (!eol)
+                        eol = G.autorun_command + strlen(G.autorun_command) - 1;
+                    length -= eol + 1 - G.autorun_command;
+                    while (eol >= G.autorun_command && isspace(*eol))
+                        *eol-- = '\0';
 #if (defined(WIN32) && !defined(_WIN32_WCE))
-                /* Win9x console always uses OEM character coding, and
-                   WinNT console is set to OEM charset by default, too */
-                INTERN_TO_OEM(G.autorun_command, G.autorun_command);
+                    /* Win9x console always uses OEM character coding, and
+                       WinNT console is set to OEM charset by default, too */
+                    INTERN_TO_OEM(G.autorun_command, G.autorun_command);
 #endif /* (WIN32 && !_WIN32_WCE) */
+                }
             }
-        }
-        if (option == CHECK_AUTORUN_Q)  /* don't display the remainder */
-            length = 0;
-        /* seek to beginning of remaining part of comment -- rewind if */
-        /* displaying entire comment, or skip to end if discarding it  */
-        seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes +
-                  (G.inptr - G.inbuf) + comment_bytes_left - length);
-        if (!length)
-            break;
-        /*  FALL THROUGH...  */
+            if (option == CHECK_AUTORUN_Q) /* don't display the remainder */
+                length = 0;
+            /* seek to beginning of remaining part of comment -- rewind if */
+            /* displaying entire comment, or skip to end if discarding it  */
+            seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes + (G.inptr - G.inbuf) + comment_bytes_left - length);
+            if (!length)
+                break;
+            /*  FALL THROUGH...  */
 #endif /* SFX && CHEAP_SFX_AUTORUN */
 
-    /*
-     * First normal case:  print string on standard output.  First set loop
-     * variables, then loop through the comment in chunks of OUTBUFSIZ bytes,
-     * converting formats and printing as we go.  The second half of the
-     * loop conditional was added because the file might be truncated, in
-     * which case comment_bytes_left will remain at some non-zero value for
-     * all time.  outbuf and slide are used as scratch buffers because they
-     * are available (we should be either before or in between any file pro-
-     * cessing).
-     */
-
-    case DISPLAY:
-    case DISPL_8:
-        comment_bytes_left = length;
-        block_len = OUTBUFSIZ;       /* for the while statement, first time */
-        while (comment_bytes_left > 0 && block_len > 0) {
-            register uch *p = G.outbuf;
-            register uch *q = G.outbuf;
-
-            if ((block_len = readbuf(__G__ (char *)G.outbuf,
-                   MIN((unsigned)OUTBUFSIZ, comment_bytes_left))) == 0)
-                return PK_EOF;
-            comment_bytes_left -= block_len;
-
-            /* this is why we allocated an extra byte for outbuf:  terminate
-             *  with zero (ASCIIZ) */
-            G.outbuf[block_len] = '\0';
-
-            /* remove all ASCII carriage returns from comment before printing
-             * (since used before A_TO_N(), check for CR instead of '\r')
+            /*
+             * First normal case:  print string on standard output.  First set loop
+             * variables, then loop through the comment in chunks of OUTBUFSIZ bytes,
+             * converting formats and printing as we go.  The second half of the
+             * loop conditional was added because the file might be truncated, in
+             * which case comment_bytes_left will remain at some non-zero value for
+             * all time.  outbuf and slide are used as scratch buffers because they
+             * are available (we should be either before or in between any file pro-
+             * cessing).
              */
-            while (*p) {
-                while (*p == CR)
-                    ++p;
-                *q++ = *p++;
-            }
-            /* could check whether (p - outbuf) == block_len here */
-            *q = '\0';
 
-            if (option == DISPL_8) {
-                /* translate the text coded in the entry's host-dependent
-                   "extended ASCII" charset into the compiler's (system's)
-                   internal text code page */
-                Ext_ASCII_TO_Native((char *)G.outbuf, G.pInfo->hostnum,
-                                    G.pInfo->hostver, G.pInfo->HasUxAtt,
-                                    FALSE);
+        case DISPLAY:
+        case DISPL_8:
+            comment_bytes_left = length;
+            block_len = OUTBUFSIZ; /* for the while statement, first time */
+            while (comment_bytes_left > 0 && block_len > 0) {
+                register uch* p = G.outbuf;
+                register uch* q = G.outbuf;
+
+                if ((block_len = readbuf(__G__(char*) G.outbuf, MIN((unsigned)OUTBUFSIZ, comment_bytes_left))) == 0)
+                    return PK_EOF;
+                comment_bytes_left -= block_len;
+
+                /* this is why we allocated an extra byte for outbuf:  terminate
+                 *  with zero (ASCIIZ) */
+                G.outbuf[block_len] = '\0';
+
+                /* remove all ASCII carriage returns from comment before printing
+                 * (since used before A_TO_N(), check for CR instead of '\r')
+                 */
+                while (*p) {
+                    while (*p == CR)
+                        ++p;
+                    *q++ = *p++;
+                }
+                /* could check whether (p - outbuf) == block_len here */
+                *q = '\0';
+
+                if (option == DISPL_8) {
+                    /* translate the text coded in the entry's host-dependent
+                       "extended ASCII" charset into the compiler's (system's)
+                       internal text code page */
+                    Ext_ASCII_TO_Native((char*)G.outbuf, G.pInfo->hostnum, G.pInfo->hostver, G.pInfo->HasUxAtt, FALSE);
 #ifdef WINDLL
-                /* translate to ANSI (RTL internal codepage may be OEM) */
-                INTERN_TO_ISO((char *)G.outbuf, (char *)G.outbuf);
+                    /* translate to ANSI (RTL internal codepage may be OEM) */
+                    INTERN_TO_ISO((char*)G.outbuf, (char*)G.outbuf);
 #else /* !WINDLL */
 #if (defined(WIN32) && !defined(_WIN32_WCE))
-                /* Win9x console always uses OEM character coding, and
-                   WinNT console is set to OEM charset by default, too */
-                INTERN_TO_OEM((char *)G.outbuf, (char *)G.outbuf);
+                    /* Win9x console always uses OEM character coding, and
+                       WinNT console is set to OEM charset by default, too */
+                    INTERN_TO_OEM((char*)G.outbuf, (char*)G.outbuf);
 #endif /* (WIN32 && !_WIN32_WCE) */
 #endif /* ?WINDLL */
-            } else {
-                A_TO_N(G.outbuf);   /* translate string to native */
-            }
+                }
+                else {
+                    A_TO_N(G.outbuf); /* translate string to native */
+                }
 
 #ifdef WINDLL
-            /* ran out of local mem -- had to cheat */
-            win_fprintf((zvoid *)&G, stdout, (extent)(q-G.outbuf),
-                        (char *)G.outbuf);
-            win_fprintf((zvoid *)&G, stdout, 2, (char *)"\n\n");
-#else /* !WINDLL */
-#ifdef NOANSIFILT       /* GRR:  can ANSI be used with EBCDIC? */
-            (*G.message)((zvoid *)&G, G.outbuf, (ulg)(q-G.outbuf), 0);
-#else /* ASCII, filter out ANSI escape sequences and handle ^S (pause) */
-            p = G.outbuf - 1;
-            q = slide;
-            while (*++p) {
-                int pause = FALSE;
+                /* ran out of local mem -- had to cheat */
+                win_fprintf((zvoid*)&G, stdout, (extent)(q - G.outbuf), (char*)G.outbuf);
+                win_fprintf((zvoid*)&G, stdout, 2, (char*)"\n\n");
+#else             /* !WINDLL */
+#ifdef NOANSIFILT /* GRR:  can ANSI be used with EBCDIC? */
+                (*G.message)((zvoid*)&G, G.outbuf, (ulg)(q - G.outbuf), 0);
+#else             /* ASCII, filter out ANSI escape sequences and handle ^S (pause) */
+                p = G.outbuf - 1;
+                q = slide;
+                while (*++p) {
+                    int pause = FALSE;
 
-                if (*p == 0x1B) {          /* ASCII escape char */
-                    *q++ = '^';
-                    *q++ = '[';
-                } else if (*p == 0x13) {   /* ASCII ^S (pause) */
-                    pause = TRUE;
-                    if (p[1] == LF)        /* ASCII LF */
-                        *q++ = *++p;
-                    else if (p[1] == CR && p[2] == LF) {  /* ASCII CR LF */
-                        *q++ = *++p;
-                        *q++ = *++p;
+                    if (*p == 0x1B) { /* ASCII escape char */
+                        *q++ = '^';
+                        *q++ = '[';
                     }
-                } else
-                    *q++ = *p;
-                if ((unsigned)(q-slide) > WSIZE-3 || pause) {   /* flush */
-                    (*G.message)((zvoid *)&G, slide, (ulg)(q-slide), 0);
-                    q = slide;
-                    if (pause && G.extract_flag) /* don't pause for list/test */
-                        (*G.mpause)((zvoid *)&G, LoadFarString(QuitPrompt), 0);
+                    else if (*p == 0x13) { /* ASCII ^S (pause) */
+                        pause = TRUE;
+                        if (p[1] == LF) /* ASCII LF */
+                            *q++ = *++p;
+                        else if (p[1] == CR && p[2] == LF) { /* ASCII CR LF */
+                            *q++ = *++p;
+                            *q++ = *++p;
+                        }
+                    }
+                    else
+                        *q++ = *p;
+                    if ((unsigned)(q - slide) > WSIZE - 3 || pause) { /* flush */
+                        (*G.message)((zvoid*)&G, slide, (ulg)(q - slide), 0);
+                        q = slide;
+                        if (pause && G.extract_flag) /* don't pause for list/test */
+                            (*G.mpause)((zvoid*)&G, LoadFarString(QuitPrompt), 0);
+                    }
                 }
+                (*G.message)((zvoid*)&G, slide, (ulg)(q - slide), 0);
+#endif            /* ?NOANSIFILT */
+#endif            /* ?WINDLL */
             }
-            (*G.message)((zvoid *)&G, slide, (ulg)(q-slide), 0);
-#endif /* ?NOANSIFILT */
-#endif /* ?WINDLL */
-        }
-        /* add '\n' if not at start of line */
-        (*G.message)((zvoid *)&G, slide, 0L, 0x40);
-        break;
-
-    /*
-     * Second case:  read string into filename[] array.  The filename should
-     * never ever be longer than FILNAMSIZ-1 (1024), but for now we'll check,
-     * just to be sure.
-     */
-
-    case DS_FN:
-    case DS_FN_L:
-#ifdef UNICODE_SUPPORT
-        /* get the whole filename as need it for Unicode checksum */
-        if (G.fnfull_bufsize <= length) {
-            extent fnbufsiz = FILNAMSIZ;
-
-            if (fnbufsiz <= length)
-                fnbufsiz = length + 1;
-            if (G.filename_full)
-                free(G.filename_full);
-            G.filename_full = malloc(fnbufsiz);
-            if (G.filename_full == NULL)
-                return PK_MEM;
-            G.fnfull_bufsize = fnbufsiz;
-        }
-        if (readbuf(__G__ G.filename_full, length) == 0)
-            return PK_EOF;
-        G.filename_full[length] = '\0';      /* terminate w/zero:  ASCIIZ */
-
-        /* if needed, chop off end so standard filename is a valid length */
-        if (length >= FILNAMSIZ) {
-            Info(slide, 0x401, ((char *)slide,
-              LoadFarString(FilenameTooLongTrunc)));
-            error = PK_WARN;
-            length = FILNAMSIZ - 1;
-        }
-        /* no excess size */
-        block_len = 0;
-        strncpy(G.filename, G.filename_full, length);
-        G.filename[length] = '\0';      /* terminate w/zero:  ASCIIZ */
-#else /* !UNICODE_SUPPORT */
-        if (length >= FILNAMSIZ) {
-            Info(slide, 0x401, ((char *)slide,
-              LoadFarString(FilenameTooLongTrunc)));
-            error = PK_WARN;
-            /* remember excess length in block_len */
-            block_len = length - (FILNAMSIZ - 1);
-            length = FILNAMSIZ - 1;
-        } else
-            /* no excess size */
-            block_len = 0;
-        if (readbuf(__G__ G.filename, length) == 0)
-            return PK_EOF;
-        G.filename[length] = '\0';      /* terminate w/zero:  ASCIIZ */
-#endif /* ?UNICODE_SUPPORT */
-
-        /* translate the Zip entry filename coded in host-dependent "extended
-           ASCII" into the compiler's (system's) internal text code page */
-        Ext_ASCII_TO_Native(G.filename, G.pInfo->hostnum, G.pInfo->hostver,
-                            G.pInfo->HasUxAtt, (option == DS_FN_L));
-
-        if (G.pInfo->lcflag)      /* replace with lowercase filename */
-            STRLOWER(G.filename, G.filename);
-
-        if (G.pInfo->vollabel && length > 8 && G.filename[8] == '.') {
-            char *p = G.filename+8;
-            while (*p++)
-                p[-1] = *p;  /* disk label, and 8th char is dot:  remove dot */
-        }
-
-        if (!block_len)         /* no overflow, we're done here */
+            /* add '\n' if not at start of line */
+            (*G.message)((zvoid*)&G, slide, 0L, 0x40);
             break;
 
-        /*
-         * We truncated the filename, so print what's left and then fall
-         * through to the SKIP routine.
-         */
-        Info(slide, 0x401, ((char *)slide, "[ %s ]\n", FnFilter1(G.filename)));
-        length = block_len;     /* SKIP the excess bytes... */
-        /*  FALL THROUGH...  */
+            /*
+             * Second case:  read string into filename[] array.  The filename should
+             * never ever be longer than FILNAMSIZ-1 (1024), but for now we'll check,
+             * just to be sure.
+             */
 
-    /*
-     * Third case:  skip string, adjusting readbuf's internal variables
-     * as necessary (and possibly skipping to and reading a new block of
-     * data).
-     */
-
-    case SKIP:
-        /* cur_zipfile_bufstart already takes account of extra_bytes, so don't
-         * correct for it twice: */
-        seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes +
-                  (G.inptr-G.inbuf) + length);
-        break;
-
-    /*
-     * Fourth case:  assume we're at the start of an "extra field"; malloc
-     * storage for it and read data into the allocated space.
-     */
-
-    case EXTRA_FIELD:
-        if (G.extra_field != (uch *)NULL)
-            free(G.extra_field);
-        if ((G.extra_field = (uch *)malloc(length)) == (uch *)NULL) {
-            Info(slide, 0x401, ((char *)slide, LoadFarString(ExtraFieldTooLong),
-              length));
-            /* cur_zipfile_bufstart already takes account of extra_bytes,
-             * so don't correct for it twice: */
-            seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes +
-                      (G.inptr-G.inbuf) + length);
-        } else {
-            if (readbuf(__G__ (char *)G.extra_field, length) == 0)
-                return PK_EOF;
-            /* Looks like here is where extra fields are read */
-            getZip64Data(__G__ G.extra_field, length);
+        case DS_FN:
+        case DS_FN_L:
 #ifdef UNICODE_SUPPORT
-            G.unipath_filename = NULL;
-            if (G.UzO.U_flag < 2) {
-              /* check if GPB11 (General Purpuse Bit 11) is set indicating
-                 the standard path and comment are UTF-8 */
-              if (G.pInfo->GPFIsUTF8) {
-                /* if GPB11 set then filename_full is untruncated UTF-8 */
-                G.unipath_filename = G.filename_full;
-              } else {
-                /* Get the Unicode fields if exist */
-                getUnicodeData(__G__ G.extra_field, length);
-                if (G.unipath_filename && strlen(G.unipath_filename) == 0) {
-                  /* the standard filename field is UTF-8 */
-                  free(G.unipath_filename);
-                  G.unipath_filename = G.filename_full;
-                }
-              }
-              if (G.unipath_filename) {
-# ifdef UTF8_MAYBE_NATIVE
-                if (G.native_is_utf8
-#  ifdef UNICODE_WCHAR
-                    && (!G.unicode_escape_all)
-#  endif
-                   ) {
-                  strncpy(G.filename, G.unipath_filename, FILNAMSIZ - 1);
-                  /* make sure filename is short enough */
-                  if (strlen(G.unipath_filename) >= FILNAMSIZ) {
-                    G.filename[FILNAMSIZ - 1] = '\0';
-                    Info(slide, 0x401, ((char *)slide,
-                      LoadFarString(UFilenameTooLongTrunc)));
-                    error = PK_WARN;
-                  }
-                }
-#  ifdef UNICODE_WCHAR
-                else
-#  endif
-# endif /* UTF8_MAYBE_NATIVE */
-# ifdef UNICODE_WCHAR
-                {
-                  char *fn;
+            /* get the whole filename as need it for Unicode checksum */
+            if (G.fnfull_bufsize <= length) {
+                extent fnbufsiz = FILNAMSIZ;
 
-                  /* convert UTF-8 to local character set */
-                  fn = utf8_to_local_string(G.unipath_filename,
-                                            G.unicode_escape_all);
-                  /* make sure filename is short enough */
-                  if (strlen(fn) >= FILNAMSIZ) {
-                    fn[FILNAMSIZ - 1] = '\0';
-                    Info(slide, 0x401, ((char *)slide,
-                      LoadFarString(UFilenameTooLongTrunc)));
-                    error = PK_WARN;
-                  }
-                  /* replace filename with converted UTF-8 */
-                  strcpy(G.filename, fn);
-                  free(fn);
-                }
-# endif /* UNICODE_WCHAR */
-                if (G.unipath_filename != G.filename_full)
-                  free(G.unipath_filename);
-                G.unipath_filename = NULL;
-              }
+                if (fnbufsiz <= length)
+                    fnbufsiz = length + 1;
+                if (G.filename_full)
+                    free(G.filename_full);
+                G.filename_full = malloc(fnbufsiz);
+                if (G.filename_full == NULL)
+                    return PK_MEM;
+                G.fnfull_bufsize = fnbufsiz;
             }
+            if (readbuf(__G__ G.filename_full, length) == 0)
+                return PK_EOF;
+            G.filename_full[length] = '\0'; /* terminate w/zero:  ASCIIZ */
+
+            /* if needed, chop off end so standard filename is a valid length */
+            if (length >= FILNAMSIZ) {
+                Info(slide, 0x401, ((char*)slide, LoadFarString(FilenameTooLongTrunc)));
+                error = PK_WARN;
+                length = FILNAMSIZ - 1;
+            }
+            /* no excess size */
+            block_len = 0;
+            strncpy(G.filename, G.filename_full, length);
+            G.filename[length] = '\0'; /* terminate w/zero:  ASCIIZ */
+#else                                  /* !UNICODE_SUPPORT */
+            if (length >= FILNAMSIZ) {
+                Info(slide, 0x401, ((char*)slide, LoadFarString(FilenameTooLongTrunc)));
+                error = PK_WARN;
+                /* remember excess length in block_len */
+                block_len = length - (FILNAMSIZ - 1);
+                length = FILNAMSIZ - 1;
+            }
+            else
+                /* no excess size */
+                block_len = 0;
+            if (readbuf(__G__ G.filename, length) == 0)
+                return PK_EOF;
+            G.filename[length] = '\0'; /* terminate w/zero:  ASCIIZ */
+#endif                                 /* ?UNICODE_SUPPORT */
+
+            /* translate the Zip entry filename coded in host-dependent "extended
+               ASCII" into the compiler's (system's) internal text code page */
+            Ext_ASCII_TO_Native(G.filename, G.pInfo->hostnum, G.pInfo->hostver, G.pInfo->HasUxAtt, (option == DS_FN_L));
+
+            if (G.pInfo->lcflag) /* replace with lowercase filename */
+                STRLOWER(G.filename, G.filename);
+
+            if (G.pInfo->vollabel && length > 8 && G.filename[8] == '.') {
+                char* p = G.filename + 8;
+                while (*p++)
+                    p[-1] = *p; /* disk label, and 8th char is dot:  remove dot */
+            }
+
+            if (!block_len) /* no overflow, we're done here */
+                break;
+
+            /*
+             * We truncated the filename, so print what's left and then fall
+             * through to the SKIP routine.
+             */
+            Info(slide, 0x401, ((char*)slide, "[ %s ]\n", FnFilter1(G.filename)));
+            length = block_len; /* SKIP the excess bytes... */
+            /*  FALL THROUGH...  */
+
+            /*
+             * Third case:  skip string, adjusting readbuf's internal variables
+             * as necessary (and possibly skipping to and reading a new block of
+             * data).
+             */
+
+        case SKIP:
+            /* cur_zipfile_bufstart already takes account of extra_bytes, so don't
+             * correct for it twice: */
+            seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes + (G.inptr - G.inbuf) + length);
+            break;
+
+            /*
+             * Fourth case:  assume we're at the start of an "extra field"; malloc
+             * storage for it and read data into the allocated space.
+             */
+
+        case EXTRA_FIELD:
+            if (G.extra_field != (uch*)NULL)
+                free(G.extra_field);
+            if ((G.extra_field = (uch*)malloc(length)) == (uch*)NULL) {
+                Info(slide, 0x401, ((char*)slide, LoadFarString(ExtraFieldTooLong), length));
+                /* cur_zipfile_bufstart already takes account of extra_bytes,
+                 * so don't correct for it twice: */
+                seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes + (G.inptr - G.inbuf) + length);
+            }
+            else {
+                if (readbuf(__G__(char*) G.extra_field, length) == 0)
+                    return PK_EOF;
+                /* Looks like here is where extra fields are read */
+                getZip64Data(__G__ G.extra_field, length);
+#ifdef UNICODE_SUPPORT
+                G.unipath_filename = NULL;
+                if (G.UzO.U_flag < 2) {
+                    /* check if GPB11 (General Purpuse Bit 11) is set indicating
+                       the standard path and comment are UTF-8 */
+                    if (G.pInfo->GPFIsUTF8) {
+                        /* if GPB11 set then filename_full is untruncated UTF-8 */
+                        G.unipath_filename = G.filename_full;
+                    }
+                    else {
+                        /* Get the Unicode fields if exist */
+                        getUnicodeData(__G__ G.extra_field, length);
+                        if (G.unipath_filename && strlen(G.unipath_filename) == 0) {
+                            /* the standard filename field is UTF-8 */
+                            free(G.unipath_filename);
+                            G.unipath_filename = G.filename_full;
+                        }
+                    }
+                    if (G.unipath_filename) {
+#ifdef UTF8_MAYBE_NATIVE
+                        if (G.native_is_utf8
+#ifdef UNICODE_WCHAR
+                            && (!G.unicode_escape_all)
+#endif
+                        ) {
+                            strncpy(G.filename, G.unipath_filename, FILNAMSIZ - 1);
+                            /* make sure filename is short enough */
+                            if (strlen(G.unipath_filename) >= FILNAMSIZ) {
+                                G.filename[FILNAMSIZ - 1] = '\0';
+                                Info(slide, 0x401, ((char*)slide, LoadFarString(UFilenameTooLongTrunc)));
+                                error = PK_WARN;
+                            }
+                        }
+#ifdef UNICODE_WCHAR
+                        else
+#endif
+#endif /* UTF8_MAYBE_NATIVE */
+#ifdef UNICODE_WCHAR
+                        {
+                            char* fn;
+
+                            /* convert UTF-8 to local character set */
+                            fn = utf8_to_local_string(G.unipath_filename, G.unicode_escape_all);
+                            /* make sure filename is short enough */
+                            if (strlen(fn) >= FILNAMSIZ) {
+                                fn[FILNAMSIZ - 1] = '\0';
+                                Info(slide, 0x401, ((char*)slide, LoadFarString(UFilenameTooLongTrunc)));
+                                error = PK_WARN;
+                            }
+                            /* replace filename with converted UTF-8 */
+                            strcpy(G.filename, fn);
+                            free(fn);
+                        }
+#endif /* UNICODE_WCHAR */
+                        if (G.unipath_filename != G.filename_full)
+                            free(G.unipath_filename);
+                        G.unipath_filename = NULL;
+                    }
+                }
 #endif /* UNICODE_SUPPORT */
-        }
-        break;
+            }
+            break;
 
 #ifdef AMIGA
-    /*
-     * Fifth case, for the Amiga only:  take the comment that would ordinarily
-     * be skipped over, and turn it into a 79 character string that will be
-     * attached to the file as a "filenote" after it is extracted.
-     */
+            /*
+             * Fifth case, for the Amiga only:  take the comment that would ordinarily
+             * be skipped over, and turn it into a 79 character string that will be
+             * attached to the file as a "filenote" after it is extracted.
+             */
 
-    case FILENOTE:
-        if ((block_len = readbuf(__G__ tmp_fnote, (unsigned)
-                                 MIN(length, 2 * AMIGA_FILENOTELEN - 1))) == 0)
-            return PK_EOF;
-        if ((length -= block_len) > 0)  /* treat remainder as in case SKIP: */
-            seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes
-                      + (G.inptr - G.inbuf) + length);
-        /* convert multi-line text into single line with no ctl-chars: */
-        tmp_fnote[block_len] = '\0';
-        while ((short int) --block_len >= 0)
-            if ((unsigned) tmp_fnote[block_len] < ' ')
-                if (tmp_fnote[block_len+1] == ' ')     /* no excess */
-                    strcpy(tmp_fnote+block_len, tmp_fnote+block_len+1);
-                else
-                    tmp_fnote[block_len] = ' ';
-        tmp_fnote[AMIGA_FILENOTELEN - 1] = '\0';
-        if (G.filenotes[G.filenote_slot])
-            free(G.filenotes[G.filenote_slot]);     /* should not happen */
-        G.filenotes[G.filenote_slot] = NULL;
-        if (tmp_fnote[0]) {
-            if (!(G.filenotes[G.filenote_slot] = malloc(strlen(tmp_fnote)+1)))
-                return PK_MEM;
-            strcpy(G.filenotes[G.filenote_slot], tmp_fnote);
-        }
-        break;
+        case FILENOTE:
+            if ((block_len = readbuf(__G__ tmp_fnote, (unsigned)MIN(length, 2 * AMIGA_FILENOTELEN - 1))) == 0)
+                return PK_EOF;
+            if ((length -= block_len) > 0) /* treat remainder as in case SKIP: */
+                seek_zipf(__G__ G.cur_zipfile_bufstart - G.extra_bytes + (G.inptr - G.inbuf) + length);
+            /* convert multi-line text into single line with no ctl-chars: */
+            tmp_fnote[block_len] = '\0';
+            while ((short int)--block_len >= 0)
+                if ((unsigned)tmp_fnote[block_len] < ' ')
+                    if (tmp_fnote[block_len + 1] == ' ') /* no excess */
+                        strcpy(tmp_fnote + block_len, tmp_fnote + block_len + 1);
+                    else
+                        tmp_fnote[block_len] = ' ';
+            tmp_fnote[AMIGA_FILENOTELEN - 1] = '\0';
+            if (G.filenotes[G.filenote_slot])
+                free(G.filenotes[G.filenote_slot]); /* should not happen */
+            G.filenotes[G.filenote_slot] = NULL;
+            if (tmp_fnote[0]) {
+                if (!(G.filenotes[G.filenote_slot] = malloc(strlen(tmp_fnote) + 1)))
+                    return PK_MEM;
+                strcpy(G.filenotes[G.filenote_slot], tmp_fnote);
+            }
+            break;
 #endif /* AMIGA */
 
     } /* end switch (option) */
@@ -2415,16 +2218,12 @@ int do_string(__G__ length, option)   /* return PK-type error code */
 
 } /* end function do_string() */
 
-
-
-
-
 /***********************/
 /* Function makeword() */
 /***********************/
 
 ush makeword(b)
-    ZCONST uch *b;
+ZCONST uch* b;
 {
     /*
      * Convert Intel style 'short' integer to non-Intel non-16-bit
@@ -2433,79 +2232,55 @@ ush makeword(b)
     return (ush)((b[1] << 8) | b[0]);
 }
 
-
-
-
-
 /***********************/
 /* Function makelong() */
 /***********************/
 
 ulg makelong(sig)
-    ZCONST uch *sig;
+ZCONST uch* sig;
 {
     /*
      * Convert intel style 'long' variable to non-Intel non-16-bit
      * host format.  This routine also takes care of byte-ordering.
      */
-    return (((ulg)sig[3]) << 24)
-         + (((ulg)sig[2]) << 16)
-         + (ulg)((((unsigned)sig[1]) << 8)
-               + ((unsigned)sig[0]));
+    return (((ulg)sig[3]) << 24) + (((ulg)sig[2]) << 16) + (ulg)((((unsigned)sig[1]) << 8) + ((unsigned)sig[0]));
 }
-
-
-
-
 
 /************************/
 /* Function makeint64() */
 /************************/
 
 zusz_t makeint64(sig)
-    ZCONST uch *sig;
+ZCONST uch* sig;
 {
 #ifdef LARGE_FILE_SUPPORT
     /*
      * Convert intel style 'int64' variable to non-Intel non-16-bit
      * host format.  This routine also takes care of byte-ordering.
      */
-    return (((zusz_t)sig[7]) << 56)
-        + (((zusz_t)sig[6]) << 48)
-        + (((zusz_t)sig[5]) << 40)
-        + (((zusz_t)sig[4]) << 32)
-        + (zusz_t)((((ulg)sig[3]) << 24)
-                 + (((ulg)sig[2]) << 16)
-                 + (((unsigned)sig[1]) << 8)
-                 + (sig[0]));
+    return (((zusz_t)sig[7]) << 56) + (((zusz_t)sig[6]) << 48) + (((zusz_t)sig[5]) << 40) + (((zusz_t)sig[4]) << 32) +
+           (zusz_t)((((ulg)sig[3]) << 24) + (((ulg)sig[2]) << 16) + (((unsigned)sig[1]) << 8) + (sig[0]));
 
 #else /* !LARGE_FILE_SUPPORT */
 
     if ((sig[7] | sig[6] | sig[5] | sig[4]) != 0)
         return (zusz_t)0xffffffffL;
     else
-        return (zusz_t)((((ulg)sig[3]) << 24)
-                      + (((ulg)sig[2]) << 16)
-                      + (((unsigned)sig[1]) << 8)
-                      + (sig[0]));
+        return (zusz_t)((((ulg)sig[3]) << 24) + (((ulg)sig[2]) << 16) + (((unsigned)sig[1]) << 8) + (sig[0]));
 
 #endif /* ?LARGE_FILE_SUPPORT */
 }
-
-
-
-
 
 /*********************/
 /* Function fzofft() */
 /*********************/
 
 /* Format a zoff_t value in a cylindrical buffer set. */
-char *fzofft(__G__ val, pre, post)
-    __GDEF
-    zoff_t val;
-    ZCONST char *pre;
-    ZCONST char *post;
+char* fzofft(__G__ val, pre, post)
+__GDEF
+zoff_t val;
+ZCONST char* pre;
+ZCONST char* post;
 {
     /* Storage cylinder. (now in globals.h) */
     /*static char fzofft_buf[FZOFFT_NUM][FZOFFT_LEN];*/
@@ -2517,7 +2292,7 @@ char *fzofft(__G__ val, pre, post)
     /* Assemble the format string. */
     fmt[0] = '%';
     fmt[1] = '\0';             /* Start after initial "%". */
-    if (pre == FZOFFT_HEX_WID)  /* Special hex width. */
+    if (pre == FZOFFT_HEX_WID) /* Special hex width. */
     {
         strcat(fmt, FZOFFT_HEX_WID_VALUE);
     }
@@ -2526,17 +2301,17 @@ char *fzofft(__G__ val, pre, post)
         strcat(fmt, ".");
         strcat(fmt, FZOFFT_HEX_WID_VALUE);
     }
-    else if (pre != NULL)       /* Caller's prefix (width). */
+    else if (pre != NULL) /* Caller's prefix (width). */
     {
         strcat(fmt, pre);
     }
 
-    strcat(fmt, FZOFFT_FMT);   /* Long or long-long or whatever. */
+    strcat(fmt, FZOFFT_FMT); /* Long or long-long or whatever. */
 
     if (post == NULL)
-        strcat(fmt, "d");      /* Default radix = decimal. */
+        strcat(fmt, "d"); /* Default radix = decimal. */
     else
-        strcat(fmt, post);     /* Caller's radix. */
+        strcat(fmt, post); /* Caller's radix. */
 
     /* Advance the cylinder. */
     G.fzofft_index = (G.fzofft_index + 1) % FZOFFT_NUM;
@@ -2548,9 +2323,6 @@ char *fzofft(__G__ val, pre, post)
     return G.fzofft_buf[G.fzofft_index];
 }
 
-
-
-
 #if CRYPT
 
 #ifdef NEED_STR2ISO
@@ -2558,15 +2330,15 @@ char *fzofft(__G__ val, pre, post)
 /* Function str2iso() */
 /**********************/
 
-char *str2iso(dst, src)
-    char *dst;                          /* destination buffer */
-    register ZCONST char *src;          /* source string */
+char* str2iso(dst, src)
+char* dst;                 /* destination buffer */
+register ZCONST char* src; /* source string */
 {
 #ifdef INTERN_TO_ISO
     INTERN_TO_ISO(src, dst);
 #else
     register uch c;
-    register char *dstp = dst;
+    register char* dstp = dst;
 
     do {
         c = (uch)foreign(*src++);
@@ -2578,21 +2350,20 @@ char *str2iso(dst, src)
 }
 #endif /* NEED_STR2ISO */
 
-
 #ifdef NEED_STR2OEM
 /**********************/
 /* Function str2oem() */
 /**********************/
 
-char *str2oem(dst, src)
-    char *dst;                          /* destination buffer */
-    register ZCONST char *src;          /* source string */
+char* str2oem(dst, src)
+char* dst;                 /* destination buffer */
+register ZCONST char* src; /* source string */
 {
 #ifdef INTERN_TO_OEM
     INTERN_TO_OEM(src, dst);
 #else
     register uch c;
-    register char *dstp = dst;
+    register char* dstp = dst;
 
     do {
         c = (uch)foreign(*src++);
@@ -2606,72 +2377,63 @@ char *str2oem(dst, src)
 
 #endif /* CRYPT */
 
-
-#ifdef ZMEM  /* memset/memcmp/memcpy for systems without either them or */
-             /* bzero/bcmp/bcopy */
-             /* (no known systems as of 960211) */
+#ifdef ZMEM /* memset/memcmp/memcpy for systems without either them or */
+            /* bzero/bcmp/bcopy */
+            /* (no known systems as of 960211) */
 
 /*********************/
 /* Function memset() */
 /*********************/
 
-zvoid *memset(buf, init, len)
-    register zvoid *buf;        /* buffer location */
-    register int init;          /* initializer character */
-    register unsigned int len;  /* length of the buffer */
+zvoid* memset(buf, init, len)
+register zvoid* buf;       /* buffer location */
+register int init;         /* initializer character */
+register unsigned int len; /* length of the buffer */
 {
-    zvoid *start;
+    zvoid* start;
 
     start = buf;
     while (len--)
-        *((char *)buf++) = (char)init;
+        *((char*)buf++) = (char)init;
     return start;
 }
-
-
 
 /*********************/
 /* Function memcmp() */
 /*********************/
 
 int memcmp(b1, b2, len)
-    register ZCONST zvoid *b1;
-    register ZCONST zvoid *b2;
-    register unsigned int len;
+register ZCONST zvoid* b1;
+register ZCONST zvoid* b2;
+register unsigned int len;
 {
     register int c;
 
-    if (len > 0) do {
-        if ((c = (int)(*((ZCONST unsigned char *)b1)++) -
-                 (int)(*((ZCONST unsigned char *)b2)++)) != 0)
-           return c;
-    } while (--len > 0)
-    return 0;
+    if (len > 0)
+        do {
+            if ((c = (int)(*((ZCONST unsigned char*)b1)++) - (int)(*((ZCONST unsigned char*)b2)++)) != 0)
+                return c;
+        } while (--len > 0) return 0;
 }
-
-
 
 /*********************/
 /* Function memcpy() */
 /*********************/
 
-zvoid *memcpy(dst, src, len)
-    register zvoid *dst;
-    register ZCONST zvoid *src;
-    register unsigned int len;
+zvoid* memcpy(dst, src, len)
+register zvoid* dst;
+register ZCONST zvoid* src;
+register unsigned int len;
 {
-    zvoid *start;
+    zvoid* start;
 
     start = dst;
     while (len-- > 0)
-        *((char *)dst)++ = *((ZCONST char *)src)++;
+        *((char*)dst)++ = *((ZCONST char*)src)++;
     return start;
 }
 
 #endif /* ZMEM */
-
-
-
 
 #ifdef NO_STRNICMP
 
@@ -2680,16 +2442,15 @@ zvoid *memcpy(dst, src, len)
 /************************/
 
 int zstrnicmp(s1, s2, n)
-    register ZCONST char *s1, *s2;
-    register unsigned n;
+register ZCONST char *s1, *s2;
+register unsigned n;
 {
-    for (; n > 0;  --n, ++s1, ++s2) {
-
+    for (; n > 0; --n, ++s1, ++s2) {
         if (ToLower(*s1) != ToLower(*s2))
             /* test includes early termination of one string */
-            return ((uch)ToLower(*s1) < (uch)ToLower(*s2))? -1 : 1;
+            return ((uch)ToLower(*s1) < (uch)ToLower(*s2)) ? -1 : 1;
 
-        if (*s1 == '\0')   /* both strings terminate early */
+        if (*s1 == '\0') /* both strings terminate early */
             return 0;
     }
     return 0;
@@ -2697,27 +2458,21 @@ int zstrnicmp(s1, s2, n)
 
 #endif /* NO_STRNICMP */
 
-
-
-
-#ifdef REGULUS  /* returns the inode number on success(!)...argh argh argh */
-#  undef stat
+#ifdef REGULUS /* returns the inode number on success(!)...argh argh argh */
+#undef stat
 
 /********************/
 /* Function zstat() */
 /********************/
 
 int zstat(p, s)
-    ZCONST char *p;
-    struct stat *s;
+ZCONST char* p;
+struct stat* s;
 {
-    return (stat((char *)p,s) >= 0? 0 : (-1));
+    return (stat((char*)p, s) >= 0 ? 0 : (-1));
 }
 
 #endif /* REGULUS */
-
-
-
 
 #ifdef _MBCS
 
@@ -2730,21 +2485,20 @@ int zstat(p, s)
 /* Function plastchar() */
 /************************/
 
-char *plastchar(ptr, len)
-    ZCONST char *ptr;
-    extent len;
+char* plastchar(ptr, len)
+ZCONST char* ptr;
+extent len;
 {
     unsigned clen;
-    ZCONST char *oldptr = ptr;
-    while(*ptr != '\0' && len > 0){
+    ZCONST char* oldptr = ptr;
+    while (*ptr != '\0' && len > 0) {
         oldptr = ptr;
         clen = CLEN(ptr);
         ptr += clen;
         len -= clen;
     }
-    return (char *)oldptr;
+    return (char*)oldptr;
 }
-
 
 #ifdef NEED_UZMBCLEN
 /***********************/
@@ -2752,11 +2506,11 @@ char *plastchar(ptr, len)
 /***********************/
 
 extent uzmbclen(ptr)
-    ZCONST unsigned char *ptr;
+ZCONST unsigned char* ptr;
 {
     int mbl;
 
-    mbl = mblen((ZCONST char *)ptr, MB_CUR_MAX);
+    mbl = mblen((ZCONST char*)ptr, MB_CUR_MAX);
     /* For use in code scanning through MBCS strings, we need a strictly
        positive "MB char bytes count".  For our scanning purpose, it is not
        not relevant whether the MB character is valid or not. And, the NUL
@@ -2767,37 +2521,39 @@ extent uzmbclen(ptr)
 }
 #endif /* NEED_UZMBCLEN */
 
-
 #ifdef NEED_UZMBSCHR
 /***********************/
 /* Function uzmbschr() */
 /***********************/
 
-unsigned char *uzmbschr(str, c)
-    ZCONST unsigned char *str;
-    unsigned int c;
+unsigned char* uzmbschr(str, c)
+ZCONST unsigned char* str;
+unsigned int c;
 {
-    while(*str != '\0'){
-        if (*str == c) {return (unsigned char *)str;}
+    while (*str != '\0') {
+        if (*str == c) {
+            return (unsigned char*)str;
+        }
         INCSTR(str);
     }
     return NULL;
 }
 #endif /* NEED_UZMBSCHR */
 
-
 #ifdef NEED_UZMBSRCHR
 /************************/
 /* Function uzmbsrchr() */
 /************************/
 
-unsigned char *uzmbsrchr(str, c)
-    ZCONST unsigned char *str;
-    unsigned int c;
+unsigned char* uzmbsrchr(str, c)
+ZCONST unsigned char* str;
+unsigned int c;
 {
-    unsigned char *match = NULL;
-    while(*str != '\0'){
-        if (*str == c) {match = (unsigned char *)str;}
+    unsigned char* match = NULL;
+    while (*str != '\0') {
+        if (*str == c) {
+            match = (unsigned char*)str;
+        }
         INCSTR(str);
     }
     return match;
@@ -2805,62 +2561,51 @@ unsigned char *uzmbsrchr(str, c)
 #endif /* NEED_UZMBSRCHR */
 #endif /* _MBCS */
 
-
-
-
-
 #ifdef SMALL_MEM
 
 /*******************************/
-/*  Function fLoadFarString()  */   /* (and friends...) */
+/*  Function fLoadFarString()  */ /* (and friends...) */
 /*******************************/
 
-char *fLoadFarString(__GPRO__ const char Far *sz)
-{
+char* fLoadFarString(__GPRO__ const char Far* sz) {
     (void)zfstrcpy(G.rgchBigBuffer, sz);
     return G.rgchBigBuffer;
 }
 
-char *fLoadFarStringSmall(__GPRO__ const char Far *sz)
-{
+char* fLoadFarStringSmall(__GPRO__ const char Far* sz) {
     (void)zfstrcpy(G.rgchSmallBuffer, sz);
     return G.rgchSmallBuffer;
 }
 
-char *fLoadFarStringSmall2(__GPRO__ const char Far *sz)
-{
+char* fLoadFarStringSmall2(__GPRO__ const char Far* sz) {
     (void)zfstrcpy(G.rgchSmallBuffer2, sz);
     return G.rgchSmallBuffer2;
 }
 
-
-
-
 #if (!defined(_MSC_VER) || (_MSC_VER < 600))
 /*************************/
-/*  Function zfstrcpy()  */   /* portable clone of _fstrcpy() */
+/*  Function zfstrcpy()  */ /* portable clone of _fstrcpy() */
 /*************************/
 
-char Far * Far zfstrcpy(char Far *s1, const char Far *s2)
-{
-    char Far *p = s1;
+char Far* Far zfstrcpy(char Far* s1, const char Far* s2) {
+    char Far* p = s1;
 
-    while ((*s1++ = *s2++) != '\0');
+    while ((*s1++ = *s2++) != '\0')
+        ;
     return p;
 }
 
 #if (!(defined(SFX) || defined(FUNZIP)))
 /*************************/
-/*  Function zfstrcmp()  */   /* portable clone of _fstrcmp() */
+/*  Function zfstrcmp()  */ /* portable clone of _fstrcmp() */
 /*************************/
 
-int Far zfstrcmp(const char Far *s1, const char Far *s2)
-{
+int Far zfstrcmp(const char Far* s1, const char Far* s2) {
     int ret;
 
-    while ((ret = (int)(uch)*s1 - (int)(uch)*s2) == 0
-           && *s2 != '\0') {
-        ++s2; ++s1;
+    while ((ret = (int)(uch)*s1 - (int)(uch)*s2) == 0 && *s2 != '\0') {
+        ++s2;
+        ++s1;
     }
     return ret;
 }

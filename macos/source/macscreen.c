@@ -14,7 +14,6 @@
 
   ---------------------------------------------------------------------------*/
 
-
 /*****************************************************************************/
 /*  Includes                                                                 */
 /*****************************************************************************/
@@ -25,18 +24,16 @@
 #include <stdarg.h>
 #include <string.h>
 
-
 /*****************************************************************************/
 /*  Macros, typedefs                                                         */
 /*****************************************************************************/
 
-#define bufferSize      4096
+#define bufferSize 4096
 
-#define screenWindow    128
+#define screenWindow 128
 
-#define pauseOption     0x0001
-#define scrollOption    0x0002
-
+#define pauseOption 0x0001
+#define scrollOption 0x0002
 
 /*****************************************************************************/
 /*  Module level Vars                                                        */
@@ -54,33 +51,30 @@ static char *screenImage, **screenLine;
 
 static int screenOptions;
 
-
-
 /*****************************************************************************/
 /*  Prototypes                                                               */
 /*****************************************************************************/
 
-void screenOpen(char *);
-void screenControl(char *, int);
+void screenOpen(char*);
+void screenControl(char*, int);
 void screenClose(void);
 void screenUpdate(WindowPtr);
-void screenDisplay(char *);
-void screenDump(char *, long);
+void screenDisplay(char*);
+void screenDump(char*, long);
 
-char *macfgets(char *, int, FILE *);
-int  macfprintf(FILE *, char *, ...);
-int  macprintf(char *, ...);
-int  macgetch(void);
-
+char* macfgets(char*, int, FILE*);
+int macfprintf(FILE*, char*, ...);
+int macprintf(char*, ...);
+int macgetch(void);
 
 /*****************************************************************************/
 /*  Functions                                                                */
 /*****************************************************************************/
 
-void screenOpen(char *Title) {
+void screenOpen(char* Title) {
     FontInfo fontInfo;
     int n;
-    short       fontFamID;
+    short fontFamID;
 
     theWindow = GetNewWindow(screenWindow, nil, (WindowPtr)(-1));
 
@@ -93,7 +87,7 @@ void screenOpen(char *Title) {
     ShowWindow(theWindow);
 
     SetPort(theWindow);
-    GetFNum( "\pMonaco", &fontFamID );
+    GetFNum("\pMonaco", &fontFamID);
     TextFont(fontFamID);
     TextSize(9);
 
@@ -103,30 +97,22 @@ void screenOpen(char *Title) {
 
     scrollRgn = NewRgn();
 
-    screenWidth = (theWindow->portRect.right - theWindow->portRect.left - 10) /
-        fontWidth;
-    screenHeight = (theWindow->portRect.bottom - theWindow->portRect.top) /
-        fontHeight;
+    screenWidth = (theWindow->portRect.right - theWindow->portRect.left - 10) / fontWidth;
+    screenHeight = (theWindow->portRect.bottom - theWindow->portRect.top) / fontHeight;
     maxPosition = screenHeight * fontHeight;
     pausePosition = maxPosition - (currentPosition = fontHeight);
 
-    SetRect(&scrollRect, theWindow->portRect.left,
-            theWindow->portRect.top + fontInfo.descent,
-            theWindow->portRect.right,
-            theWindow->portRect.bottom);
-    SetRect(&pauseRect, theWindow->portRect.left,
-            pausePosition + fontInfo.descent,
-            theWindow->portRect.right,
-            theWindow->portRect.bottom);
+    SetRect(&scrollRect, theWindow->portRect.left, theWindow->portRect.top + fontInfo.descent, theWindow->portRect.right, theWindow->portRect.bottom);
+    SetRect(&pauseRect, theWindow->portRect.left, pausePosition + fontInfo.descent, theWindow->portRect.right, theWindow->portRect.bottom);
 
     MoveTo(5, currentPosition);
 
-    n = (sizeof(char *) + sizeof(short) + screenWidth) * screenHeight;
+    n = (sizeof(char*) + sizeof(short) + screenWidth) * screenHeight;
 
-    screenLine = (char **)NewPtr(n);
+    screenLine = (char**)NewPtr(n);
 
-    screenLength = (short *)&screenLine[screenHeight];
-    screenImage = (char *)&screenLength[screenHeight];
+    screenLength = (short*)&screenLine[screenHeight];
+    screenImage = (char*)&screenLength[screenHeight];
 
     for (n = 0; n < screenHeight; n++) {
         screenLine[n] = &screenImage[n * screenWidth];
@@ -140,22 +126,19 @@ void screenOpen(char *Title) {
     return;
 }
 
-
-
-
-void screenControl(char *options, int setting) {
+void screenControl(char* options, int setting) {
     int n = 0;
 
     while (*options) {
         switch (*options) {
-        case 'p':
-            n |= pauseOption;
-            break;
-        case 's':
-            n |= scrollOption;
-            break;
-        default:
-            break;
+            case 'p':
+                n |= pauseOption;
+                break;
+            case 's':
+                n |= scrollOption;
+                break;
+            default:
+                break;
         }
         options += 1;
     }
@@ -171,9 +154,6 @@ void screenControl(char *options, int setting) {
     return;
 }
 
-
-
-
 void screenClose(void) {
     DisposePtr((Ptr)screenLine);
 
@@ -182,11 +162,8 @@ void screenClose(void) {
     return;
 }
 
-
-
-
 void screenUpdate(WindowPtr window) {
-    GrafPort *savePort;
+    GrafPort* savePort;
     int m, n;
 
     if (window == theWindow) {
@@ -195,12 +172,14 @@ void screenUpdate(WindowPtr window) {
             GetPort(&savePort);
             SetPort(window);
             n = startLine;
-            for (m = 1; ; m++) {
+            for (m = 1;; m++) {
                 MoveTo(5, m * fontHeight);
                 if (screenLength[n] != 0)
                     DrawText(screenLine[n], 0, screenLength[n]);
-                if (n == endLine) break;
-                if ((n += 1) == screenHeight) n = 0;
+                if (n == endLine)
+                    break;
+                if ((n += 1) == screenHeight)
+                    n = 0;
             }
             SetPort(savePort);
         }
@@ -210,17 +189,16 @@ void screenUpdate(WindowPtr window) {
     return;
 }
 
-
-
-
 static void screenNewline(void) {
     MoveTo(5, currentPosition += fontHeight);
     if (currentPosition > maxPosition) {
         if (screenOptions & scrollOption) {
             ScrollRect(&scrollRect, 0, -fontHeight, scrollRgn);
             MoveTo(5, currentPosition = maxPosition);
-            if ((startLine += 1) == screenHeight) startLine = 0;
-        } else {
+            if ((startLine += 1) == screenHeight)
+                startLine = 0;
+        }
+        else {
             ScrollRect(&scrollRect, 0, -maxPosition + fontHeight, scrollRgn);
             MoveTo(5, currentPosition = fontHeight + fontHeight);
             startLine = endLine;
@@ -228,42 +206,36 @@ static void screenNewline(void) {
     }
     pausePosition -= fontHeight;
 
-    if ((endLine += 1) == screenHeight) endLine = 0;
+    if ((endLine += 1) == screenHeight)
+        endLine = 0;
     screenLength[endLine] = 0;
 
     return;
 }
 
-
-
-
 static char waitChar(void) {
     WindowPtr whichWindow;
     EventRecord theEvent;
 
-    for ( ; ; ) {
+    for (;;) {
         SystemTask();
         if (GetNextEvent(everyEvent, &theEvent)) {
             switch (theEvent.what) {
-            case keyDown:
-                if ((theEvent.modifiers & cmdKey) &&
-                    ((theEvent.message & charCodeMask) == '.'))
-                    ExitToShell();
-                return(theEvent.message & charCodeMask);
-            case mouseDown:
-                if (FindWindow(theEvent.where, &whichWindow) == inSysWindow)
-                    SystemClick(&theEvent, whichWindow);
-                break;
-            case updateEvt:
-                screenUpdate((WindowPtr)theEvent.message);
-                break;
+                case keyDown:
+                    if ((theEvent.modifiers & cmdKey) && ((theEvent.message & charCodeMask) == '.'))
+                        ExitToShell();
+                    return (theEvent.message & charCodeMask);
+                case mouseDown:
+                    if (FindWindow(theEvent.where, &whichWindow) == inSysWindow)
+                        SystemClick(&theEvent, whichWindow);
+                    break;
+                case updateEvt:
+                    screenUpdate((WindowPtr)theEvent.message);
+                    break;
             }
         }
     }
 }
-
-
-
 
 static void screenPause(void) {
     if (pausePosition == 0) {
@@ -285,13 +257,10 @@ static void screenPause(void) {
     return;
 }
 
-
-
-
-void screenDisplay(char *s) {
-    GrafPort *savePort;
+void screenDisplay(char* s) {
+    GrafPort* savePort;
     int m, n;
-    char *t;
+    char* t;
 
     GetPort(&savePort);
     SetPort(theWindow);
@@ -300,9 +269,10 @@ void screenDisplay(char *s) {
         screenPause();
 
         for (t = s; (*s) && (*s != '\n') && (*s != '\r'); s++)
-            ;  /* empty body */
+            ; /* empty body */
 
-        if ((n = s - t) > (m = screenWidth - screenLength[endLine])) n = m;
+        if ((n = s - t) > (m = screenWidth - screenLength[endLine]))
+            n = m;
 
         if (n > 0) {
             DrawText(t, 0, n);
@@ -321,13 +291,10 @@ void screenDisplay(char *s) {
     return;
 }
 
-
-
-
-void screenDump(char *s, long n) {
-    GrafPort *savePort;
+void screenDump(char* s, long n) {
+    GrafPort* savePort;
     int k, m;
-    char *t;
+    char* t;
 
     GetPort(&savePort);
     SetPort(theWindow);
@@ -336,9 +303,10 @@ void screenDump(char *s, long n) {
         screenPause();
 
         for (t = s; (n) && (*s != '\n') && (*s != '\r'); s++, n--)
-            ;  /* empty body */
+            ; /* empty body */
 
-        if ((k = s - t) > (m = screenWidth - screenLength[endLine])) k = m;
+        if ((k = s - t) > (m = screenWidth - screenLength[endLine]))
+            k = m;
 
         if (k > 0) {
             DrawText(t, 0, k);
@@ -358,11 +326,8 @@ void screenDump(char *s, long n) {
     return;
 }
 
-
-
-
-char *macfgets(char *s, int n, FILE *stream) {
-    GrafPort *savePort;
+char* macfgets(char* s, int n, FILE* stream) {
+    GrafPort* savePort;
     char c, *t = s;
 
     stream = stream;
@@ -376,20 +341,17 @@ char *macfgets(char *s, int n, FILE *stream) {
             screenLine[endLine][screenLength[endLine]++] = c;
     }
 
-    if (c == '\r') screenNewline();
+    if (c == '\r')
+        screenNewline();
 
     *t = '\0';
 
     SetPort(savePort);
 
-    return(s);
+    return (s);
 }
 
-
-
-
-int macfprintf(FILE *stream, char *format, ...)
-{
+int macfprintf(FILE* stream, char* format, ...) {
     char buffer[bufferSize];
     va_list ap;
     int rc;
@@ -405,11 +367,7 @@ int macfprintf(FILE *stream, char *format, ...)
     return rc;
 }
 
-
-
-
-int macprintf(char *format, ...)
-{
+int macprintf(char* format, ...) {
     char buffer[bufferSize];
     va_list ap;
     int rc;
@@ -423,17 +381,14 @@ int macprintf(char *format, ...)
     return rc;
 }
 
-
-
 /***********************/
 /* Function macgetch() */
 /***********************/
 
-int macgetch(void)
-{
+int macgetch(void) {
     WindowPtr whichWindow;
     EventRecord theEvent;
-    char c;                     /* one-byte buffer for read() to use */
+    char c; /* one-byte buffer for read() to use */
 
     do {
         SystemTask();
@@ -441,17 +396,16 @@ int macgetch(void)
             theEvent.what = nullEvent;
         else {
             switch (theEvent.what) {
-            case keyDown:
-                c = theEvent.message & charCodeMask;
-                break;
-            case mouseDown:
-                if (FindWindow(theEvent.where, &whichWindow) ==
-                    inSysWindow)
-                    SystemClick(&theEvent, whichWindow);
-                break;
-            case updateEvt:
-                screenUpdate((WindowPtr)theEvent.message);
-                break;
+                case keyDown:
+                    c = theEvent.message & charCodeMask;
+                    break;
+                case mouseDown:
+                    if (FindWindow(theEvent.where, &whichWindow) == inSysWindow)
+                        SystemClick(&theEvent, whichWindow);
+                    break;
+                case updateEvt:
+                    screenUpdate((WindowPtr)theEvent.message);
+                    break;
             }
         }
     } while (theEvent.what != keyDown);

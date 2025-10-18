@@ -91,8 +91,6 @@
  * exec cmdline [ /qualifiers ...] [parameters ...]
  */
 
-
-
 /* 2004-12-13 SMS.
  * Disabled the module name macro to accommodate old GNU C which didn't
  * obey the directive, and thus confused MMS/MMK where the object
@@ -109,8 +107,8 @@
 #define UNZIP_INTERNAL
 #include "unzip.h"
 #ifndef TEST
-#  include "unzvers.h"  /* for VMSCLI_usage() */
-#endif /* !TEST */
+#include "unzvers.h" /* for VMSCLI_usage() */
+#endif               /* !TEST */
 
 /* Workaround for broken header files of older DECC distributions
  * that are incompatible with the /NAMES=AS_IS qualifier. */
@@ -137,11 +135,13 @@ globalvalue CLI$_COMMA;
 /*
 **  "Macro" to initialize a dynamic string descriptor.
 */
-#define init_dyndesc(dsc) {\
-        dsc.dsc$w_length = 0;\
-        dsc.dsc$b_dtype = DSC$K_DTYPE_T;\
-        dsc.dsc$b_class = DSC$K_CLASS_D;\
-        dsc.dsc$a_pointer = NULL;}
+#define init_dyndesc(dsc)                \
+    {                                    \
+        dsc.dsc$w_length = 0;            \
+        dsc.dsc$b_dtype = DSC$K_DTYPE_T; \
+        dsc.dsc$b_class = DSC$K_CLASS_D; \
+        dsc.dsc$a_pointer = NULL;        \
+    }
 
 /*
 **  Memory allocation step for argv string buffer.
@@ -151,16 +151,18 @@ globalvalue CLI$_COMMA;
 /*
 **  Memory reallocation macro for argv string buffer.
 */
-#define CHECK_BUFFER_ALLOCATION(buf, reserved, requested) { \
-    if ((requested) > (reserved)) { \
-        char *save_buf = (buf); \
-        (reserved) += ARGBSIZE_UNIT; \
-        if (((buf) = (char *) realloc((buf), (reserved))) == NULL) { \
-            if (save_buf != NULL) free(save_buf); \
-            return (SS$_INSFMEM); \
-        } \
-    } \
-}
+#define CHECK_BUFFER_ALLOCATION(buf, reserved, requested)              \
+    {                                                                  \
+        if ((requested) > (reserved)) {                                \
+            char* save_buf = (buf);                                    \
+            (reserved) += ARGBSIZE_UNIT;                               \
+            if (((buf) = (char*)realloc((buf), (reserved))) == NULL) { \
+                if (save_buf != NULL)                                  \
+                    free(save_buf);                                    \
+                return (SS$_INSFMEM);                                  \
+            }                                                          \
+        }                                                              \
+    }
 
 /*
 **  Define descriptors for all of the CLI parameters and qualifiers.
@@ -168,152 +170,144 @@ globalvalue CLI$_COMMA;
 #if 0
 $DESCRIPTOR(cli_extract,        "EXTRACT");             /* obsolete */
 #endif
-$DESCRIPTOR(cli_text,           "TEXT");                /* -a[a] */
-$DESCRIPTOR(cli_text_auto,      "TEXT.AUTO");           /* -a */
-$DESCRIPTOR(cli_text_all,       "TEXT.ALL");            /* -aa */
-$DESCRIPTOR(cli_text_none,      "TEXT.NONE");           /* ---a */
-$DESCRIPTOR(cli_text_stmlf,     "TEXT.STMLF");          /* -S */
-$DESCRIPTOR(cli_binary,         "BINARY");              /* -b[b] */
-$DESCRIPTOR(cli_binary_auto,    "BINARY.AUTO");         /* -b */
-$DESCRIPTOR(cli_binary_all,     "BINARY.ALL");          /* -bb */
-$DESCRIPTOR(cli_binary_none,    "BINARY.NONE");         /* ---b */
-$DESCRIPTOR(cli_case_insensitive,"CASE_INSENSITIVE");   /* -C */
-$DESCRIPTOR(cli_screen,         "SCREEN");              /* -c */
-$DESCRIPTOR(cli_directory,      "DIRECTORY");           /* -d */
-$DESCRIPTOR(cli_freshen,        "FRESHEN");             /* -f */
-$DESCRIPTOR(cli_help,           "HELP");                /* -h */
-$DESCRIPTOR(cli_junk,           "JUNK");                /* -j */
-$DESCRIPTOR(cli_lowercase,      "LOWERCASE");           /* -L */
-$DESCRIPTOR(cli_list,           "LIST");                /* -l */
-$DESCRIPTOR(cli_brief,          "BRIEF");               /* -l */
-$DESCRIPTOR(cli_full,           "FULL");                /* -v */
-$DESCRIPTOR(cli_full_diags,     "FULL.DIAGNOSTICS");    /* -vv */
-$DESCRIPTOR(cli_existing,       "EXISTING");            /* -o, -oo, -n */
-$DESCRIPTOR(cli_exist_newver,   "EXISTING.NEW_VERSION"); /* -o */
-$DESCRIPTOR(cli_exist_over,     "EXISTING.OVERWRITE");  /* -oo */
-$DESCRIPTOR(cli_exist_noext,    "EXISTING.NOEXTRACT");  /* -n */
-$DESCRIPTOR(cli_overwrite,      "OVERWRITE");           /* -o, -n */
-$DESCRIPTOR(cli_quiet,          "QUIET");               /* -q */
-$DESCRIPTOR(cli_super_quiet,    "QUIET.SUPER");         /* -qq */
-$DESCRIPTOR(cli_test,           "TEST");                /* -t */
-$DESCRIPTOR(cli_pipe,           "PIPE");                /* -p */
-$DESCRIPTOR(cli_password,       "PASSWORD");            /* -P */
-$DESCRIPTOR(cli_timestamp,      "TIMESTAMP");           /* -T */
-$DESCRIPTOR(cli_uppercase,      "UPPERCASE");           /* -U */
-$DESCRIPTOR(cli_update,         "UPDATE");              /* -u */
-$DESCRIPTOR(cli_version,        "VERSION");             /* -V */
-$DESCRIPTOR(cli_restore,        "RESTORE");             /* -X */
-$DESCRIPTOR(cli_restore_own,    "RESTORE.OWNER_PROT");  /* -X */
-$DESCRIPTOR(cli_restore_date,   "RESTORE.DATE");        /* -DD */
-$DESCRIPTOR(cli_restore_date_all, "RESTORE.DATE.ALL");  /* --D */
+$DESCRIPTOR(cli_text, "TEXT");                             /* -a[a] */
+$DESCRIPTOR(cli_text_auto, "TEXT.AUTO");                   /* -a */
+$DESCRIPTOR(cli_text_all, "TEXT.ALL");                     /* -aa */
+$DESCRIPTOR(cli_text_none, "TEXT.NONE");                   /* ---a */
+$DESCRIPTOR(cli_text_stmlf, "TEXT.STMLF");                 /* -S */
+$DESCRIPTOR(cli_binary, "BINARY");                         /* -b[b] */
+$DESCRIPTOR(cli_binary_auto, "BINARY.AUTO");               /* -b */
+$DESCRIPTOR(cli_binary_all, "BINARY.ALL");                 /* -bb */
+$DESCRIPTOR(cli_binary_none, "BINARY.NONE");               /* ---b */
+$DESCRIPTOR(cli_case_insensitive, "CASE_INSENSITIVE");     /* -C */
+$DESCRIPTOR(cli_screen, "SCREEN");                         /* -c */
+$DESCRIPTOR(cli_directory, "DIRECTORY");                   /* -d */
+$DESCRIPTOR(cli_freshen, "FRESHEN");                       /* -f */
+$DESCRIPTOR(cli_help, "HELP");                             /* -h */
+$DESCRIPTOR(cli_junk, "JUNK");                             /* -j */
+$DESCRIPTOR(cli_lowercase, "LOWERCASE");                   /* -L */
+$DESCRIPTOR(cli_list, "LIST");                             /* -l */
+$DESCRIPTOR(cli_brief, "BRIEF");                           /* -l */
+$DESCRIPTOR(cli_full, "FULL");                             /* -v */
+$DESCRIPTOR(cli_full_diags, "FULL.DIAGNOSTICS");           /* -vv */
+$DESCRIPTOR(cli_existing, "EXISTING");                     /* -o, -oo, -n */
+$DESCRIPTOR(cli_exist_newver, "EXISTING.NEW_VERSION");     /* -o */
+$DESCRIPTOR(cli_exist_over, "EXISTING.OVERWRITE");         /* -oo */
+$DESCRIPTOR(cli_exist_noext, "EXISTING.NOEXTRACT");        /* -n */
+$DESCRIPTOR(cli_overwrite, "OVERWRITE");                   /* -o, -n */
+$DESCRIPTOR(cli_quiet, "QUIET");                           /* -q */
+$DESCRIPTOR(cli_super_quiet, "QUIET.SUPER");               /* -qq */
+$DESCRIPTOR(cli_test, "TEST");                             /* -t */
+$DESCRIPTOR(cli_pipe, "PIPE");                             /* -p */
+$DESCRIPTOR(cli_password, "PASSWORD");                     /* -P */
+$DESCRIPTOR(cli_timestamp, "TIMESTAMP");                   /* -T */
+$DESCRIPTOR(cli_uppercase, "UPPERCASE");                   /* -U */
+$DESCRIPTOR(cli_update, "UPDATE");                         /* -u */
+$DESCRIPTOR(cli_version, "VERSION");                       /* -V */
+$DESCRIPTOR(cli_restore, "RESTORE");                       /* -X */
+$DESCRIPTOR(cli_restore_own, "RESTORE.OWNER_PROT");        /* -X */
+$DESCRIPTOR(cli_restore_date, "RESTORE.DATE");             /* -DD */
+$DESCRIPTOR(cli_restore_date_all, "RESTORE.DATE.ALL");     /* --D */
 $DESCRIPTOR(cli_restore_date_files, "RESTORE.DATE.FILES"); /* -D */
-$DESCRIPTOR(cli_dot_version,    "DOT_VERSION");         /* -Y */
-$DESCRIPTOR(cli_comment,        "COMMENT");             /* -z */
-$DESCRIPTOR(cli_exclude,        "EXCLUDE");             /* -x */
-$DESCRIPTOR(cli_ods2,           "ODS2");                /* -2 */
-$DESCRIPTOR(cli_traverse,       "TRAVERSE_DIRS");       /* -: */
+$DESCRIPTOR(cli_dot_version, "DOT_VERSION");               /* -Y */
+$DESCRIPTOR(cli_comment, "COMMENT");                       /* -z */
+$DESCRIPTOR(cli_exclude, "EXCLUDE");                       /* -x */
+$DESCRIPTOR(cli_ods2, "ODS2");                             /* -2 */
+$DESCRIPTOR(cli_traverse, "TRAVERSE_DIRS");                /* -: */
 
-$DESCRIPTOR(cli_information,    "ZIPINFO");             /* -Z */
-$DESCRIPTOR(cli_short,          "SHORT");               /* -Zs */
-$DESCRIPTOR(cli_medium,         "MEDIUM");              /* -Zm */
-$DESCRIPTOR(cli_long,           "LONG");                /* -Zl */
-$DESCRIPTOR(cli_verbose,        "VERBOSE");             /* -Zv */
-$DESCRIPTOR(cli_header,         "HEADER");              /* -Zh */
-$DESCRIPTOR(cli_totals,         "TOTALS");              /* -Zt */
-$DESCRIPTOR(cli_times,          "TIMES");               /* -ZT */
-$DESCRIPTOR(cli_one_line,       "ONE_LINE");            /* -Z2 */
+$DESCRIPTOR(cli_information, "ZIPINFO"); /* -Z */
+$DESCRIPTOR(cli_short, "SHORT");         /* -Zs */
+$DESCRIPTOR(cli_medium, "MEDIUM");       /* -Zm */
+$DESCRIPTOR(cli_long, "LONG");           /* -Zl */
+$DESCRIPTOR(cli_verbose, "VERBOSE");     /* -Zv */
+$DESCRIPTOR(cli_header, "HEADER");       /* -Zh */
+$DESCRIPTOR(cli_totals, "TOTALS");       /* -Zt */
+$DESCRIPTOR(cli_times, "TIMES");         /* -ZT */
+$DESCRIPTOR(cli_one_line, "ONE_LINE");   /* -Z2 */
 
-$DESCRIPTOR(cli_page,           "PAGE");                /* -M , -ZM */
+$DESCRIPTOR(cli_page, "PAGE"); /* -M , -ZM */
 
-$DESCRIPTOR(cli_yyz,            "YYZ_UNZIP");
+$DESCRIPTOR(cli_yyz, "YYZ_UNZIP");
 
-$DESCRIPTOR(cli_zipfile,        "ZIPFILE");
-$DESCRIPTOR(cli_infile,         "INFILE");
-$DESCRIPTOR(unzip_command,      "unzip ");
+$DESCRIPTOR(cli_zipfile, "ZIPFILE");
+$DESCRIPTOR(cli_infile, "INFILE");
+$DESCRIPTOR(unzip_command, "unzip ");
 
 static int show_VMSCLI_usage;
 
 #ifndef vms_unzip_cld
-#  define vms_unzip_cld VMS_UNZIP_CLD
+#define vms_unzip_cld VMS_UNZIP_CLD
 #endif
 #if defined(__DECC) || defined(__GNUC__)
-extern void *vms_unzip_cld;
+extern void* vms_unzip_cld;
 #else
-globalref void *vms_unzip_cld;
+globalref void* vms_unzip_cld;
 #endif
 
 /* extern unsigned long LIB$GET_INPUT(void), LIB$SIG_TO_RET(void); */
 
 #ifndef cli$dcl_parse
-#  define cli$dcl_parse CLI$DCL_PARSE
+#define cli$dcl_parse CLI$DCL_PARSE
 #endif
 #ifndef cli$present
-#  define cli$present CLI$PRESENT
+#define cli$present CLI$PRESENT
 #endif
 #ifndef cli$get_value
-#  define cli$get_value CLI$GET_VALUE
+#define cli$get_value CLI$GET_VALUE
 #endif
-extern unsigned long cli$dcl_parse ();
-extern unsigned long cli$present ();
-extern unsigned long cli$get_value ();
+extern unsigned long cli$dcl_parse();
+extern unsigned long cli$present();
+extern unsigned long cli$get_value();
 
-unsigned long vms_unzip_cmdline (int *, char ***);
-static unsigned long get_list (struct dsc$descriptor_s *,
-                               struct dsc$descriptor_d *, int,
-                               char **, unsigned long *, unsigned long *);
-static unsigned long check_cli (struct dsc$descriptor_s *);
+unsigned long vms_unzip_cmdline(int*, char***);
+static unsigned long get_list(struct dsc$descriptor_s*, struct dsc$descriptor_d*, int, char**, unsigned long*, unsigned long*);
+static unsigned long check_cli(struct dsc$descriptor_s*);
 
-
 #ifdef TEST
-int
-main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     return (vms_unzip_cmdline(&argc, &argv));
 }
 #endif /* TEST */
 
-
-unsigned long
-vms_unzip_cmdline (int *argc_p, char ***argv_p)
-{
-/*
-**  Routine:    vms_unzip_cmdline
-**
-**  Function:
-**
-**      Parse the DCL command line and create a fake argv array to be
-**      handed off to Zip.
-**
-**      NOTE: the argv[] is built as we go, so all the parameters are
-**      checked in the appropriate order!!
-**
-**  Formal parameters:
-**
-**      argc_p          - Address of int to receive the new argc
-**      argv_p          - Address of char ** to receive the argv address
-**
-**  Calling sequence:
-**
-**      status = vms_unzip_cmdline (&argc, &argv);
-**
-**  Returns:
-**
-**      SS$_NORMAL      - Success.
-**      SS$_INSFMEM     - A malloc() or realloc() failed
-**      SS$_ABORT       - Bad time value
-**
-*/
+unsigned long vms_unzip_cmdline(int* argc_p, char*** argv_p) {
+    /*
+    **  Routine:    vms_unzip_cmdline
+    **
+    **  Function:
+    **
+    **      Parse the DCL command line and create a fake argv array to be
+    **      handed off to Zip.
+    **
+    **      NOTE: the argv[] is built as we go, so all the parameters are
+    **      checked in the appropriate order!!
+    **
+    **  Formal parameters:
+    **
+    **      argc_p          - Address of int to receive the new argc
+    **      argv_p          - Address of char ** to receive the argv address
+    **
+    **  Calling sequence:
+    **
+    **      status = vms_unzip_cmdline (&argc, &argv);
+    **
+    **  Returns:
+    **
+    **      SS$_NORMAL      - Success.
+    **      SS$_INSFMEM     - A malloc() or realloc() failed
+    **      SS$_ABORT       - Bad time value
+    **
+    */
     register unsigned long status;
     char options[256];
-    char *the_cmd_line;                 /* buffer for argv strings */
-    unsigned long cmdl_size;            /* allocated size of buffer */
-    unsigned long cmdl_len;             /* used size of buffer */
-    char *ptr;
-    int  x, len, zipinfo, exclude_list;
+    char* the_cmd_line;      /* buffer for argv strings */
+    unsigned long cmdl_size; /* allocated size of buffer */
+    unsigned long cmdl_len;  /* used size of buffer */
+    char* ptr;
+    int x, len, zipinfo, exclude_list;
     int restore_date;
 
     int new_argc;
-    char **new_argv;
+    char** new_argv;
 
     struct dsc$descriptor_d work_str;
     struct dsc$descriptor_d foreign_cmdline;
@@ -340,24 +334,21 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         */
         if (foreign_cmdline.dsc$w_length == 0)
             return (SS$_NORMAL);
-        if ((*(foreign_cmdline.dsc$a_pointer) == '-') ||
-            ((foreign_cmdline.dsc$w_length > 1) &&
-             (*(foreign_cmdline.dsc$a_pointer) == '"') &&
-             (*(foreign_cmdline.dsc$a_pointer + 1) == '-'))) {
+        if ((*(foreign_cmdline.dsc$a_pointer) == '-') || ((foreign_cmdline.dsc$w_length > 1) && (*(foreign_cmdline.dsc$a_pointer) == '"') && (*(foreign_cmdline.dsc$a_pointer + 1) == '-'))) {
             show_VMSCLI_usage = FALSE;
             return (SS$_NORMAL);
         }
 
         str$concat(&work_str, &unzip_command, &foreign_cmdline);
-        status = cli$dcl_parse(&work_str, &vms_unzip_cld, lib$get_input,
-                        lib$get_input, 0);
-        if (!(status & 1)) return (status);
+        status = cli$dcl_parse(&work_str, &vms_unzip_cld, lib$get_input, lib$get_input, 0);
+        if (!(status & 1))
+            return (status);
     }
 
     /*
     **  There's always going to be a new_argv[] because of the image name.
     */
-    if ((the_cmd_line = (char *) malloc(cmdl_size = ARGBSIZE_UNIT)) == NULL)
+    if ((the_cmd_line = (char*)malloc(cmdl_size = ARGBSIZE_UNIT)) == NULL)
         return (SS$_INSFMEM);
 
     strcpy(the_cmd_line, "unzip");
@@ -368,7 +359,7 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
     */
 
     options[0] = '-';
-    ptr = &options[1];          /* Point to temporary buffer */
+    ptr = &options[1]; /* Point to temporary buffer */
 
     /*
     **  Is it ZipInfo??
@@ -376,7 +367,6 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
     zipinfo = 0;
     status = cli$present(&cli_information);
     if (status & 1) {
-
         zipinfo = 1;
 
         *ptr++ = 'Z';
@@ -399,10 +389,8 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
             *ptr++ = 't';
         if (cli$present(&cli_times) & 1)
             *ptr++ = 'T';
-
     }
     else {
-
 #if 0
         /*
         **  Extract files?
@@ -424,8 +412,7 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
             *ptr++ = '-';
             *ptr++ = '-';
             *ptr++ = 'b';
-            if ((status & 1) &&
-                !((status = cli$present(&cli_binary_none)) & 1)) {
+            if ((status & 1) && !((status = cli$present(&cli_binary_none)) & 1)) {
                 *ptr++ = 'b';
                 if ((status = cli$present(&cli_binary_all)) & 1)
                     *ptr++ = 'b';
@@ -441,8 +428,7 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
             *ptr++ = '-';
             *ptr++ = '-';
             *ptr++ = 'a';
-            if ((status & 1) &&
-                !((status = cli$present(&cli_text_none)) & 1)) {
+            if ((status & 1) && !((status = cli$present(&cli_text_none)) & 1)) {
                 *ptr++ = 'a';
                 if ((status = cli$present(&cli_text_all)) & 1)
                     *ptr++ = 'a';
@@ -485,12 +471,14 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
             if (status == CLI$_NEGATED) {
                 /* /RESTORE=NODATE */
                 restore_date = 2;
-            } else {
+            }
+            else {
                 status = cli$present(&cli_restore_date_all);
                 if (status == CLI$_PRESENT) {
                     /* /RESTORE=(DATE=ALL) */
                     restore_date = 0;
-                } else {
+                }
+                else {
                     /* /RESTORE=(DATE=FILES) (default) */
                     restore_date = 1;
                 }
@@ -533,11 +521,12 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         status = cli$present(&cli_list);
         if (status & 1) {
             if (cli$present(&cli_full) & 1) {
-               *ptr++ = 'v';
-               if (cli$present(&cli_full_diags) & 1)
-                   *ptr++ = 'v';
-            } else
-               *ptr++ = 'l';
+                *ptr++ = 'v';
+                if (cli$present(&cli_full_diags) & 1)
+                    *ptr++ = 'v';
+            }
+            else
+                *ptr++ = 'l';
         }
 
         /*
@@ -677,8 +666,8 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         if (status != CLI$_ABSENT) {
             if (status == CLI$_NEGATED) {
                 *ptr++ = '-';
-            } else if ((status = cli$present(&cli_restore))
-                       == CLI$_NEGATED) {
+            }
+            else if ((status = cli$present(&cli_restore)) == CLI$_NEGATED) {
                 *ptr++ = '-';
             }
             *ptr++ = 'X';
@@ -693,7 +682,7 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         if (status != CLI$_ABSENT)
             *ptr++ = 'z';
 
-    }   /* ZipInfo check way up there.... */
+    } /* ZipInfo check way up there.... */
 
     /* The following options are common to both UnZip and ZipInfo mode. */
 
@@ -753,9 +742,8 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         cmdl_len += password_arg.dsc$w_length + 4;
         CHECK_BUFFER_ALLOCATION(the_cmd_line, cmdl_size, cmdl_len)
         strcpy(&the_cmd_line[x], "-P");
-        strncpy(&the_cmd_line[x+3], password_arg.dsc$a_pointer,
-                password_arg.dsc$w_length);
-        the_cmd_line[cmdl_len-1] = '\0';
+        strncpy(&the_cmd_line[x + 3], password_arg.dsc$a_pointer, password_arg.dsc$w_length);
+        the_cmd_line[cmdl_len - 1] = '\0';
     }
 
     /*
@@ -768,10 +756,8 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         x = cmdl_len;
         cmdl_len += work_str.dsc$w_length + 1;
         CHECK_BUFFER_ALLOCATION(the_cmd_line, cmdl_size, cmdl_len)
-        strncpy(&the_cmd_line[x], work_str.dsc$a_pointer,
-                work_str.dsc$w_length);
-        the_cmd_line[cmdl_len-1] = '\0';
-
+        strncpy(&the_cmd_line[x], work_str.dsc$a_pointer, work_str.dsc$w_length);
+        the_cmd_line[cmdl_len - 1] = '\0';
     }
 
     /*
@@ -782,9 +768,8 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         cmdl_len += output_directory.dsc$w_length + 4;
         CHECK_BUFFER_ALLOCATION(the_cmd_line, cmdl_size, cmdl_len)
         strcpy(&the_cmd_line[x], "-d");
-        strncpy(&the_cmd_line[x+3], output_directory.dsc$a_pointer,
-                output_directory.dsc$w_length);
-        the_cmd_line[cmdl_len-1] = '\0';
+        strncpy(&the_cmd_line[x + 3], output_directory.dsc$a_pointer, output_directory.dsc$w_length);
+        the_cmd_line[cmdl_len - 1] = '\0';
     }
 
     /*
@@ -792,9 +777,9 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
     */
     status = cli$present(&cli_infile);
     if (status & 1) {
-        status = get_list(&cli_infile, &foreign_cmdline, '\0',
-                          &the_cmd_line, &cmdl_size, &cmdl_len);
-        if (!(status & 1)) return (status);
+        status = get_list(&cli_infile, &foreign_cmdline, '\0', &the_cmd_line, &cmdl_size, &cmdl_len);
+        if (!(status & 1))
+            return (status);
     }
 
     /*
@@ -806,16 +791,16 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
         CHECK_BUFFER_ALLOCATION(the_cmd_line, cmdl_size, cmdl_len)
         strcpy(&the_cmd_line[x], "-x");
 
-        status = get_list(&cli_exclude, &foreign_cmdline, '\0',
-                          &the_cmd_line, &cmdl_size, &cmdl_len);
-        if (!(status & 1)) return (status);
+        status = get_list(&cli_exclude, &foreign_cmdline, '\0', &the_cmd_line, &cmdl_size, &cmdl_len);
+        if (!(status & 1))
+            return (status);
     }
 
     /*
     **  We have finished collecting the strings for the argv vector,
     **  release unused space.
     */
-    if ((the_cmd_line = (char *) realloc(the_cmd_line, cmdl_len)) == NULL)
+    if ((the_cmd_line = (char*)realloc(the_cmd_line, cmdl_len)) == NULL)
         return (SS$_INSFMEM);
 
     /*
@@ -830,7 +815,7 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
     **  Allocate memory for the new argv[].  The last element of argv[]
     **  is supposed to be NULL, so allocate enough for new_argc+1.
     */
-    if ((new_argv = (char **) calloc(new_argc+1, sizeof(char *))) == NULL)
+    if ((new_argv = (char**)calloc(new_argc + 1, sizeof(char*))) == NULL)
         return (SS$_INSFMEM);
 
     /*
@@ -858,32 +843,27 @@ vms_unzip_cmdline (int *argc_p, char ***argv_p)
     return (SS$_NORMAL);
 }
 
-
-
-static unsigned long
-get_list (struct dsc$descriptor_s *qual, struct dsc$descriptor_d *rawtail,
-          int delim, char **p_str, unsigned long *p_size, unsigned long *p_end)
-{
-/*
-**  Routine:    get_list
-**
-**  Function:   This routine runs through a comma-separated CLI list
-**              and copies the strings to the argv buffer.  The
-**              specified separation character is used to separate
-**              the strings in the argv buffer.
-**
-**              All unquoted strings are converted to lower-case.
-**
-**  Formal parameters:
-**
-**      qual    - Address of descriptor for the qualifier name
-**      rawtail - Address of descriptor for the full command line tail
-**      delim   - Character to use to separate the list items
-**      p_str   - Address of pointer pointing to output buffer (argv strings)
-**      p_size  - Address of number containing allocated size for output string
-**      p_end   - Address of number containing used length in output buf
-**
-*/
+static unsigned long get_list(struct dsc$descriptor_s* qual, struct dsc$descriptor_d* rawtail, int delim, char** p_str, unsigned long* p_size, unsigned long* p_end) {
+    /*
+    **  Routine:    get_list
+    **
+    **  Function:   This routine runs through a comma-separated CLI list
+    **              and copies the strings to the argv buffer.  The
+    **              specified separation character is used to separate
+    **              the strings in the argv buffer.
+    **
+    **              All unquoted strings are converted to lower-case.
+    **
+    **  Formal parameters:
+    **
+    **      qual    - Address of descriptor for the qualifier name
+    **      rawtail - Address of descriptor for the full command line tail
+    **      delim   - Character to use to separate the list items
+    **      p_str   - Address of pointer pointing to output buffer (argv strings)
+    **      p_size  - Address of number containing allocated size for output string
+    **      p_end   - Address of number containing used length in output buf
+    **
+    */
 
     register unsigned long status;
     struct dsc$descriptor_d work_str;
@@ -892,21 +872,22 @@ get_list (struct dsc$descriptor_s *qual, struct dsc$descriptor_d *rawtail,
 
     status = cli$present(qual);
     if (status & 1) {
-
         unsigned long len, old_len;
         long ind, sind;
         int keep_case;
-        char *src, *dst; int x;
+        char *src, *dst;
+        int x;
 
         /*
         **  Just in case the string doesn't exist yet, though it does.
         */
         if (*p_str == NULL) {
             *p_size = ARGBSIZE_UNIT;
-            if ((*p_str = (char *) malloc(*p_size)) == NULL)
+            if ((*p_str = (char*)malloc(*p_size)) == NULL)
                 return (SS$_INSFMEM);
             len = 0;
-        } else {
+        }
+        else {
             len = *p_end;
         }
 
@@ -922,15 +903,14 @@ get_list (struct dsc$descriptor_s *qual, struct dsc$descriptor_d *rawtail,
             */
             keep_case = FALSE;
             str$find_first_substring(rawtail, &ind, &sind, &work_str);
-            if ((ind > 1 && *(rawtail->dsc$a_pointer + ind - 2) == '"') ||
-                (ind == 0))
+            if ((ind > 1 && *(rawtail->dsc$a_pointer + ind - 2) == '"') || (ind == 0))
                 keep_case = TRUE;
 
             /*
             **  Copy the string to the buffer, converting to lowercase.
             */
             src = work_str.dsc$a_pointer;
-            dst = *p_str+old_len;
+            dst = *p_str + old_len;
             for (x = 0; x < work_str.dsc$w_length; x++) {
                 if (!keep_case && ((*src >= 'A') && (*src <= 'Z')))
                     *dst++ = *src++ + 32;
@@ -938,52 +918,47 @@ get_list (struct dsc$descriptor_s *qual, struct dsc$descriptor_d *rawtail,
                     *dst++ = *src++;
             }
             if (status == CLI$_COMMA)
-                (*p_str)[len-1] = (char)delim;
+                (*p_str)[len - 1] = (char)delim;
             else
-                (*p_str)[len-1] = '\0';
+                (*p_str)[len - 1] = '\0';
         }
         *p_end = len;
     }
 
     return (SS$_NORMAL);
-
 }
 
-
-static unsigned long
-check_cli (struct dsc$descriptor_s *qual)
-{
-/*
-**  Routine:    check_cli
-**
-**  Function:   Check to see if a CLD was used to invoke the program.
-**
-**  Formal parameters:
-**
-**      qual    - Address of descriptor for qualifier name to check.
-**
-*/
-    lib$establish(lib$sig_to_ret);      /* Establish condition handler */
-    return (cli$present(qual));         /* Just see if something was given */
+static unsigned long check_cli(struct dsc$descriptor_s* qual) {
+    /*
+    **  Routine:    check_cli
+    **
+    **  Function:   Check to see if a CLD was used to invoke the program.
+    **
+    **  Formal parameters:
+    **
+    **      qual    - Address of descriptor for qualifier name to check.
+    **
+    */
+    lib$establish(lib$sig_to_ret); /* Establish condition handler */
+    return (cli$present(qual));    /* Just see if something was given */
 }
 
-
 #ifndef TEST
 #ifdef SFX
 
 #ifdef SFX_EXDIR
-#  define SFXOPT_EXDIR "\n                   and /DIRECTORY=exdir-spec"
+#define SFXOPT_EXDIR "\n                   and /DIRECTORY=exdir-spec"
 #else
-#  define SFXOPT_EXDIR ""
+#define SFXOPT_EXDIR ""
 #endif
 
 #ifdef MORE
-#  define SFXOPT1 "/PAGE, "
+#define SFXOPT1 "/PAGE, "
 #else
-#  define SFXOPT1 ""
+#define SFXOPT1 ""
 #endif
 
-int VMSCLI_usage(__GPRO__ int error)    /* returns PK-type error code */
+int VMSCLI_usage(__GPRO__ int error) /* returns PK-type error code */
 {
     extern ZCONST char UnzipSFXBanner[];
 #ifdef BETA
@@ -992,34 +967,36 @@ int VMSCLI_usage(__GPRO__ int error)    /* returns PK-type error code */
     int flag;
 
     if (!show_VMSCLI_usage)
-       return usage(__G__ error);
+        return usage(__G__ error);
 
-    flag = (error? 1 : 0);
+    flag = (error ? 1 : 0);
 
-    Info(slide, flag, ((char *)slide, UnzipSFXBanner,
-      UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, UZ_VERSION_DATE));
-    Info(slide, flag, ((char *)slide, "\
+    Info(slide, flag, ((char*)slide, UnzipSFXBanner, UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, UZ_VERSION_DATE));
+    Info(slide, flag,
+         ((char*)slide,
+          "\
 Valid main options are /TEST, /FRESHEN, /UPDATE, /PIPE, /SCREEN, /COMMENT%s.\n",
-      SFXOPT_EXDIR));
-    Info(slide, flag, ((char *)slide, "\
+          SFXOPT_EXDIR));
+    Info(slide, flag,
+         ((char*)slide,
+          "\
 Modifying options are /TEXT, /BINARY, /JUNK, /EXISTING, /QUIET,\n\
                       /CASE_INSENSITIVE, /LOWERCASE, %s/VERSION, /RESTORE.\n",
-      SFXOPT1));
+          SFXOPT1));
 #ifdef BETA
-    Info(slide, flag, ((char *)slide, BetaVersion, "\n", "SFX"));
+    Info(slide, flag, ((char*)slide, BetaVersion, "\n", "SFX"));
 #endif
 
     if (error)
         return PK_PARAM;
     else
-        return PK_COOL;     /* just wanted usage screen: no error */
+        return PK_COOL; /* just wanted usage screen: no error */
 
 } /* end function VMSCLI_usage() */
 
-
 #else /* !SFX */
 
-int VMSCLI_usage(__GPRO__ int error)    /* returns PK-type error code */
+int VMSCLI_usage(__GPRO__ int error) /* returns PK-type error code */
 {
     extern ZCONST char UnzipUsageLine1[];
 #ifdef BETA
@@ -1028,32 +1005,35 @@ int VMSCLI_usage(__GPRO__ int error)    /* returns PK-type error code */
     int flag;
 
     if (!show_VMSCLI_usage)
-       return usage(__G__ error);
+        return usage(__G__ error);
 
-/*---------------------------------------------------------------------------
-    If user requested usage, send it to stdout; else send to stderr.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        If user requested usage, send it to stdout; else send to stderr.
+      ---------------------------------------------------------------------------*/
 
-    flag = (error? 1 : 0);
+    flag = (error ? 1 : 0);
 
-
-/*---------------------------------------------------------------------------
-    Print either ZipInfo usage or UnZip usage, depending on incantation.
-  ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Print either ZipInfo usage or UnZip usage, depending on incantation.
+      ---------------------------------------------------------------------------*/
 
     if (uO.zipinfo_mode) {
 
 #ifndef NO_ZIPINFO
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
 ZipInfo %d.%d%d%s %s, by Newtware and the fine folks at Info-ZIP.\n\n\
 List name, date/time, attribute, size, compression method, etc., about files\n\
 in list (excluding those in xlist) contained in the specified .zip archive(s).\
 \n\"file[.zip]\" may be a wildcard name containing * or %% (e.g., \"*font-%%\
-.zip\").\n", ZI_MAJORVER, ZI_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL,
-          UZ_VERSION_DATE));
+.zip\").\n",
+              ZI_MAJORVER, ZI_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, UZ_VERSION_DATE));
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
    usage:  zipinfo file[.zip] [list] [/EXCL=(xlist)] [/DIR=exdir] /options\n\
    or:  unzip /ZIPINFO file[.zip] [list] [/EXCL=(xlist)] [/DIR=exdir] /options\
 \n\nmain\
@@ -1062,7 +1042,9 @@ in list (excluding those in xlist) contained in the specified .zip archive(s).\
   /VERBOSE   verbose, multi-page format   /LONG    long Unix \"ls -l\" format\n\
 "));
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
 miscellaneous options:\n  \
 /HEADER   print header line       /TOTALS  totals for listed files or for all\n\
   /COMMENT  print zipfile comment   /TIMES   times in sortable decimal format\n\
@@ -1070,35 +1052,39 @@ miscellaneous options:\n  \
   /[NO]PAGE page output through built-in \"more\"\n\
   /EXCLUDE=(file-spec1,etc.)  exclude file-specs from listing\n"));
 
-        Info(slide, flag, ((char *)slide, "\n\
+        Info(slide, flag,
+             ((char*)slide,
+              "\n\
 Type unzip \"-Z\" for Unix style flags\n\
 Remember that non-lowercase filespecs must be\
  quoted in VMS (e.g., \"Makefile\").\n"));
 
 #endif /* !NO_ZIPINFO */
+    }
+    else { /* UnZip mode */
 
-    } else {   /* UnZip mode */
-
-        Info(slide, flag, ((char *)slide, UnzipUsageLine1,
-          UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL,
-          UZ_VERSION_DATE));
+        Info(slide, flag, ((char*)slide, UnzipUsageLine1, UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, UZ_VERSION_DATE));
 
 #ifdef BETA
-        Info(slide, flag, ((char *)slide, BetaVersion, "", ""));
+        Info(slide, flag, ((char*)slide, BetaVersion, "", ""));
 #endif
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
 Usage: unzip file[.zip] [list] [/EXCL=(xlist)] [/DIR=exdir] /options /modifiers\
 \n  Default action is to extract files in list, except those in xlist, to exdir\
 ;\n  file[.zip] may be a wildcard.  %s\n\n",
 #ifdef NO_ZIPINFO
-          "(ZipInfo mode is disabled in this version.)"
+              "(ZipInfo mode is disabled in this version.)"
 #else
-          "Type \"unzip /ZIPINFO\" for ZipInfo-mode usage."
+              "Type \"unzip /ZIPINFO\" for ZipInfo-mode usage."
 #endif
-          ));
+              ));
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
 Major options include (type unzip -h for Unix style flags):\n\
    /[NO]TEST, /LIST, /[NO]SCREEN, /PIPE, /[NO]FRESHEN, /[NO]UPDATE,\n\
    /[NO]COMMENT, /DIRECTORY=directory-spec, /EXCLUDE=(file-spec1,etc.)\n\n\
@@ -1108,7 +1094,9 @@ Modifiers include:\n\
    /QUIET[=SUPER], /[NO]PAGE, /[NO]CASE_INSENSITIVE, /[NO]LOWERCASE,\n\
    /[NO]VERSION, /RESTORE[=([NO]OWNER_PROT[,NODATE|DATE={ALL|FILES}])]\n\n"));
 
-        Info(slide, flag, ((char *)slide, "\
+        Info(slide, flag,
+             ((char*)slide,
+              "\
 Examples (see unzip.txt or \"HELP UNZIP\" for more info):\n\
    unzip edit1 /EXCL=joe.jou /CASE_INSENSITIVE    => Extract all files except\
 \n\
@@ -1128,7 +1116,7 @@ Examples (see unzip.txt or \"HELP UNZIP\" for more info):\n\
     if (error)
         return PK_PARAM;
     else
-        return PK_COOL;     /* just wanted usage screen: no error */
+        return PK_COOL; /* just wanted usage screen: no error */
 
 } /* end function VMSCLI_usage() */
 

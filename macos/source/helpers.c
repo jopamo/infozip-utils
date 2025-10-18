@@ -27,182 +27,153 @@
 #include "helpers.h"
 #include "pathname.h"
 
-
 /*****************************************************************************/
 /*  Global Vars                                                              */
 /*****************************************************************************/
 
-
 extern int noisy;
 extern char MacPathEnd;
-extern char *zipfile;   /* filename of the Zipfile */
-extern char *tempzip;   /* Temporary zip file name */
+extern char* zipfile; /* filename of the Zipfile */
+extern char* tempzip; /* Temporary zip file name */
 extern ZCONST unsigned char MacRoman_to_WinCP1252[128];
 
-
-static char         argStr[1024];
-static char         *argv[MAX_ARGS + 1];
-
-
+static char argStr[1024];
+static char* argv[MAX_ARGS + 1];
 
 /*****************************************************************************/
 /*  Functions                                                                */
 /*****************************************************************************/
-
 
 /*
 **  Copy a C string to a Pascal string
 **
 */
 
-unsigned char *CToPCpy(unsigned char *pstr, char *cstr)
-{
-    register char *dptr;
+unsigned char* CToPCpy(unsigned char* pstr, char* cstr) {
+    register char* dptr;
     register unsigned len;
 
-        len=0;
-        dptr=(char *)pstr+1;
-    while (len<255 && (*dptr++ = *cstr++)!='\0') ++len;
-    *pstr= (unsigned char)len;
-  return pstr;
+    len = 0;
+    dptr = (char*)pstr + 1;
+    while (len < 255 && (*dptr++ = *cstr++) != '\0')
+        ++len;
+    *pstr = (unsigned char)len;
+    return pstr;
 }
-
 
 /*
 **  Copy a Pascal string to a C string
 **
 */
 
-char *PToCCpy(unsigned char *pstr, char *cstr)
-{
-strncpy(cstr, (char *) &pstr[1], *pstr);
-    cstr[pstr[0]] = '\0';  /* set endmarker for c-string */
-return cstr;
+char* PToCCpy(unsigned char* pstr, char* cstr) {
+    strncpy(cstr, (char*)&pstr[1], *pstr);
+    cstr[pstr[0]] = '\0'; /* set endmarker for c-string */
+    return cstr;
 }
-
 
 /*
 **  strcpy() and strcat() work-alikes which allow overlapping buffers.
 */
 
-char *sstrcpy(char *to,const char *from)
-{
-    memmove(to, from, 1+strlen(from));
+char* sstrcpy(char* to, const char* from) {
+    memmove(to, from, 1 + strlen(from));
     return to;
 }
 
-char *sstrcat(char *to,const char *from)
-{
+char* sstrcat(char* to, const char* from) {
     sstrcpy(to + strlen(to), from);
     return to;
 }
-
-
 
 /*
 **  Alloc memory and init it
 **
 */
 
-char *StrCalloc(unsigned short size)
-{
-char *strPtr = NULL;
+char* StrCalloc(unsigned short size) {
+    char* strPtr = NULL;
 
-if ((strPtr = calloc(size, sizeof(char))) == NULL)
-    printerr("StrCalloc failed:", -1, size, __LINE__, __FILE__, "");
+    if ((strPtr = calloc(size, sizeof(char))) == NULL)
+        printerr("StrCalloc failed:", -1, size, __LINE__, __FILE__, "");
 
-Assert_it(strPtr,"strPtr == NULL","")
-return strPtr;
+    Assert_it(strPtr, "strPtr == NULL", "") return strPtr;
 }
-
-
 
 /*
 **  Release only non NULL pointers
 **
 */
 
-char *StrFree(char *strPtr)
-{
-
-if (strPtr != NULL)
-    {
-    free(strPtr);
+char* StrFree(char* strPtr) {
+    if (strPtr != NULL) {
+        free(strPtr);
     }
 
-return NULL;
+    return NULL;
 }
-
-
-
 
 /*
 **  Return a value in a binary string
 **
 */
 
-char *sBit2Str(unsigned short value)
-{
-  static char str[sizeof(value)*8];
-  int biz    = 16;
-  int strwid = 16;
-  int i, j;
-  char *tempPtr = str;
+char* sBit2Str(unsigned short value) {
+    static char str[sizeof(value) * 8];
+    int biz = 16;
+    int strwid = 16;
+    int i, j;
+    char* tempPtr = str;
 
-      j = strwid - (biz + (biz >> 2)- (biz % 4 ? 0 : 1));
+    j = strwid - (biz + (biz >> 2) - (biz % 4 ? 0 : 1));
 
-      for (i = 0; i < j; i++) {
+    for (i = 0; i < j; i++) {
+        *tempPtr++ = ' ';
+    }
+    while (--biz >= 0) {
+        *tempPtr++ = ((value >> biz) & 1) + '0';
+        if (!(biz % 4) && biz) {
             *tempPtr++ = ' ';
-      }
-      while (--biz >= 0)
-      {
-            *tempPtr++ = ((value >> biz) & 1) + '0';
-            if (!(biz % 4) && biz) {
-                  *tempPtr++ = ' ';
-            }
-      }
-      *tempPtr = '\0';
+        }
+    }
+    *tempPtr = '\0';
 
-  return str;
+    return str;
 }
-
-
-
 
 /*
 **  Parse commandline style arguments
 **
 */
 
-int ParseArguments(char *s, char ***arg)
-{
-    int  n = 1, Quote = 0;
+int ParseArguments(char* s, char*** arg) {
+    int n = 1, Quote = 0;
     char *p = s, *p1, c;
 
     argv[0] = GetAppName();
 
     *arg = argv;
 
-    p1 = (char *) argStr;
+    p1 = (char*)argStr;
     while ((c = *p++) != 0) {
-        if (c==' ') continue;
+        if (c == ' ')
+            continue;
         argv[n++] = p1;
         if (n > MAX_ARGS)
-            return (n-1);
+            return (n - 1);
         do {
-            if (c=='\\' && *p++)
+            if (c == '\\' && *p++)
                 c = *p++;
-            else
-                if ((c=='"') || (c == '\'')) {
-                    if (!Quote) {
-                        Quote = c;
-                        continue;
-                    }
-                    if (c == Quote) {
-                        Quote = 0;
-                        continue;
-                    }
+            else if ((c == '"') || (c == '\'')) {
+                if (!Quote) {
+                    Quote = c;
+                    continue;
                 }
+                if (c == Quote) {
+                    Quote = 0;
+                    continue;
+                }
+            }
             *p1++ = c;
         } while (*p && ((c = *p++) != ' ' || Quote));
         *p1++ = '\0';
@@ -210,138 +181,116 @@ int ParseArguments(char *s, char ***arg)
     return n;
 }
 
-
-
 /*
 **  Print commandline style arguments
 **
 */
 
-void PrintArguments(int argc, char **argv)
-{
+void PrintArguments(int argc, char** argv) {
+    printf("\n Arguments:");
+    printf("\n --------------------------");
 
-printf("\n Arguments:");
-printf("\n --------------------------");
+    while (--argc >= 0)
+        printf("\n argc: %d  argv: [%s]", argc, &*argv[argc]);
 
-while(--argc >= 0)
-    printf("\n argc: %d  argv: [%s]", argc, &*argv[argc]);
-
-printf("\n --------------------------\n\n");
-return;
+    printf("\n --------------------------\n\n");
+    return;
 }
-
-
 
 /*
 **  return some error-msg on file-system
 **
 */
 
-int PrintUserHFSerr(int cond, int err, char *msg2)
-{
-char *msg;
+int PrintUserHFSerr(int cond, int err, char* msg2) {
+    char* msg;
 
-if (cond != 0)
-    {
-    switch (err)
-        {
-         case -35:
-            msg = "No such Volume";
-         break;
+    if (cond != 0) {
+        switch (err) {
+            case -35:
+                msg = "No such Volume";
+                break;
 
-         case -56:
-            msg = "No such Drive";
-         break;
+            case -56:
+                msg = "No such Drive";
+                break;
 
-         case -37:
-            msg = "Bad Volume Name";
-         break;
+            case -37:
+                msg = "Bad Volume Name";
+                break;
 
-         case -49:
-            msg = "File is already open for writing";
-         break;
+            case -49:
+                msg = "File is already open for writing";
+                break;
 
-         case -43:
-            msg = "Directory/File not found";
-         break;
+            case -43:
+                msg = "Directory/File not found";
+                break;
 
-         case -120:
-            msg = "Directory/File not found or incomplete pathname";
-         break;
+            case -120:
+                msg = "Directory/File not found or incomplete pathname";
+                break;
 
-        default: return err;
-         }
-    fprintf(stderr, "\n\n Error: %s ->%s", msg, msg2);
-    exit(err);
+            default:
+                return err;
+        }
+        fprintf(stderr, "\n\n Error: %s ->%s", msg, msg2);
+        exit(err);
     }
 
-return 0;
+    return 0;
 }
-
-
 
 /*
 **  Check mounted volumes and return number of volumes
 **  with the same name.
 */
 
-short CheckMountedVolumes(char *FullPath)
-{
-FSSpec  volumes[50];        /* 50 Volumes should be enough */
-char VolumeName[257], volume[257];
-short actVolCount, volIndex = 1, VolCount = 0;
-OSErr err;
-int i;
+short CheckMountedVolumes(char* FullPath) {
+    FSSpec volumes[50]; /* 50 Volumes should be enough */
+    char VolumeName[257], volume[257];
+    short actVolCount, volIndex = 1, VolCount = 0;
+    OSErr err;
+    int i;
 
-GetVolumeFromPath(FullPath, VolumeName);
+    GetVolumeFromPath(FullPath, VolumeName);
 
-err = OnLine(volumes, 50, &actVolCount, &volIndex);
-printerr("OnLine:", (err != -35) && (err != 0), err, __LINE__, __FILE__, "");
+    err = OnLine(volumes, 50, &actVolCount, &volIndex);
+    printerr("OnLine:", (err != -35) && (err != 0), err, __LINE__, __FILE__, "");
 
-for (i=0; i < actVolCount; i++)
-    {
-    PToCCpy(volumes[i].name,volume);
-    if (stricmp(volume, VolumeName) == 0) VolCount++;
+    for (i = 0; i < actVolCount; i++) {
+        PToCCpy(volumes[i].name, volume);
+        if (stricmp(volume, VolumeName) == 0)
+            VolCount++;
     }
-printerr("OnLine: ", (VolCount == 0), VolCount, __LINE__, __FILE__, FullPath);
+    printerr("OnLine: ", (VolCount == 0), VolCount, __LINE__, __FILE__, FullPath);
 
-return VolCount;
+    return VolCount;
 }
-
-
-
-
-
-
-
 
 /*
 **  compares strings, ignoring differences in case
 **
 */
 
-int stricmp(const char *p1, const char *p2)
-{
-int diff;
+int stricmp(const char* p1, const char* p2) {
+    int diff;
 
-while (*p1 && *p2)
-    {
-    if (*p1 != *p2)
-        {
-        if (isalpha(*p1) && isalpha(*p2))
-            {
-            diff = toupper(*p1) - toupper(*p2);
-            if (diff) return diff;
+    while (*p1 && *p2) {
+        if (*p1 != *p2) {
+            if (isalpha(*p1) && isalpha(*p2)) {
+                diff = toupper(*p1) - toupper(*p2);
+                if (diff)
+                    return diff;
             }
-            else break;
+            else
+                break;
         }
         p1++;
         p2++;
     }
-return *p1 - *p2;
+    return *p1 - *p2;
 }
-
-
 
 /*
 ** Convert the MacOS-Strings (Filenames/Findercomments) to a most compatible.
@@ -350,71 +299,45 @@ return *p1 - *p2;
 ** for extraction.
 */
 
-void MakeCompatibleString(char *MacOS_Str,
-            const char SpcChar1, const char SpcChar2,
-            const char SpcChar3, const char SpcChar4,
-            short CurrTextEncodingBase)
-{
-    char *tmpPtr;
+void MakeCompatibleString(char* MacOS_Str, const char SpcChar1, const char SpcChar2, const char SpcChar3, const char SpcChar4, short CurrTextEncodingBase) {
+    char* tmpPtr;
     register uch curch;
 
-    Assert_it(MacOS_Str,"MakeCompatibleString MacOS_Str == NULL","")
-    for (tmpPtr = MacOS_Str; (curch = *tmpPtr) != '\0'; tmpPtr++)
-    {
+    Assert_it(MacOS_Str, "MakeCompatibleString MacOS_Str == NULL", "") for (tmpPtr = MacOS_Str; (curch = *tmpPtr) != '\0'; tmpPtr++) {
         if (curch == SpcChar1)
             *tmpPtr = SpcChar2;
-        else
-        if (curch == SpcChar3)
+        else if (curch == SpcChar3)
             *tmpPtr = SpcChar4;
-        else  /* default */
-        /* now convert from MacRoman to ISO-8859-1 */
-        /* but convert only if MacRoman is activ */
-            if ((CurrTextEncodingBase == kTextEncodingMacRoman) &&
-                (curch > 127))
-                   {
-                    *tmpPtr = (char)MacRoman_to_WinCP1252[curch - 128];
-                   }
-    }  /* end for */
+        else /* default */
+             /* now convert from MacRoman to ISO-8859-1 */
+             /* but convert only if MacRoman is activ */
+            if ((CurrTextEncodingBase == kTextEncodingMacRoman) && (curch > 127)) {
+                *tmpPtr = (char)MacRoman_to_WinCP1252[curch - 128];
+            }
+    } /* end for */
 }
 
+Boolean CheckForSwitch(char* Switch, int argc, char** argv) {
+    char* p; /* steps through option arguments */
+    int i;   /* arg counter, root directory flag */
 
-
-
-Boolean CheckForSwitch(char *Switch, int argc, char **argv)
-{
-  char *p;              /* steps through option arguments */
-  int i;                /* arg counter, root directory flag */
-
-  for (i = 1; i < argc; i++)
-  {
-    if (argv[i][0] == '-')
-    {
-      if (argv[i][1])
-        {
-        for (p = argv[i]+1; *p; p++)
-            {
-            if (*p == Switch[0])
-                {
-                return true;
-                }
-            if ((Switch[1] != NULL) &&
-                ((*p == Switch[0]) && (*p == Switch[1])))
-                {
-                return true;
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            if (argv[i][1]) {
+                for (p = argv[i] + 1; *p; p++) {
+                    if (*p == Switch[0]) {
+                        return true;
+                    }
+                    if ((Switch[1] != NULL) && ((*p == Switch[0]) && (*p == Switch[1]))) {
+                        return true;
+                    }
                 }
             }
-         }
-     }
-  }
+        }
+    }
 
-return false;
+    return false;
 }
-
-
-
-
-
-
 
 #if (defined(USE_SIOUX) || defined(MACUNZIP_STANDALONE))
 
@@ -423,57 +346,43 @@ return false;
 **  this function is for internal use only
 */
 
-OSErr printerr(const char *msg, int cond, int err, int line, char *file,
-              const char *msg2)
-{
-
-if (cond != 0)
-    {
-    fprintf(stderr, "\nint err: %d: %s %d [%d/%s] {%s}\n", clock(), msg, err,
-            line, file, msg2);
+OSErr printerr(const char* msg, int cond, int err, int line, char* file, const char* msg2) {
+    if (cond != 0) {
+        fprintf(stderr, "\nint err: %d: %s %d [%d/%s] {%s}\n", clock(), msg, err, line, file, msg2);
     }
 
-return cond;
+    return cond;
 }
-
 
 /*
 fake-functions:
 Not Implemented for metrowerks SIOUX
 */
 
-void leftStatusString(char *status)
-{
-status = status;
+void leftStatusString(char* status) {
+    status = status;
 }
 
-
-void rightStatusString(char *status)
-{
-status = status;
+void rightStatusString(char* status) {
+    status = status;
 }
 
+void DoWarnUserDupVol(char* FullPath) {
+    char VolName[257];
+    GetVolumeFromPath(FullPath, VolName);
 
+    printf("\n There are more than one volume that has the same name !!\n");
 
-void DoWarnUserDupVol( char *FullPath )
-{
-  char VolName[257];
-  GetVolumeFromPath(FullPath,  VolName);
+    printf("\n Volume: %s\n", VolName);
 
-  printf("\n There are more than one volume that has the same name !!\n");
+    printf("\n This port has one weak point:");
+    printf("\n It is based on pathnames. As you may be already know:");
+    printf("\n Pathnames are not unique on a Mac !");
+    printf("\n MacZip has problems to find the correct location of");
+    printf("\n the archive or the files.\n");
 
-  printf("\n Volume: %s\n",VolName);
-
-  printf("\n This port has one weak point:");
-  printf("\n It is based on pathnames. As you may be already know:");
-  printf("\n Pathnames are not unique on a Mac !");
-  printf("\n MacZip has problems to find the correct location of");
-  printf("\n the archive or the files.\n");
-
-  printf("\n My (Big) recommendation:  Name all your volumes with an");
-  printf("\n unique name and MacZip will run without any problem.");
+    printf("\n My (Big) recommendation:  Name all your volumes with an");
+    printf("\n unique name and MacZip will run without any problem.");
 }
-
-
 
 #endif

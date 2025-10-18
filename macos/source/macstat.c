@@ -16,7 +16,6 @@
  *
   ---------------------------------------------------------------------------*/
 
-
 /*****************************************************************************/
 /*  Includes                                                                 */
 /*****************************************************************************/
@@ -34,29 +33,23 @@
 #include "macstuff.h"
 #include "mactime.h"
 
-
 /*****************************************************************************/
 /*  Global Vars                                                              */
 /*****************************************************************************/
 
 extern int errno;
-extern MACINFO newExtraField;  /* contains all extra-field data */
+extern MACINFO newExtraField; /* contains all extra-field data */
 extern short MacZipMode;
-
 
 /*****************************************************************************/
 /*  Prototypes                                                               */
 /*****************************************************************************/
 
-
-
 /*****************************************************************************/
 /*  Functions                                                                */
 /*****************************************************************************/
 
-
-int UZmacstat(const char *path, struct stat *buf)
-{
+int UZmacstat(const char* path, struct stat* buf) {
     Boolean isDirectory;
     long dirID;
     char fullpath[NAME_MAX], UnmangledPath[NAME_MAX];
@@ -66,16 +59,13 @@ int UZmacstat(const char *path, struct stat *buf)
     OSErr err, err2;
     short CurrentFork;
 
-    AssertStr(path,path)
-    Assert_it(buf,"","")
+    AssertStr(path, path) Assert_it(buf, "", "")
 
-    memset(buf, 0, sizeof(struct stat));        /* zero out all fields */
+        memset(buf, 0, sizeof(struct stat)); /* zero out all fields */
 
-    RfDfFilen2Real(UnmangledPath, path, MacZipMode,
-                   (newExtraField.flags & EB_M3_FL_NOCHANGE), &CurrentFork);
+    RfDfFilen2Real(UnmangledPath, path, MacZipMode, (newExtraField.flags & EB_M3_FL_NOCHANGE), &CurrentFork);
     GetCompletePath(fullpath, path, &fileSpec, &err);
-    err2 = PrintUserHFSerr((err != -43) && (err != 0) && (err != -120),
-                           err, path);
+    err2 = PrintUserHFSerr((err != -43) && (err != 0) && (err != -120), err, path);
     printerr("GetCompletePath:", err2, err2, __LINE__, __FILE__, path);
 
     if (err != noErr) {
@@ -92,7 +82,8 @@ int UZmacstat(const char *path, struct stat *buf)
     vpb.ioNamePtr = fpb.hFileInfo.ioNamePtr = fileSpec.name;
     if (isDirectory) {
         fpb.hFileInfo.ioDirID = fileSpec.parID;
-    } else {
+    }
+    else {
         fpb.hFileInfo.ioDirID = dirID;
     }
 
@@ -113,16 +104,17 @@ int UZmacstat(const char *path, struct stat *buf)
             if (fpb.hFileInfo.ioFlAttrib & 0x10) {
                 buf->st_mode |= S_IFDIR;
                 buf->st_nlink = 2;
-            } else {
+            }
+            else {
                 buf->st_nlink = 1;
                 if (fpb.hFileInfo.ioFlFndrInfo.fdFlags & 0x8000) {
                     buf->st_mode |= S_IFLNK;
-                } else {
+                }
+                else {
                     buf->st_mode |= S_IFREG;
                 }
             }
-            if ((fpb.hFileInfo.ioFlAttrib & 0x10) ||
-                (fpb.hFileInfo.ioFlFndrInfo.fdType == 'APPL')) {
+            if ((fpb.hFileInfo.ioFlAttrib & 0x10) || (fpb.hFileInfo.ioFlFndrInfo.fdType == 'APPL')) {
                 /*
                  * Directories and applications are executable by everyone.
                  */
@@ -148,8 +140,7 @@ int UZmacstat(const char *path, struct stat *buf)
                 buf->st_size = fpb.hFileInfo.ioFlLgLen;
 
             buf->st_blksize = vpb.ioVAlBlkSiz;
-            buf->st_blocks = (buf->st_size + buf->st_blksize - 1)
-                            / buf->st_blksize;
+            buf->st_blocks = (buf->st_size + buf->st_blksize - 1) / buf->st_blksize;
 
             /*
              * The times returned by the Mac file system are in the
@@ -160,20 +151,14 @@ int UZmacstat(const char *path, struct stat *buf)
 
             buf->st_mtime = MacFtime2UnixFtime(fpb.hFileInfo.ioFlMdDat);
             buf->st_ctime = MacFtime2UnixFtime(fpb.hFileInfo.ioFlCrDat);
-            buf->st_atime = buf->st_ctime;         /* best guess */
+            buf->st_atime = buf->st_ctime; /* best guess */
 
 #ifdef DEBUG_TIME
             {
-            struct tm *tp = localtime(&buf->st_mtime);
-            printf(
-              "\nUZmacstat: local buf->st_mtime is %ld = %d/%2d/%2d  %2d:%2d:%2d",
-              buf->st_mtime, tp->tm_year, tp->tm_mon+1, tp->tm_mday,
-              tp->tm_hour, tp->tm_min, tp->tm_sec);
-            tp = gmtime(&buf->st_mtime);
-            printf(
-              "\nUZmacstat: UTC   buf->st_mtime is %ld = %d/%2d/%2d  %2d:%2d:%2d\n",
-              buf->st_mtime, tp->tm_year, tp->tm_mon+1, tp->tm_mday,
-              tp->tm_hour, tp->tm_min, tp->tm_sec);
+                struct tm* tp = localtime(&buf->st_mtime);
+                printf("\nUZmacstat: local buf->st_mtime is %ld = %d/%2d/%2d  %2d:%2d:%2d", buf->st_mtime, tp->tm_year, tp->tm_mon + 1, tp->tm_mday, tp->tm_hour, tp->tm_min, tp->tm_sec);
+                tp = gmtime(&buf->st_mtime);
+                printf("\nUZmacstat: UTC   buf->st_mtime is %ld = %d/%2d/%2d  %2d:%2d:%2d\n", buf->st_mtime, tp->tm_year, tp->tm_mon + 1, tp->tm_mday, tp->tm_hour, tp->tm_min, tp->tm_sec);
             }
 #endif /* DEBUG_TIME */
         }

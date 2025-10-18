@@ -15,12 +15,9 @@
 #include <sc.h>
 #include <lub.h>
 
-short _isatty(int fd)
-{
+short _isatty(int fd) {
     register short lub;
 
-    lub = (int) _fcntl(&stdin[fd], 5, (size_t) 0);
-    return (lub >= CONIN && lub <= CONOUT)
-        || (lub >= COM1 && lub <= COM4)
-        || (lub >= COM5 && lub <= COM16);
+    lub = (int)_fcntl(&stdin[fd], 5, (size_t)0);
+    return (lub >= CONIN && lub <= CONOUT) || (lub >= COM1 && lub <= COM4) || (lub >= COM5 && lub <= COM16);
 }

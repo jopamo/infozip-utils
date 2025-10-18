@@ -12,5 +12,4 @@
 
 typedef struct stat stat_t;
 
-#endif  /* ndef __UNIXLIB_LOADED */
-
+#endif /* ndef __UNIXLIB_LOADED */

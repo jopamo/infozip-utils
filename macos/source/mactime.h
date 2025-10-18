@@ -29,20 +29,19 @@ contains replacement functions for them.
 /*  Macros, typedefs                                                         */
 /*****************************************************************************/
 
-
-  /*
-   * ARGH.  Mac times are based on 1904 Jan 1 00:00, not 1970 Jan 1 00:00.
-   *  So we have to diddle time_t's appropriately:  add or subtract 66 years'
-   *  worth of seconds == number of days times 86400 == (66*365 regular days +
-   *  17 leap days ) * 86400 == (24090 + 17) * 86400 == 2082844800L seconds.
-   *  We hope time_t is an unsigned long (ulg) on the Macintosh...
-   */
+/*
+ * ARGH.  Mac times are based on 1904 Jan 1 00:00, not 1970 Jan 1 00:00.
+ *  So we have to diddle time_t's appropriately:  add or subtract 66 years'
+ *  worth of seconds == number of days times 86400 == (66*365 regular days +
+ *  17 leap days ) * 86400 == (24090 + 17) * 86400 == 2082844800L seconds.
+ *  We hope time_t is an unsigned long (ulg) on the Macintosh...
+ */
 /*
 This Offset is only used by MacFileDate_to_UTime()
 */
 
-#define MACOS_TO_UNIX(x)  (x) -= (unsigned long)MacOS_2_Unix
-#define UNIX_TO_MACOS(x)  (x) += (unsigned long)MacOS_2_Unix
+#define MACOS_TO_UNIX(x) (x) -= (unsigned long)MacOS_2_Unix
+#define UNIX_TO_MACOS(x) (x) += (unsigned long)MacOS_2_Unix
 
 /*
 The MacOS function GetDateTime returns  the
@@ -50,12 +49,10 @@ number of seconds elapsed since midnight, January 1, 1904.
 */
 extern const unsigned long MacOS_2_Unix;
 
-
 /* prototypes for public utility functions */
 time_t MacFtime2UnixFtime(unsigned long macftime);
 unsigned long UnixFtime2MacFtime(time_t unxftime);
-time_t  AdjustForTZmoveMac(unsigned long macloctim, long s_gmtoffs);
-Boolean GetGMToffsetMac(unsigned long macftime, long *UTCoffset);
-
+time_t AdjustForTZmoveMac(unsigned long macloctim, long s_gmtoffs);
+Boolean GetGMToffsetMac(unsigned long macftime, long* UTCoffset);
 
 #endif

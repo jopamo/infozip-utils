@@ -16,6 +16,6 @@
 
 #include "INCL_BZIP2:BZLIB.H"
 
-extern void bz_internal_error ( int bzerrcode );
+extern void bz_internal_error(int bzerrcode);
 
 #pragma names restore

@@ -7,7 +7,7 @@
   also may be found at:  ftp://ftp.info-zip.org/pub/infozip/license.html
 */
 #ifndef _MACSTUFF_H
-#define _MACSTUFF_H     1
+#define _MACSTUFF_H 1
 
 #include "MoreFilesExtras.h"
 #include "MoreDesktopMgr.h"
@@ -15,4 +15,4 @@
 #include "FSpCompat.h"
 #include "FullPath.h"
 
-#endif               /*  _MACSTUFF_H  */
+#endif /*  _MACSTUFF_H  */

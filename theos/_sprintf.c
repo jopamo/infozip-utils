@@ -13,14 +13,12 @@
  * fools the preprocessor
  */
 
-int _sprintf(char *s, const char *fmt, ...)
-{
+int _sprintf(char* s, const char* fmt, ...) {
     va_list ap;
     long n;
 
     va_start(ap, fmt);
-    n = vsprintf(s, fmt, (long*) ap);
+    n = vsprintf(s, fmt, (long*)ap);
     va_end(ap);
     return n;
 }
-

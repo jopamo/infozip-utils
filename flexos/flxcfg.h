@@ -18,8 +18,8 @@
 #define EXE_EXTENSION ".286"
 
 #ifndef nearmalloc
-#  define nearmalloc malloc
-#  define nearfree free
+#define nearmalloc malloc
+#define nearfree free
 #endif
 
 #define CRTL_CP_IS_OEM

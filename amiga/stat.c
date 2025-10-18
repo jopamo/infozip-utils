@@ -24,146 +24,125 @@
 
 #include <exec/types.h>
 #include <exec/memory.h>
-#include "amiga/z-stat.h"             /* fake version of stat.h */
+#include "amiga/z-stat.h" /* fake version of stat.h */
 #include <string.h>
 
 #ifdef AZTEC_C
-#  include <libraries/dos.h>
-#  include <libraries/dosextens.h>
-#  include <clib/exec_protos.h>
-#  include <clib/dos_protos.h>
-#  include <pragmas/exec_lib.h>
-#  include <pragmas/dos_lib.h>
+#include <libraries/dos.h>
+#include <libraries/dosextens.h>
+#include <clib/exec_protos.h>
+#include <clib/dos_protos.h>
+#include <pragmas/exec_lib.h>
+#include <pragmas/dos_lib.h>
 #endif
 #ifdef __SASC
-#  include <sys/dir.h>               /* SAS/C dir function prototypes */
-#  include <sys/types.h>
-#  include <proto/exec.h>
-#  include <proto/dos.h>
+#include <sys/dir.h> /* SAS/C dir function prototypes */
+#include <sys/types.h>
+#include <proto/exec.h>
+#include <proto/dos.h>
 #endif
 
 #ifndef SUCCESS
-#  define SUCCESS (-1)
-#  define FAILURE (0)
+#define SUCCESS (-1)
+#define FAILURE (0)
 #endif
 
+void close_leftover_open_dirs(void); /* prototype */
 
-void close_leftover_open_dirs(void);    /* prototype */
-
-static DIR *dir_cleanup_list = NULL;    /* for resource tracking */
+static DIR* dir_cleanup_list = NULL; /* for resource tracking */
 
 /* CALL THIS WHEN HANDLING CTRL-C OR OTHER UNEXPECTED EXIT! */
-void close_leftover_open_dirs(void)
-{
+void close_leftover_open_dirs(void) {
     while (dir_cleanup_list)
         closedir(dir_cleanup_list);
 }
 
-
 unsigned short disk_not_mounted;
 
-extern int stat(const char *file, struct stat *buf);
+extern int stat(const char* file, struct stat* buf);
 
-stat(file,buf)
-const char *file;
-struct stat *buf;
+stat(file, buf) const char* file;
+struct stat* buf;
 {
+    struct FileInfoBlock* inf;
+    BPTR lock;
+    time_t ftime;
+    struct tm local_tm;
 
-        struct FileInfoBlock *inf;
-        BPTR lock;
-        time_t ftime;
-        struct tm local_tm;
+    if ((lock = Lock((char*)file, SHARED_LOCK)) == 0)
+        /* file not found */
+        return (-1);
 
-        if( (lock = Lock((char *)file,SHARED_LOCK))==0 )
-                /* file not found */
-                return(-1);
+    if (!(inf = (struct FileInfoBlock*)AllocMem((long)sizeof(struct FileInfoBlock), MEMF_PUBLIC | MEMF_CLEAR))) {
+        UnLock(lock);
+        return (-1);
+    }
 
-        if( !(inf = (struct FileInfoBlock *)AllocMem(
-                (long)sizeof(struct FileInfoBlock),MEMF_PUBLIC|MEMF_CLEAR)) )
-        {
-                UnLock(lock);
-                return(-1);
-        }
+    if (Examine(lock, inf) == FAILURE) {
+        FreeMem((char*)inf, (long)sizeof(*inf));
+        UnLock(lock);
+        return (-1);
+    }
 
-        if( Examine(lock,inf)==FAILURE )
-        {
-                FreeMem((char *)inf,(long)sizeof(*inf));
-                UnLock(lock);
-                return(-1);
-        }
+    /* fill in buf */
+    buf->st_dev = buf->st_nlink = buf->st_uid = buf->st_gid = buf->st_rdev = 0;
+    buf->st_ino = inf->fib_DiskKey;
+    buf->st_blocks = inf->fib_NumBlocks;
+    buf->st_size = inf->fib_Size;
 
-        /* fill in buf */
-        buf->st_dev         =
-        buf->st_nlink       =
-        buf->st_uid         =
-        buf->st_gid         =
-        buf->st_rdev        = 0;
-        buf->st_ino         = inf->fib_DiskKey;
-        buf->st_blocks      = inf->fib_NumBlocks;
-        buf->st_size        = inf->fib_Size;
+    /* now the date.  AmigaDOS has weird datestamps---
+     *      ds_Days is the number of days since 1-1-1978;
+     *      however, as Unix wants date since 1-1-1970...
+     */
 
-        /* now the date.  AmigaDOS has weird datestamps---
-         *      ds_Days is the number of days since 1-1-1978;
-         *      however, as Unix wants date since 1-1-1970...
-         */
+    ftime = (inf->fib_Date.ds_Days * 86400) + (inf->fib_Date.ds_Minute * 60) + (inf->fib_Date.ds_Tick / TICKS_PER_SECOND) + (86400 * 8 * 365) + (86400 * 2); /* two leap years */
 
-        ftime =
-                (inf->fib_Date.ds_Days * 86400 )                +
-                (inf->fib_Date.ds_Minute * 60 )                 +
-                (inf->fib_Date.ds_Tick / TICKS_PER_SECOND )     +
-                (86400 * 8 * 365 )                              +
-                (86400 * 2 );  /* two leap years */
+    /* tzset(); */ /* this should be handled by mktime(), instead */
+    /* ftime += timezone; */
+    local_tm = *gmtime(&ftime);
+    local_tm.tm_isdst = -1;
+    ftime = mktime(&local_tm);
 
-        /* tzset(); */  /* this should be handled by mktime(), instead */
-        /* ftime += timezone; */
-        local_tm = *gmtime(&ftime);
-        local_tm.tm_isdst = -1;
-        ftime = mktime(&local_tm);
+    buf->st_ctime = buf->st_atime = buf->st_mtime = ftime;
 
-        buf->st_ctime =
-        buf->st_atime =
-        buf->st_mtime = ftime;
+    buf->st_mode = (inf->fib_DirEntryType < 0 ? S_IFREG : S_IFDIR);
 
-        buf->st_mode = (inf->fib_DirEntryType < 0 ? S_IFREG : S_IFDIR);
+    /* lastly, throw in the protection bits */
+    buf->st_mode |= ((inf->fib_Protection ^ 0xF) & 0xFF);
 
-        /* lastly, throw in the protection bits */
-        buf->st_mode |= ((inf->fib_Protection ^ 0xF) & 0xFF);
+    FreeMem((char*)inf, (long)sizeof(*inf));
+    UnLock((BPTR)lock);
 
-        FreeMem((char *)inf, (long)sizeof(*inf));
-        UnLock((BPTR)lock);
-
-        return(0);
-
+    return (0);
 }
 
-int fstat(int handle, struct stat *buf)
-{
+int fstat(int handle, struct stat* buf) {
     /* fake some reasonable values for stdin */
-    buf->st_mode = (S_IREAD|S_IWRITE|S_IFREG);
+    buf->st_mode = (S_IREAD | S_IWRITE | S_IFREG);
     buf->st_size = -1;
     buf->st_mtime = time(&buf->st_mtime);
     return 0;
 }
 
-
 /* opendir(), readdir(), closedir(), rmdir(), and chmod() by Paul Kienitz. */
 
-DIR *opendir(const char *path)
-{
-    DIR *dd = AllocMem(sizeof(DIR), MEMF_PUBLIC);
-    if (!dd) return NULL;
-    if (!(dd->d_parentlock = Lock((char *)path, MODE_OLDFILE))) {
+DIR* opendir(const char* path) {
+    DIR* dd = AllocMem(sizeof(DIR), MEMF_PUBLIC);
+    if (!dd)
+        return NULL;
+    if (!(dd->d_parentlock = Lock((char*)path, MODE_OLDFILE))) {
         disk_not_mounted = IoErr() == ERROR_DEVICE_NOT_MOUNTED;
         FreeMem(dd, sizeof(DIR));
         return NULL;
-    } else
+    }
+    else
         disk_not_mounted = 0;
     if (!Examine(dd->d_parentlock, &dd->d_fib) || dd->d_fib.fib_EntryType < 0) {
         UnLock(dd->d_parentlock);
         FreeMem(dd, sizeof(DIR));
         return NULL;
     }
-    dd->d_cleanuplink = dir_cleanup_list;       /* track them resources */
+    dd->d_cleanuplink = dir_cleanup_list; /* track them resources */
     if (dir_cleanup_list)
         dir_cleanup_list->d_cleanupparent = &dd->d_cleanuplink;
     dd->d_cleanupparent = &dir_cleanup_list;
@@ -171,8 +150,7 @@ DIR *opendir(const char *path)
     return dd;
 }
 
-void closedir(DIR *dd)
-{
+void closedir(DIR* dd) {
     if (dd) {
         if (dd->d_cleanuplink)
             dd->d_cleanuplink->d_cleanupparent = dd->d_cleanupparent;
@@ -183,39 +161,37 @@ void closedir(DIR *dd)
     }
 }
 
-struct dirent *readdir(DIR *dd)
-{
-    return (ExNext(dd->d_parentlock, &dd->d_fib) ? (struct dirent *)dd : NULL);
+struct dirent* readdir(DIR* dd) {
+    return (ExNext(dd->d_parentlock, &dd->d_fib) ? (struct dirent*)dd : NULL);
 }
-
 
 #ifdef AZTEC_C
 
-int rmdir(const char *path)
-{
-    return (DeleteFile((char *)path) ? 0 : IoErr());
+int rmdir(const char* path) {
+    return (DeleteFile((char*)path) ? 0 : IoErr());
 }
 
-int chmod(const char *filename, int bits)       /* bits are as for st_mode */
+int chmod(const char* filename, int bits) /* bits are as for st_mode */
 {
     long protmask = (bits & 0xFF) ^ 0xF;
-    return !SetProtection((char *)filename, protmask);
+    return !SetProtection((char*)filename, protmask);
 }
 
-
 /* This here removes unnecessary bulk from the executable with Aztec: */
-void _wb_parse(void)  { }
+void _wb_parse(void) {}
 
 /* fake a unix function that does not apply to amigados: */
-int umask(void)  { return 0; }
+int umask(void) {
+    return 0;
+}
 
-
-#  include <signal.h>
+#include <signal.h>
 
 /* C library signal() messes up debugging yet adds no actual usefulness */
 typedef void (*__signal_return_type)(int);
-__signal_return_type signal()  { return SIG_ERR; }
-
+__signal_return_type signal() {
+    return SIG_ERR;
+}
 
 /* The following replaces Aztec's argv-parsing function for compatibility with
 Unix-like syntax used on other platforms.  It also fixes the problem the
@@ -224,20 +200,19 @@ standard _cli_parse() has of accepting only lower-ascii characters. */
 int _argc, _arg_len;
 char **_argv, *_arg_lin;
 
-void _cli_parse(struct Process *pp, long alen, register UBYTE *aptr)
-{
-    register UBYTE *cp;
-    register struct CommandLineInterface *cli;
+void _cli_parse(struct Process* pp, long alen, register UBYTE* aptr) {
+    register UBYTE* cp;
+    register struct CommandLineInterface* cli;
     register short c;
     register short starred = 0;
-#  ifdef PRESTART_HOOK
+#ifdef PRESTART_HOOK
     void Prestart_Hook(void);
-#  endif
+#endif
 
-    cli = (struct CommandLineInterface *) (pp->pr_CLI << 2);
-    cp = (UBYTE *) (cli->cli_CommandName << 2);
+    cli = (struct CommandLineInterface*)(pp->pr_CLI << 2);
+    cp = (UBYTE*)(cli->cli_CommandName << 2);
     _arg_len = cp[0] + alen + 2;
-    if (!(_arg_lin = AllocMem((long) _arg_len, 0L)))
+    if (!(_arg_lin = AllocMem((long)_arg_len, 0L)))
         return;
     c = cp[0];
     strncpy(_arg_lin, cp + 1, c);
@@ -246,7 +221,7 @@ void _cli_parse(struct Process *pp, long alen, register UBYTE *aptr)
         *cp++ = *aptr++;
     *cp = 0;
     aptr = cp = _arg_lin + c + 1;
-    for (_argc = 1; ; _argc++) {
+    for (_argc = 1;; _argc++) {
         while (*cp == ' ' || *cp == '\t')
             cp++;
         if (!*cp)
@@ -258,14 +233,16 @@ void _cli_parse(struct Process *pp, long alen, register UBYTE *aptr)
                     *aptr++ = 0;
                     starred = 0;
                     break;
-                } else if (c == '\\' && !starred)
+                }
+                else if (c == '\\' && !starred)
                     starred = 1;
                 else {
                     *aptr++ = c;
                     starred = 0;
                 }
             }
-        } else {
+        }
+        else {
             while ((c = *cp++) && c != ' ' && c != '\t')
                 *aptr++ = c;
             *aptr++ = 0;
@@ -283,9 +260,9 @@ void _cli_parse(struct Process *pp, long alen, register UBYTE *aptr)
         cp += strlen(cp) + 1;
     }
     _argv[c] = NULL;
-#  ifdef PRESTART_HOOK
+#ifdef PRESTART_HOOK
     Prestart_Hook();
-#  endif
+#endif
 }
 
 #endif /* AZTEC_C */

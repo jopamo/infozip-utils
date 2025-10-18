@@ -10,10 +10,10 @@
  *  Header declaration(s) which are forced to go after earlier includes
  */
 
-#ifndef __tannsk_h   /* prevent multiple inclusions */
+#ifndef __tannsk_h /* prevent multiple inclusions */
 #define __tannsk_h
 
 /* ztimbuf is declared in zip\tailor.h after include of tandem.h */
-int utime (const char *, const ztimbuf *);
+int utime(const char*, const ztimbuf*);
 
 #endif /* !__tannsk_h */

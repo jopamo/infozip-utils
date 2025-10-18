@@ -13,14 +13,12 @@
  * fools the preprocessor
  */
 
-int _fprintf(FILE* fp, const char* fmt, ...)
-{
+int _fprintf(FILE* fp, const char* fmt, ...) {
     va_list ap;
     long n;
 
     va_start(ap, fmt);
-    n = vfprintf(fp, fmt, (long*) ap);
+    n = vfprintf(fp, fmt, (long*)ap);
     va_end(ap);
     return n;
 }
-

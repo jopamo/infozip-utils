@@ -23,16 +23,15 @@
 
   ---------------------------------------------------------------------------*/
 
-
-#define __UBZ2ERR_C     /* identifies this source module */
+#define __UBZ2ERR_C /* identifies this source module */
 #define UNZIP_INTERNAL
 #include "unzip.h"
 #ifdef WINDLL
-#  ifdef POCKET_UNZIP
-#    include "wince/intrface.h"
-#  else
-#    include "windll/windll.h"
-#  endif
+#ifdef POCKET_UNZIP
+#include "wince/intrface.h"
+#else
+#include "windll/windll.h"
+#endif
 #endif
 
 #ifdef USE_BZIP2
@@ -45,13 +44,11 @@
  * BZ_NO_STDIO), required to handle fatal internal bug-type errors of
  * the bzip2 library.
  */
-void bz_internal_error(bzerrcode)
-    int bzerrcode;
+void bz_internal_error(bzerrcode) int bzerrcode;
 {
     GETGLOBALS();
 
-    Info(slide, 0x421, ((char *)slide,
-      "error: internal fatal libbzip2 error number %d\n", bzerrcode));
+    Info(slide, 0x421, ((char*)slide, "error: internal fatal libbzip2 error number %d\n", bzerrcode));
 #ifdef WINDLL
     longjmp(dll_error_return, 1);
 #else

@@ -42,23 +42,21 @@
 
 /* Allocate argv array in 16 entries chunks */
 
-static int allocarg(int n, int asize, char ***nargv, char *s)
-{
-    if ((n+1) > asize) {    /* If array full */
-        asize += 16;        /* increase size and reallocate */
-        if (!(*nargv = (char **) realloc(*nargv, asize * sizeof (void *)))) {
-            errno = _errnum = ENOMEM;    /* Not enough memory */
+static int allocarg(int n, int asize, char*** nargv, char* s) {
+    if ((n + 1) > asize) { /* If array full */
+        asize += 16;       /* increase size and reallocate */
+        if (!(*nargv = (char**)realloc(*nargv, asize * sizeof(void*)))) {
+            errno = _errnum = ENOMEM; /* Not enough memory */
             return 0;
         }
     }
-    (*nargv)[n] = strdup(s);    /* Save argument */
-    return asize;               /* Return new maxsize */
+    (*nargv)[n] = strdup(s); /* Save argument */
+    return asize;            /* Return new maxsize */
 }
 
 /* check if file is a member of a library */
 
-static int ismember(char* path)
-{
+static int ismember(char* path) {
     char* p;
 
     if ((p = strrchr(path, '/')) == NULL)
@@ -68,8 +66,7 @@ static int ismember(char* path)
 
 /* extract library name from a file name */
 
-static char* libname(char* path)
-{
+static char* libname(char* path) {
     char* p;
     static char lib[256];
     char disk[3];
@@ -78,8 +75,9 @@ static char* libname(char* path)
     if (p = strrchr(lib, ':')) {
         strncpy(disk, p, 2);
         disk[2] = '\0';
-        *p = '\0' ;
-    } else
+        *p = '\0';
+    }
+    else
         disk[0] = '\0';
 
     if ((p = strrchr(lib, '/')) == NULL)
@@ -94,40 +92,39 @@ static char* libname(char* path)
 
 /* Main body of the function */
 
-int _setargv(int *argc, char ***argv)
-{
-    register int nargc;     /* New arguments counter */
-    char **nargv;           /* New arguments pointers */
+int _setargv(int* argc, char*** argv) {
+    register int nargc; /* New arguments counter */
+    char** nargv;       /* New arguments pointers */
     register int i, j;
-    int asize;              /* argv array size */
-    char *arg;
+    int asize; /* argv array size */
+    char* arg;
     char lib[256];
 
     _errnum = 0;
-    nargc = 0;          /* Initialise counter, size counter */
-    asize = *argc;      /* and new argument vector to the */
-                        /* current argv array size */
+    nargc = 0;     /* Initialise counter, size counter */
+    asize = *argc; /* and new argument vector to the */
+                   /* current argv array size */
 
-    if ((nargv = (char **) calloc((size_t) *argc, sizeof (void *))) != NULL) {
+    if ((nargv = (char**)calloc((size_t)*argc, sizeof(void*))) != NULL) {
         /* For each initial argument */
         for (i = 0; i < *argc; i++) {
             arg = (*argv)[i];
 #ifdef DEBUG
             fprintf(stderr, "checking arg: %s", arg);
 #endif
-            if (i == 0 || *arg == '-' || ! ismember(arg)) {
+            if (i == 0 || *arg == '-' || !ismember(arg)) {
                 /* if it begins with a dash or doesn't include
                  * a library name simply add it to the new array */
-                if (! (asize = allocarg(nargc, asize, &nargv, arg)))
-                    return 0;   /* Not enough memory */
+                if (!(asize = allocarg(nargc, asize, &nargv, arg)))
+                    return 0; /* Not enough memory */
                 nargc++;
-            } else {
+            }
+            else {
                 short insert;
                 strcpy(lib, libname(arg));
                 /* add library name if necessary */
                 for (j = 2, insert = 1; i < nargc; i++) {
-                    if (ismember(nargv[i])
-                     && ! strcmp(lib, libname(nargv[i]))) {
+                    if (ismember(nargv[i]) && !strcmp(lib, libname(nargv[i]))) {
                         insert = 0;
                         break;
                     }
@@ -136,16 +133,16 @@ int _setargv(int *argc, char ***argv)
 #ifdef DEBUG
                     fprintf(stderr, "inserting lib %s ", lib);
 #endif
-                    if (! (asize = allocarg(nargc, asize, &nargv, lib)))
-                        return 0;   /* Not enough memory */
+                    if (!(asize = allocarg(nargc, asize, &nargv, lib)))
+                        return 0; /* Not enough memory */
                     nargc++;
                 }
                 /* add file name */
 #ifdef DEBUG
                 fprintf(stderr, "inserting file %s", arg);
 #endif
-                if (! (asize = allocarg(nargc, asize, &nargv, arg)))
-                    return 0;   /* Not enough memory */
+                if (!(asize = allocarg(nargc, asize, &nargv, arg)))
+                    return 0; /* Not enough memory */
                 nargc++;
             }
 #ifdef DEBUG

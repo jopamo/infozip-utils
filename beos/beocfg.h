@@ -13,44 +13,44 @@
 #ifndef __beocfg_h
 #define __beocfg_h
 
-#include <sys/types.h>          /* [cjh]:  This is pretty much a generic  */
-#include <sys/stat.h>           /* POSIX 1003.1 system; see beos/ for     */
-#include <fcntl.h>              /* extra code to deal with our extra file */
-#include <sys/param.h>          /* attributes. */
+#include <sys/types.h> /* [cjh]:  This is pretty much a generic  */
+#include <sys/stat.h>  /* POSIX 1003.1 system; see beos/ for     */
+#include <fcntl.h>     /* extra code to deal with our extra file */
+#include <sys/param.h> /* attributes. */
 #include <unistd.h>
 #include <utime.h>
 #define GOT_UTIMBUF
 #define DIRENT
 #include <time.h>
 #ifndef DATE_FORMAT
-#  define DATE_FORMAT DF_MDY    /* GRR:  customize with locale.h somehow? */
+#define DATE_FORMAT DF_MDY /* GRR:  customize with locale.h somehow? */
 #endif
-#define lenEOL          1
-#define PutNativeEOL    *q++ = native(LF);
-#define SCREENSIZE(ttrows, ttcols)  screensize(ttrows, ttcols)
-#define SCREENWIDTH     80
+#define lenEOL 1
+#define PutNativeEOL *q++ = native(LF);
+#define SCREENSIZE(ttrows, ttcols) screensize(ttrows, ttcols)
+#define SCREENWIDTH 80
 #if (!defined(NO_EF_UT_TIME) && !defined(USE_EF_UT_TIME))
-#  define USE_EF_UT_TIME
+#define USE_EF_UT_TIME
 #endif
 #define SET_SYMLINK_ATTRIBS
 #define SET_DIR_ATTRIB
 #if (!defined(NOTIMESTAMP) && !defined(TIMESTAMP))
-#  define TIMESTAMP
+#define TIMESTAMP
 #endif
 #define RESTORE_UIDGID
-#define NO_STRNICMP             /* not in the x86 headers at least */
+#define NO_STRNICMP /* not in the x86 headers at least */
 #define INT_SPRINTF
 #define SYMLINKS
-#define MAIN main_stub          /* now that we're using a wrapper... */
+#define MAIN main_stub /* now that we're using a wrapper... */
 
 /* Static variables that we have to add to Uz_Globs: */
-#define SYSTEM_SPECIFIC_GLOBALS \
-    int created_dir, renamed_fullpath;\
-    char *rootpath, *buildpath, *end;\
-    ZCONST char *wildname;\
-    char *dirname, matchname[FILNAMSIZ];\
-    int rootlen, have_dirname, dirnamelen, notfirstcall;\
-    zvoid *wild_dir;
+#define SYSTEM_SPECIFIC_GLOBALS                          \
+    int created_dir, renamed_fullpath;                   \
+    char *rootpath, *buildpath, *end;                    \
+    ZCONST char* wildname;                               \
+    char *dirname, matchname[FILNAMSIZ];                 \
+    int rootlen, have_dirname, dirnamelen, notfirstcall; \
+    zvoid* wild_dir;
 
 /* created_dir, and renamed_fullpath are used by both mapname() and    */
 /*    checkdir().                                                      */

@@ -1,7 +1,6 @@
 #ifndef __MCBINIII_H__
 #define __MCBINIII_H__
 
-
 /****************************************************************
     MacBinaryIII.h
 
@@ -10,7 +9,6 @@
     Basic encoding and decoding of Macintosh files to the
     MacBinary III spec.
 ****************************************************************/
-
 
 /*
 --------------------------------------------------------------------
@@ -139,15 +137,12 @@ should be set to zero.
 
 */
 
-
 /*
 Public functions
 */
 
-OSErr   EncodeMacbinaryFile(FSSpec *file);
-OSErr   DecodeMacBinaryFile(FSSpec *source);
-Boolean FSpIsMacBinary(FSSpec *file);
-
+OSErr EncodeMacbinaryFile(FSSpec* file);
+OSErr DecodeMacBinaryFile(FSSpec* source);
+Boolean FSpIsMacBinary(FSSpec* file);
 
 #endif
-

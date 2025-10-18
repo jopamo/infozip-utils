@@ -28,24 +28,22 @@ so we have to undefine them for replacing (see printf.c)  */
 #undef putchar
 #undef putc
 
-#ifndef    TRUE
-#define    TRUE 1
-#endif  /* TRUE */
-#ifndef    FALSE
-#define    FALSE 0
-#endif  /* FALSE */
+#ifndef TRUE
+#define TRUE 1
+#endif /* TRUE */
+#ifndef FALSE
+#define FALSE 0
+#endif /* FALSE */
 
 /*
 #define DEBUG_TIME
  */
-
 
 #define USE_EF_UT_TIME
 
 /* since we have no TZ environment variable on Macs
    this option must be disabled */
 #undef IZ_CHECK_TZ
-
 
 /*****************************************************************************/
 /*  Includes standard headers                                                */
@@ -65,97 +63,64 @@ so we have to undefine them for replacing (see printf.c)  */
 #include <Devices.h>
 #include <StandardFile.h>
 
-
 /*
 #define MAC_DEBUG  1
  */
 
-
 #ifdef MAC_DEBUG
-#define LOG_DEBUG   7   /* debug-level messages */
-int Print2Syslog(UInt8 priority, const char *format, ...);
+#define LOG_DEBUG 7 /* debug-level messages */
+int Print2Syslog(UInt8 priority, const char* format, ...);
 #include <ctype.h>
 
-
-#define Notify(msg)                                             \
-    {                                                           \
-    (void)Print2Syslog(LOG_DEBUG, "%s (file: %s line: %d)",     \
-                       msg, __FILE__, __LINE__);                \
+#define Notify(msg)                                                                       \
+    {                                                                                     \
+        (void)Print2Syslog(LOG_DEBUG, "%s (file: %s line: %d)", msg, __FILE__, __LINE__); \
     }
 
-
-
-#define Assert_it(cond,msg,kind)                                    \
-    {                                                               \
-    if (!(cond))                                                    \
-        {                                                           \
-        (void)Print2Syslog(LOG_DEBUG, "%s failed: [%s] cond: [%s] (file: %s line: %d)", \
-                           kind, msg, #cond, __FILE__, __LINE__);   \
-        }                                                           \
+#define Assert_it(cond, msg, kind)                                                                                                 \
+    {                                                                                                                              \
+        if (!(cond)) {                                                                                                             \
+            (void)Print2Syslog(LOG_DEBUG, "%s failed: [%s] cond: [%s] (file: %s line: %d)", kind, msg, #cond, __FILE__, __LINE__); \
+        }                                                                                                                          \
     }
 
+#define AssertBool(b, msg) Assert_it(((b) == TRUE) || ((b) == FALSE), (msg), ("AssertBool "))
 
-
-#define AssertBool(b,msg) \
-    Assert_it (((b) == TRUE) || ((b) == FALSE),(msg),("AssertBool "))
-
-
-
-#define AssertStr(s,msg)                                            \
-    {                                                               \
-        int s_i = 0;                                                \
-        Assert_it ((s),(msg),("1. AssertStr "));                    \
-        while ((s)[s_i]) {                                          \
-            Assert_it ((!iscntrl((s)[s_i]) || ((s)[s_i] == 0x0A) || \
-                       ((s)[s_i] == 0x0D)),(s),("2. AssertStr "));  \
-            s_i++;                                                  \
-        }                                                           \
+#define AssertStr(s, msg)                                                                                        \
+    {                                                                                                            \
+        int s_i = 0;                                                                                             \
+        Assert_it((s), (msg), ("1. AssertStr "));                                                                \
+        while ((s)[s_i]) {                                                                                       \
+            Assert_it((!iscntrl((s)[s_i]) || ((s)[s_i] == 0x0A) || ((s)[s_i] == 0x0D)), (s), ("2. AssertStr ")); \
+            s_i++;                                                                                               \
+        }                                                                                                        \
     }
 
+#define AssertTime(t, msg)                                                                                                                                                                \
+    Assert_it(((t).tm_sec >= 0) && ((t).tm_sec < 62) && ((t).tm_min >= 0) && ((t).tm_min < 60) && ((t).tm_hour >= 0) && ((t).tm_hour < 24) && ((t).tm_mday >= 1) && ((t).tm_mday < 32) && \
+                  ((t).tm_mon >= 0) && ((t).tm_mon < 12) && ((t).tm_wday >= 0) && ((t).tm_wday < 7) && ((t).tm_yday >= 0) && ((t).tm_yday < 366),                                         \
+              (msg), ("AssertStr "))
 
+#define AssertIntRange(myvalue, minimum, maximum, msg) Assert_it(((myvalue) >= (minimum)) && ((myvalue) <= (maximum)), msg, ("AssertIntRange "))
 
-#define AssertTime(t,msg) \
-    Assert_it (((t).tm_sec  >=  0) && ((t).tm_sec  < 62) &&   \
-               ((t).tm_min  >=  0) && ((t).tm_min  < 60) &&   \
-               ((t).tm_hour >=  0) && ((t).tm_hour < 24) &&   \
-               ((t).tm_mday >=  1) && ((t).tm_mday < 32) &&   \
-               ((t).tm_mon  >=  0) && ((t).tm_mon  < 12) &&   \
-               ((t).tm_wday >=  0) && ((t).tm_wday < 7)  &&   \
-               ((t).tm_yday >=  0) && ((t).tm_yday < 366),(msg),("AssertStr "))
-
-
-
-#define AssertIntRange(myvalue,minimum,maximum, msg) \
-    Assert_it (((myvalue) >= (minimum)) && ((myvalue) <= (maximum)), \
-               msg,("AssertIntRange "))
-
-
-
-#define AssertStrNoOverlap(str1,str2,msg)                           \
-    {                                                               \
-        long s_i = 0;                                               \
-        AssertStr((str1),(msg))                                     \
-        AssertStr((str2),(msg))                                     \
-        if ((str1) < (str2))                                        \
-            {                                                       \
-            s_i = strlen((str2));                                   \
-            Assert_it ( (((str1) + s_i) < (str2)),(msg),("AssertStrNoOverlap "));   \
-            }                                                       \
-        else                                                        \
-            {                                                       \
-            s_i = strlen((str1));                                   \
-            Assert_it ( (((str2) + s_i) < (str1)),(msg),("AssertStrNoOverlap "));   \
-            }                                                       \
-    }                                                               \
-
-
-
+#define AssertStrNoOverlap(str1, str2, msg)                                       \
+    {                                                                             \
+        long s_i = 0;                                                             \
+        AssertStr((str1), (msg)) AssertStr((str2), (msg)) if ((str1) < (str2)) {  \
+            s_i = strlen((str2));                                                 \
+            Assert_it((((str1) + s_i) < (str2)), (msg), ("AssertStrNoOverlap ")); \
+        }                                                                         \
+        else {                                                                    \
+            s_i = strlen((str1));                                                 \
+            Assert_it((((str2) + s_i) < (str1)), (msg), ("AssertStrNoOverlap ")); \
+        }                                                                         \
+    }
 
 #else /* !MAC_DEBUG */
-#define Assert_it(cond,msg,kind)
-#define AssertBool(b,msg)
-#define AssertStr(s,msg)
-#define AssertTime(t,msg)
-#define AssertIntRange(myvalue,minimum,maximum,msg)
-#define AssertStrNoOverlap(str1,str2,msg)
+#define Assert_it(cond, msg, kind)
+#define AssertBool(b, msg)
+#define AssertStr(s, msg)
+#define AssertTime(t, msg)
+#define AssertIntRange(myvalue, minimum, maximum, msg)
+#define AssertStrNoOverlap(str1, str2, msg)
 #endif /* ?MAC_DEBUG */

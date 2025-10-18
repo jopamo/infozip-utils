@@ -17,7 +17,7 @@
 #ifndef _ATHEOS_H_
 #define _ATHEOS_H_
 
-#define EB_BE_FL_BADBITS    0xfe    /* bits currently undefined */
+#define EB_BE_FL_BADBITS 0xfe /* bits currently undefined */
 
 /*
 AtheOS 'At' extra-field layout:

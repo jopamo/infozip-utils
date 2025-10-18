@@ -12,16 +12,15 @@
 #include <stdlib.h>
 
 #ifndef SEEK_SET
-# define SEEK_SET 0
+#define SEEK_SET 0
 #endif /* ndef SEEK_SET */
 
 #ifndef SEEK_CUR
-# define SEEK_CUR 1
+#define SEEK_CUR 1
 #endif /* ndef SEEK_CUR */
 
 #ifndef SEEK_END
-# define SEEK_END 2
+#define SEEK_END 2
 #endif /* ndef SEEK_END */
 
-#endif  /* ndef __UNIXIO_LOADED */
-
+#endif /* ndef __UNIXIO_LOADED */

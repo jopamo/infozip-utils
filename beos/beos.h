@@ -11,9 +11,9 @@
 /* This is covered under the usual Info-ZIP copyright. */
 
 /* "#define EF_BE_FL_UNCMPR 0x01" has been moved into unzpriv.h */
-#define EB_BE_FL_BADBITS    0xfe    /* bits currently undefined */
+#define EB_BE_FL_BADBITS 0xfe /* bits currently undefined */
 
-#define BEOS_ASSIGN_FILETYPE 1      /* call update_mime_info() */
+#define BEOS_ASSIGN_FILETYPE 1 /* call update_mime_info() */
 
 /*
 DR9 'Be' extra-field layout:

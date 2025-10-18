@@ -24,7 +24,6 @@
  * amiga/amiga.c (UnZip); time() is used only by Zip.
  */
 
-
 /* HISTORY/CHANGES
  *  2 Sep 92, Greg Roelofs, Original coding.
  *  6 Sep 92, John Bush, Incorporated into UnZip 5.1
@@ -108,7 +107,6 @@
 #ifndef __amiga_filedate_c
 #define __amiga_filedate_c
 
-
 #include "zip.h"
 #include <ctype.h>
 #include <errno.h>
@@ -119,85 +117,83 @@
 #include <dos/dosextens.h>
 
 #ifdef AZTEC_C
-#  include <libraries/dos.h>
-#  include <libraries/dosextens.h>
-#  include <clib/exec_protos.h>
-#  include <clib/dos_protos.h>
-#  include <clib/locale_protos.h>
-#  include <pragmas/exec_lib.h>
-#  include <pragmas/dos_lib.h>
-#  include <pragmas/locale_lib.h>
-#  define ESRCH  ENOENT
-#  define EOSERR EIO
+#include <libraries/dos.h>
+#include <libraries/dosextens.h>
+#include <clib/exec_protos.h>
+#include <clib/dos_protos.h>
+#include <clib/locale_protos.h>
+#include <pragmas/exec_lib.h>
+#include <pragmas/dos_lib.h>
+#include <pragmas/locale_lib.h>
+#define ESRCH ENOENT
+#define EOSERR EIO
 #endif
 
 #ifdef __SASC
-#  include <stdlib.h>
-#  if (defined(_M68020) && (!defined(__USE_SYSBASE)))
-                            /* on 68020 or higher processors it is faster   */
-#    define __USE_SYSBASE   /* to use the pragma libcall instead of syscall */
-#  endif                    /* to access functions of the exec.library      */
-#  include <proto/exec.h>   /* see SAS/C manual:part 2,chapter 2,pages 6-7  */
-#  include <proto/dos.h>
-#  include <proto/locale.h>
-#  ifdef DEBUG
-#     include <sprof.h>
-#  endif
-#  ifdef MWDEBUG
-#    include <stdio.h>      /* include both before memwatch.h again just */
-#    include <stdlib.h>     /* to be safe */
-#    include "memwatch.h"
-#  endif /* MWDEBUG */
+#include <stdlib.h>
+#if (defined(_M68020) && (!defined(__USE_SYSBASE)))
+/* on 68020 or higher processors it is faster   */
+#define __USE_SYSBASE   /* to use the pragma libcall instead of syscall */
+#endif                  /* to access functions of the exec.library      */
+#include <proto/exec.h> /* see SAS/C manual:part 2,chapter 2,pages 6-7  */
+#include <proto/dos.h>
+#include <proto/locale.h>
+#ifdef DEBUG
+#include <sprof.h>
+#endif
+#ifdef MWDEBUG
+#include <stdio.h>  /* include both before memwatch.h again just */
+#include <stdlib.h> /* to be safe */
+#include "memwatch.h"
+#endif /* MWDEBUG */
 #endif /* __SASC */
 
-#include "crypt.h"            /* just so we can tell if CRYPT is supported */
-
+#include "crypt.h" /* just so we can tell if CRYPT is supported */
 
 #if (!defined(FUNZIP) && !defined(UTIL))
 
-#include "timezone.h"         /* for AMIGA-specific timezone callbacks */
+#include "timezone.h" /* for AMIGA-specific timezone callbacks */
 
 #ifndef SUCCESS
-#  define SUCCESS (-1L)
-#  define FAILURE 0L
+#define SUCCESS (-1L)
+#define FAILURE 0L
 #endif
 
-#define ReqVers 36L        /* required library version for SetFileDate() */
-#define ENVSIZE 100        /* max space allowed for an environment var   */
+#define ReqVers 36L /* required library version for SetFileDate() */
+#define ENVSIZE 100 /* max space allowed for an environment var   */
 
-extern struct ExecBase *SysBase;
+extern struct ExecBase* SysBase;
 
 #ifndef min
-#  define min(a, b)  ((a) < (b) ? (a) : (b))
-#  define max(a, b)  ((a) < (b) ? (b) : (a))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
 
 #if defined(ZIP) || defined(HAVE_MKTIME)
-static const unsigned short ydays[] =
-    { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 };
+static const unsigned short ydays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
 #else
-extern const unsigned short ydays[];  /* in unzip's fileio.c */
+extern const unsigned short ydays[]; /* in unzip's fileio.c */
 #endif
 
-#define LEAP(y)     (((y) % 4 == 0 && (y) % 100 != 0) || (y) % 400 == 0)
+#define LEAP(y) (((y) % 4 == 0 && (y) % 100 != 0) || (y) % 400 == 0)
 #define YDAYS(m, y) (ydays[m] + (m > 1 && LEAP(y)))
 /* Number of leap years from 1978 to `y' (not including `y' itself). */
-#define ANLEAP(y)   (((y) - 1977) / 4 - ((y) - 1901) / 100 + ((y) - 1601) / 400)
-#define SECSPERMIN  60
+#define ANLEAP(y) (((y) - 1977) / 4 - ((y) - 1901) / 100 + ((y) - 1601) / 400)
+#define SECSPERMIN 60
 #define MINSPERHOUR 60
 #define SECSPERHOUR (SECSPERMIN * MINSPERHOUR)
-#define SECSPERDAY  86400L
+#define SECSPERDAY 86400L
 
 /* prototypes */
-char *getenv(const char *var);
+char* getenv(const char* var);
 #ifdef __SASC
 /*  XXX !!  We have really got to find a way to operate without these. */
-int setenv(const char *var, const char *value, int overwrite);
+int setenv(const char* var, const char* value, int overwrite);
 void set_TZ(long time_zone, int day_light);
 #endif
 
-LONG FileDate(char *filename, time_t u[]);
-LONG sendpkt(struct MsgPort *pid, LONG action, LONG *args, LONG nargs);
+LONG FileDate(char* filename, time_t u[]);
+LONG sendpkt(struct MsgPort* pid, LONG action, LONG* args, LONG nargs);
 int Agetch(void);
 
 /* =============================================================== */
@@ -230,20 +226,20 @@ int Agetch(void);
  */
 
 LONG FileDate(filename, u)
-    char *filename;
-    time_t u[];
+char* filename;
+time_t u[];
 {
-    LONG SetFileDate(UBYTE *filename, struct DateStamp *pDate);
-    LONG sendpkt(struct MsgPort *pid, LONG action, LONG *args, LONG nargs);
-    struct MsgPort *taskport;
+    LONG SetFileDate(UBYTE * filename, struct DateStamp * pDate);
+    LONG sendpkt(struct MsgPort * pid, LONG action, LONG * args, LONG nargs);
+    struct MsgPort* taskport;
     BPTR dirlock, lock;
-    struct FileInfoBlock *fib;
+    struct FileInfoBlock* fib;
     LONG pktargs[4];
-    UBYTE *ptr;
+    UBYTE* ptr;
     long ret;
 
     struct DateStamp pDate;
-    struct tm *ltm;
+    struct tm* ltm;
     int years;
 
     tzset();
@@ -255,51 +251,44 @@ LONG FileDate(filename, u)
     if (years < 1978)
         pDate.ds_Days = pDate.ds_Minute = pDate.ds_Tick = 0;
     else {
-        pDate.ds_Days = (years - 1978) * 365L + (ANLEAP(years)) +
-                        YDAYS(ltm->tm_mon, years) + (ltm->tm_mday - 1);
+        pDate.ds_Days = (years - 1978) * 365L + (ANLEAP(years)) + YDAYS(ltm->tm_mon, years) + (ltm->tm_mday - 1);
         pDate.ds_Minute = ltm->tm_hour * 60 + ltm->tm_min;
         pDate.ds_Tick = ltm->tm_sec * TICKS_PER_SECOND;
     }
 
-    if (SysBase->LibNode.lib_Version >= ReqVers)
-    {
-        return (SetFileDate(filename,&pDate));  /* native routine at 2.0+ */
+    if (SysBase->LibNode.lib_Version >= ReqVers) {
+        return (SetFileDate(filename, &pDate)); /* native routine at 2.0+ */
     }
-    else  /* !(SysBase->lib_Version >=ReqVers) */
+    else /* !(SysBase->lib_Version >=ReqVers) */
     {
-        if( !(taskport = (struct MsgPort *)DeviceProc(filename)) )
-        {
-            errno = ESRCH;          /* no such process */
+        if (!(taskport = (struct MsgPort*)DeviceProc(filename))) {
+            errno = ESRCH; /* no such process */
             return FAILURE;
         }
 
-        if( !(lock = Lock(filename,SHARED_LOCK)) )
-        {
-            errno = ENOENT;         /* no such file */
+        if (!(lock = Lock(filename, SHARED_LOCK))) {
+            errno = ENOENT; /* no such file */
             return FAILURE;
         }
 
-        if( !(fib = (struct FileInfoBlock *)AllocMem(
-            (long)sizeof(struct FileInfoBlock),MEMF_PUBLIC|MEMF_CLEAR)) )
-        {
-            errno = ENOMEM;         /* insufficient memory */
+        if (!(fib = (struct FileInfoBlock*)AllocMem((long)sizeof(struct FileInfoBlock), MEMF_PUBLIC | MEMF_CLEAR))) {
+            errno = ENOMEM; /* insufficient memory */
             UnLock(lock);
             return FAILURE;
         }
 
-        if( Examine(lock,fib)==FAILURE )
-        {
-            errno = EOSERR;         /* operating system error */
+        if (Examine(lock, fib) == FAILURE) {
+            errno = EOSERR; /* operating system error */
             UnLock(lock);
-            FreeMem(fib,(long)sizeof(*fib));
+            FreeMem(fib, (long)sizeof(*fib));
             return FAILURE;
         }
 
         dirlock = ParentDir(lock);
-        ptr = (UBYTE *)AllocMem(64L,MEMF_PUBLIC);
-        strcpy((ptr+1),fib->fib_FileName);
+        ptr = (UBYTE*)AllocMem(64L, MEMF_PUBLIC);
+        strcpy((ptr + 1), fib->fib_FileName);
         *ptr = strlen(fib->fib_FileName);
-        FreeMem(fib,(long)sizeof(*fib));
+        FreeMem(fib, (long)sizeof(*fib));
         UnLock(lock);
 
         /* now fill in argument array */
@@ -309,33 +298,33 @@ LONG FileDate(filename, u)
         pktargs[2] = (LONG)&ptr[0] >> 2;
         pktargs[3] = (LONG)&pDate;
 
-        errno = ret = sendpkt(taskport,ACTION_SET_DATE,pktargs,4L);
+        errno = ret = sendpkt(taskport, ACTION_SET_DATE, pktargs, 4L);
 
-        FreeMem(ptr,64L);
+        FreeMem(ptr, 64L);
         UnLock(dirlock);
 
         return SUCCESS;
-    }  /* ?(SysBase->lib_Version >= ReqVers) */
+    } /* ?(SysBase->lib_Version >= ReqVers) */
 } /* FileDate() */
 
-
-char *getenv(const char *var)         /* not reentrant! */
+char* getenv(const char* var) /* not reentrant! */
 {
     static char space[ENVSIZE];
-    struct Process *me = (void *) FindTask(NULL);
-    void *old_window = me->pr_WindowPtr;
-    char *ret = NULL;
+    struct Process* me = (void*)FindTask(NULL);
+    void* old_window = me->pr_WindowPtr;
+    char* ret = NULL;
 
-    me->pr_WindowPtr = (void *) -1;   /* suppress any "Please insert" popups */
+    me->pr_WindowPtr = (void*)-1; /* suppress any "Please insert" popups */
     if (SysBase->LibNode.lib_Version >= ReqVers) {
-        if (GetVar((char *) var, space, ENVSIZE - 1, /*GVF_GLOBAL_ONLY*/ 0) > 0)
+        if (GetVar((char*)var, space, ENVSIZE - 1, /*GVF_GLOBAL_ONLY*/ 0) > 0)
             ret = space;
-    } else {                    /* early AmigaDOS, get env var the crude way */
+    }
+    else { /* early AmigaDOS, get env var the crude way */
         BPTR hand, foot, spine;
         int z = 0;
         if (foot = Lock("ENV:", ACCESS_READ)) {
             spine = CurrentDir(foot);
-            if (hand = Open((char *) var, MODE_OLDFILE)) {
+            if (hand = Open((char*)var, MODE_OLDFILE)) {
                 z = Read(hand, space, ENVSIZE - 1);
                 Close(hand);
             }
@@ -351,27 +340,27 @@ char *getenv(const char *var)         /* not reentrant! */
 }
 
 #ifdef __SASC
-int setenv(const char *var, const char *value, int overwrite)
-{
-    struct Process *me = (void *) FindTask(NULL);
-    void *old_window = me->pr_WindowPtr;
+int setenv(const char* var, const char* value, int overwrite) {
+    struct Process* me = (void*)FindTask(NULL);
+    void* old_window = me->pr_WindowPtr;
     int ret = -1;
 
-    me->pr_WindowPtr = (void *) -1;   /* suppress any "Please insert" popups */
+    me->pr_WindowPtr = (void*)-1; /* suppress any "Please insert" popups */
     if (SysBase->LibNode.lib_Version >= ReqVers)
-        ret = !SetVar((char *)var, (char *)value, -1, GVF_GLOBAL_ONLY | LV_VAR);
+        ret = !SetVar((char*)var, (char*)value, -1, GVF_GLOBAL_ONLY | LV_VAR);
     else {
         BPTR hand, foot, spine;
         long len = value ? strlen(value) : 0;
         if (foot = Lock("ENV:", ACCESS_READ)) {
             spine = CurrentDir(foot);
             if (len) {
-                if (hand = Open((char *) var, MODE_NEWFILE)) {
-                    ret = Write(hand, (char *) value, len + 1) >= len;
+                if (hand = Open((char*)var, MODE_NEWFILE)) {
+                    ret = Write(hand, (char*)value, len + 1) >= len;
                     Close(hand);
                 }
-            } else
-                ret = DeleteFile((char *) var);
+            }
+            else
+                ret = DeleteFile((char*)var);
             UnLock(CurrentDir(spine));
         }
     }
@@ -382,24 +371,23 @@ int setenv(const char *var, const char *value, int overwrite)
 /* Stores data from timezone and daylight to ENV:TZ.                  */
 /* ENV:TZ is required to exist by some other SAS/C library functions, */
 /* like stat() or fstat().                                            */
-void set_TZ(long time_zone, int day_light)
-{
-    char put_tz[MAXTIMEZONELEN];  /* string for putenv: "TZ=aaabbb:bb:bbccc" */
+void set_TZ(long time_zone, int day_light) {
+    char put_tz[MAXTIMEZONELEN]; /* string for putenv: "TZ=aaabbb:bb:bbccc" */
     int offset;
-    void *exists;     /* dummy ptr to see if global envvar TZ already exists */
-    exists = (void *)getenv(TZ_ENVVAR);
+    void* exists; /* dummy ptr to see if global envvar TZ already exists */
+    exists = (void*)getenv(TZ_ENVVAR);
     /* see if there is already an envvar TZ_ENVVAR. If not, create it */
     if (exists == NULL) {
         /* create TZ string by pieces: */
         sprintf(put_tz, "GMT%+ld", time_zone / 3600L);
         if (time_zone % 3600L) {
-            offset = (int) labs(time_zone % 3600L);
+            offset = (int)labs(time_zone % 3600L);
             sprintf(put_tz + strlen(put_tz), ":%02d", offset / 60);
             if (offset % 60)
                 sprintf(put_tz + strlen(put_tz), ":%02d", offset % 60);
         }
         if (day_light)
-            strcat(put_tz,"DST");
+            strcat(put_tz, "DST");
         setenv(TZ_ENVVAR, put_tz, 1);
     }
 }
@@ -407,30 +395,30 @@ void set_TZ(long time_zone, int day_light)
 
 /* set state as well as possible from settings found in locale.library */
 int GetPlatformLocalTimezone(sp, fill_tzstate_from_rules)
-     register struct state * ZCONST sp;
-     void (*fill_tzstate_from_rules)(struct state * ZCONST sp_res,
-                                     ZCONST struct rule * ZCONST start,
-                                     ZCONST struct rule * ZCONST end);
+register struct state* ZCONST sp;
+void (*fill_tzstate_from_rules)(struct state* ZCONST sp_res, ZCONST struct rule* ZCONST start, ZCONST struct rule* ZCONST end);
 {
-    struct Library *LocaleBase;
-    struct Locale *ll;
-    struct Process *me = (void *) FindTask(NULL);
-    void *old_window = me->pr_WindowPtr;
+    struct Library* LocaleBase;
+    struct Locale* ll;
+    struct Process* me = (void*)FindTask(NULL);
+    void* old_window = me->pr_WindowPtr;
     BPTR eh;
     int z, valid = FALSE;
 
     /* read timezone from locale.library if TZ envvar missing */
-    me->pr_WindowPtr = (void *) -1;   /* suppress any "Please insert" popups */
+    me->pr_WindowPtr = (void*)-1; /* suppress any "Please insert" popups */
     if (LocaleBase = OpenLibrary("locale.library", 0)) {
         if (ll = OpenLocale(NULL)) {
-            z = ll->loc_GMTOffset;    /* in minutes */
+            z = ll->loc_GMTOffset; /* in minutes */
             if (z == -300) {
                 if (eh = Lock("ENV:sys/locale.prefs", ACCESS_READ)) {
                     UnLock(eh);
                     valid = TRUE;
-                } else
+                }
+                else
                     z = 300; /* bug: locale not initialized, default bogus! */
-            } else
+            }
+            else
                 valid = TRUE;
             if (valid) {
                 struct rule startrule, stoprule;
@@ -461,16 +449,16 @@ int GetPlatformLocalTimezone(sp, fill_tzstate_from_rules)
                     /* 2.x versions of the OS, recognize very many countries */
                     /* outside of Europe and North America.                  */
                     sp->typecnt = 2;
-                    startrule.r_mon = 3;   /* one week earlier than US DST */
+                    startrule.r_mon = 3; /* one week earlier than US DST */
                     startrule.r_week = 5;
-                } else if (z >= 150 && z <= 480 &&
-                           /* no DST in alaska, hawaii */
-                           (ll->loc_CountryCode == 0x55534100 /*"USA"*/ ||
-                            ll->loc_CountryCode == 0x43414E00 /*"CAN"*/))
+                }
+                else if (z >= 150 && z <= 480 &&
+                         /* no DST in alaska, hawaii */
+                         (ll->loc_CountryCode == 0x55534100 /*"USA"*/ || ll->loc_CountryCode == 0x43414E00 /*"CAN"*/))
                     sp->typecnt = 2;
-                    /* We check the country code for U.S. or Canada because */
-                    /* most of Latin America has no DST.  Even in these two */
-                    /* countries there are some exceptions...               */
+                /* We check the country code for U.S. or Canada because */
+                /* most of Latin America has no DST.  Even in these two */
+                /* countries there are some exceptions...               */
                 /* else if...  Feel free to add more cases here! */
 
                 if (sp->typecnt > 1)
@@ -485,22 +473,20 @@ int GetPlatformLocalTimezone(sp, fill_tzstate_from_rules)
 }
 
 #ifdef ZIP
-time_t time(time_t *tp)
-{
+time_t time(time_t* tp) {
     time_t t;
     struct DateStamp ds;
     DateStamp(&ds);
-    t = ds.ds_Tick / TICKS_PER_SECOND + ds.ds_Minute * 60
-                                      + (ds.ds_Days + 2922) * SECSPERDAY;
+    t = ds.ds_Tick / TICKS_PER_SECOND + ds.ds_Minute * 60 + (ds.ds_Days + 2922) * SECSPERDAY;
     t = mktime(gmtime(&t));
     /* gmtime leaves ds in the local timezone, mktime converts it to GMT */
-    if (tp) *tp = t;
+    if (tp)
+        *tp = t;
     return t;
 }
 #endif /* ZIP */
 
 #endif /* !FUNZIP && !UTIL */
-
 
 #if CRYPT || !defined(FUNZIP)
 
@@ -517,79 +503,75 @@ time_t time(time_t *tp)
 #include <proto/dos.h>
 */
 
-LONG sendpkt(struct MsgPort *pid, LONG action, LONG *args, LONG nargs);
+LONG sendpkt(struct MsgPort* pid, LONG action, LONG* args, LONG nargs);
 
-LONG sendpkt(pid,action,args,nargs)
-struct MsgPort *pid;           /* process identifier (handler message port) */
-LONG action,                   /* packet type (desired action)              */
-     *args,                    /* a pointer to argument list                */
-     nargs;                    /* number of arguments in list               */
+LONG sendpkt(pid, action, args, nargs)
+struct MsgPort* pid; /* process identifier (handler message port) */
+LONG action,         /* packet type (desired action)              */
+    *args,           /* a pointer to argument list                */
+    nargs;           /* number of arguments in list               */
 {
-
-    struct MsgPort *replyport, *CreatePort(UBYTE *, long);
-    void DeletePort(struct MsgPort *);
-    struct StandardPacket *packet;
+    struct MsgPort *replyport, *CreatePort(UBYTE*, long);
+    void DeletePort(struct MsgPort*);
+    struct StandardPacket* packet;
     LONG count, *pargs, res1;
 
-    replyport = CreatePort(NULL,0L);
-    if( !replyport ) return(0);
+    replyport = CreatePort(NULL, 0L);
+    if (!replyport)
+        return (0);
 
-    packet = (struct StandardPacket *)AllocMem(
-            (long)sizeof(struct StandardPacket),MEMF_PUBLIC|MEMF_CLEAR);
-    if( !packet )
-    {
+    packet = (struct StandardPacket*)AllocMem((long)sizeof(struct StandardPacket), MEMF_PUBLIC | MEMF_CLEAR);
+    if (!packet) {
         DeletePort(replyport);
-        return(0);
+        return (0);
     }
 
-    packet->sp_Msg.mn_Node.ln_Name  = (char *)&(packet->sp_Pkt);
-    packet->sp_Pkt.dp_Link          = &(packet->sp_Msg);
-    packet->sp_Pkt.dp_Port          = replyport;
-    packet->sp_Pkt.dp_Type          = action;
+    packet->sp_Msg.mn_Node.ln_Name = (char*)&(packet->sp_Pkt);
+    packet->sp_Pkt.dp_Link = &(packet->sp_Msg);
+    packet->sp_Pkt.dp_Port = replyport;
+    packet->sp_Pkt.dp_Type = action;
 
     /* copy the args into the packet */
-    pargs = &(packet->sp_Pkt.dp_Arg1);      /* address of 1st argument */
-    for( count=0; count<nargs; count++ )
+    pargs = &(packet->sp_Pkt.dp_Arg1); /* address of 1st argument */
+    for (count = 0; count < nargs; count++)
         pargs[count] = args[count];
 
-    PutMsg(pid,(struct Message *)packet);   /* send packet */
+    PutMsg(pid, (struct Message*)packet); /* send packet */
 
     WaitPort(replyport);
     GetMsg(replyport);
 
     res1 = packet->sp_Pkt.dp_Res1;
 
-    FreeMem((char *)packet,(long)sizeof(*packet));
+    FreeMem((char*)packet, (long)sizeof(*packet));
     DeletePort(replyport);
 
-    return(res1);
+    return (res1);
 
 } /* sendpkt() */
 
 #endif /* CRYPT || !FUNZIP */
 
-
 #if CRYPT || (defined(UNZIP) && !defined(FUNZIP))
 
 /* Agetch() reads one raw keystroke -- uses sendpkt() */
 
-int Agetch(void)
-{
-    LONG sendpkt(struct MsgPort *pid, LONG action, LONG *args, LONG nargs);
-    struct Task *me = FindTask(NULL);
-    struct CommandLineInterface *cli = BADDR(((struct Process *) me)->pr_CLI);
-    BPTR fh = cli->cli_StandardInput;   /* this is immune to < redirection */
-    void *conp = ((struct FileHandle *) BADDR(fh))->fh_Type;
+int Agetch(void) {
+    LONG sendpkt(struct MsgPort * pid, LONG action, LONG * args, LONG nargs);
+    struct Task* me = FindTask(NULL);
+    struct CommandLineInterface* cli = BADDR(((struct Process*)me)->pr_CLI);
+    BPTR fh = cli->cli_StandardInput; /* this is immune to < redirection */
+    void* conp = ((struct FileHandle*)BADDR(fh))->fh_Type;
     char longspace[8];
-    long *flag = (long *) ((ULONG) &longspace[4] & ~3); /* LONGWORD ALIGNED! */
+    long* flag = (long*)((ULONG)&longspace[4] & ~3); /* LONGWORD ALIGNED! */
     UBYTE c;
 
     *flag = 1;
-    sendpkt(conp, ACTION_SCREEN_MODE, flag, 1);         /* assume success */
+    sendpkt(conp, ACTION_SCREEN_MODE, flag, 1); /* assume success */
     Read(fh, &c, 1);
     *flag = 0;
     sendpkt(conp, ACTION_SCREEN_MODE, flag, 1);
-    if (c == 3)                                         /* ^C in input */
+    if (c == 3) /* ^C in input */
         Signal(me, SIGBREAKF_CTRL_C);
     return c;
 }

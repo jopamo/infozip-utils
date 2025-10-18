@@ -23,18 +23,17 @@
 /* be included wherever you use either readdir() or stat().                  */
 
 #ifdef AZTEC_C
-#  define __STAT_H
-#else  /* __SASC */
+#define __STAT_H
+#else               /* __SASC */
 /* do not include the following header, replacement definitions are here */
-#  define _STAT_H      /* do not include SAS/C <stat.h> */
-#  define _DIRENT_H    /* do not include SAS/C <dirent.h> */
-#  define _SYS_DIR_H   /* do not include SAS/C <sys/dir.h> */
-#  define _COMMIFMT_H  /* do not include SAS/C <sys/commifmt.h> */
-#  include <dos.h>
+#define _STAT_H     /* do not include SAS/C <stat.h> */
+#define _DIRENT_H   /* do not include SAS/C <dirent.h> */
+#define _SYS_DIR_H  /* do not include SAS/C <sys/dir.h> */
+#define _COMMIFMT_H /* do not include SAS/C <sys/commifmt.h> */
+#include <dos.h>
 #endif
 #include <libraries/dos.h>
 #include <time.h>
-
 
 struct stat {
     unsigned short st_mode;
@@ -45,51 +44,50 @@ struct stat {
     short st_attr, st_dev, st_nlink, st_uid, st_gid, st_rdev;
 };
 
-#define S_IFDIR  (1<<11)
-#define S_IFREG  (1<<10)
+#define S_IFDIR (1 << 11)
+#define S_IFREG (1 << 10)
 
 #if 0
    /* these values here are totally random: */
-#  define S_IFLNK  (1<<14)
-#  define S_IFSOCK (1<<13)
-#  define S_IFCHR  (1<<8)
-#  define S_IFIFO  (1<<7)
-#  define S_IFMT   (S_IFDIR|S_IFREG|S_IFCHR|S_IFLNK)
+#define S_IFLNK (1 << 14)
+#define S_IFSOCK (1 << 13)
+#define S_IFCHR (1 << 8)
+#define S_IFIFO (1 << 7)
+#define S_IFMT (S_IFDIR | S_IFREG | S_IFCHR | S_IFLNK)
 #else
-#  define S_IFMT   (S_IFDIR|S_IFREG)
+#define S_IFMT (S_IFDIR | S_IFREG)
 #endif
 
-#define S_IHIDDEN    (1<<7)
-#define S_ISCRIPT    (1<<6)
-#define S_IPURE      (1<<5)
-#define S_IARCHIVE   (1<<4)
-#define S_IREAD      (1<<3)
-#define S_IWRITE     (1<<2)
-#define S_IEXECUTE   (1<<1)
-#define S_IDELETE    (1<<0)
+#define S_IHIDDEN (1 << 7)
+#define S_ISCRIPT (1 << 6)
+#define S_IPURE (1 << 5)
+#define S_IARCHIVE (1 << 4)
+#define S_IREAD (1 << 3)
+#define S_IWRITE (1 << 2)
+#define S_IEXECUTE (1 << 1)
+#define S_IDELETE (1 << 0)
 
-int stat(const char *name, struct stat *buf);
-int fstat(int handle, struct stat *buf);      /* returns dummy values */
+int stat(const char* name, struct stat* buf);
+int fstat(int handle, struct stat* buf); /* returns dummy values */
 
 typedef struct dirent {
-    struct dirent       *d_cleanuplink,
-                       **d_cleanupparent;
-    BPTR                 d_parentlock;
+    struct dirent *d_cleanuplink, **d_cleanupparent;
+    BPTR d_parentlock;
     struct FileInfoBlock d_fib;
 } DIR;
-#define                  d_name  d_fib.fib_FileName
+#define d_name d_fib.fib_FileName
 
-extern unsigned short disk_not_mounted;         /* flag set by opendir() */
+extern unsigned short disk_not_mounted; /* flag set by opendir() */
 
-DIR *opendir(const char *);
-void closedir(DIR *);
-void close_leftover_open_dirs(void);    /* call this if aborted in mid-run */
-struct dirent *readdir(DIR *);
+DIR* opendir(const char*);
+void closedir(DIR*);
+void close_leftover_open_dirs(void); /* call this if aborted in mid-run */
+struct dirent* readdir(DIR*);
 int umask(void);
 
 #ifdef AZTEC_C
-int rmdir(const char *);
-int chmod(const char *filename, int bits);
+int rmdir(const char*);
+int chmod(const char* filename, int bits);
 #endif
 
 #endif /* __amiga_z_stat_h */

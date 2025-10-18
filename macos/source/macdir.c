@@ -16,16 +16,14 @@
  *
   ---------------------------------------------------------------------------*/
 
-
 /*****************************************************************************/
 /*  Includes                                                                 */
 /*****************************************************************************/
 
-
-#include    <Errors.h>
-#include    <Files.h>
-#include    <Strings.h>
-#include    <sound.h>
+#include <Errors.h>
+#include <Files.h>
+#include <Strings.h>
+#include <sound.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -36,27 +34,23 @@
 #include "helpers.h"
 #include "pathname.h"
 
-
 /*****************************************************************************/
 /*  Functions                                                                */
 /*****************************************************************************/
 
-int closedir(DIR *dPtr)
-{
+int closedir(DIR* dPtr) {
     free(dPtr);
 
     return 0;
 }
 
-
-DIR *opendir(char *dirName)
-{
+DIR* opendir(char* dirName) {
     int fullPath;
     unsigned pathLen;
-    char *s;
+    char* s;
     HParamBlockRec hPB;
     CInfoPBRec cPB;
-    DIR *dPtr;
+    DIR* dPtr;
     OSErr err;
     FSSpec spec;
     char CompletePath[NAME_MAX];
@@ -64,19 +58,18 @@ DIR *opendir(char *dirName)
     GetCompletePath(CompletePath, dirName, &spec, &err);
     printerr("GetCompletePath", err, err, __LINE__, __FILE__, dirName);
 
-    if (dirName == NULL || *dirName == '\0' ||
-        (pathLen = strlen(dirName)) >= 256) {
+    if (dirName == NULL || *dirName == '\0' || (pathLen = strlen(dirName)) >= 256) {
         errno = EINVAL;
         return NULL;
     }
-
 
     /* Get information about volume. */
     memset(&hPB, '\0', sizeof(hPB));
 
     if (((s = strchr(dirName, ':')) == NULL) || (*dirName == ':')) {
         fullPath = false;
-    } else {
+    }
+    else {
         *(s + 1) = '\0';
         hPB.volumeParam.ioVolIndex = -1;
         fullPath = true;
@@ -114,7 +107,7 @@ DIR *opendir(char *dirName)
 
     /* Get space for, and fill in, DIR structure. */
 
-    if ((dPtr = (DIR *)malloc(sizeof(DIR))) == NULL) {
+    if ((dPtr = (DIR*)malloc(sizeof(DIR))) == NULL) {
         return NULL;
     }
 
@@ -126,10 +119,8 @@ DIR *opendir(char *dirName)
     return dPtr;
 }
 
-
-struct dirent *readdir(DIR *dPtr)
-{
-    struct dirent *dirPtr;
+struct dirent* readdir(DIR* dPtr) {
+    struct dirent* dirPtr;
     CInfoPBRec cPB;
     char name[256];
     OSErr err;
@@ -162,8 +153,7 @@ struct dirent *readdir(DIR *dPtr)
     dirPtr->d_fileno = dPtr->ioFDirIndex++;
     dirPtr->d_namlen = strlen(name);
     strcpy(dirPtr->d_name, name);
-    dirPtr->d_reclen = sizeof(struct dirent) - sizeof(dirPtr->d_name) +
-                       dirPtr->d_namlen;
+    dirPtr->d_reclen = sizeof(struct dirent) - sizeof(dirPtr->d_name) + dirPtr->d_namlen;
 
     return dirPtr;
 }

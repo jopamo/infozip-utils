@@ -27,73 +27,72 @@
  |  6. added support for quoted arguments (6 Jul 96)
  *----------------------------------------------------------------*/
 
-
-#define __ENVARGS_C     /* identifies this source module */
+#define __ENVARGS_C /* identifies this source module */
 #define UNZIP_INTERNAL
 #include "unzip.h"
 
-#ifdef __EMX__          /* emx isspace() returns TRUE on extended ASCII !! */
-#  define ISspace(c) ((c) & 0x80 ? 0 : isspace((unsigned)c))
+#ifdef __EMX__ /* emx isspace() returns TRUE on extended ASCII !! */
+#define ISspace(c) ((c) & 0x80 ? 0 : isspace((unsigned)c))
 #else
-#  define ISspace(c) isspace((unsigned)c)
+#define ISspace(c) isspace((unsigned)c)
 #endif /* ?__EMX__ */
 
 #if (!defined(RISCOS) && (!defined(MODERN) || defined(NO_STDLIB_H)))
-extern char *getenv();
+extern char* getenv();
 #endif
-static int count_args OF((ZCONST char *));
-
+static int count_args OF((ZCONST char*));
 
 /* envargs() returns PK-style error code */
 
 int envargs(Pargc, Pargv, envstr, envstr2)
-    int *Pargc;
-    char ***Pargv;
-    ZCONST char *envstr, *envstr2;
+int* Pargc;
+char*** Pargv;
+ZCONST char *envstr, *envstr2;
 {
-    char *envptr;       /* value returned by getenv */
-    char *bufptr;       /* copy of env info */
-    int argc = 0;       /* internal arg count */
-    register int ch;    /* spare temp value */
-    char **argv;        /* internal arg vector */
-    char **argvect;     /* copy of vector address */
+    char* envptr;    /* value returned by getenv */
+    char* bufptr;    /* copy of env info */
+    int argc = 0;    /* internal arg count */
+    register int ch; /* spare temp value */
+    char** argv;     /* internal arg vector */
+    char** argvect;  /* copy of vector address */
 
     /* see if anything in the environment */
-    if ((envptr = getenv(envstr)) != (char *)NULL)        /* usual var */
-        while (ISspace(*envptr))        /* must discard leading spaces */
+    if ((envptr = getenv(envstr)) != (char*)NULL) /* usual var */
+        while (ISspace(*envptr))                  /* must discard leading spaces */
             envptr++;
-    if (envptr == (char *)NULL || *envptr == '\0')
-        if ((envptr = getenv(envstr2)) != (char *)NULL)   /* alternate var */
+    if (envptr == (char*)NULL || *envptr == '\0')
+        if ((envptr = getenv(envstr2)) != (char*)NULL) /* alternate var */
             while (ISspace(*envptr))
                 envptr++;
-    if (envptr == (char *)NULL || *envptr == '\0')
+    if (envptr == (char*)NULL || *envptr == '\0')
         return PK_OK;
 
     bufptr = malloc(1 + strlen(envptr));
-    if (bufptr == (char *)NULL)
+    if (bufptr == (char*)NULL)
         return PK_MEM;
 #if ((defined(WIN32) || defined(WINDLL)) && !defined(_WIN32_WCE))
-# ifdef WIN32
+#ifdef WIN32
     if (IsWinNT()) {
         /* SPC: don't know codepage of 'real' WinNT console */
         strcpy(bufptr, envptr);
-    } else {
+    }
+    else {
         /* Win95 environment is DOS and uses OEM character coding */
         OEM_TO_INTERN(envptr, bufptr);
     }
-# else /* !WIN32 */
+#else /* !WIN32 */
     /* DOS (Win 3.x) environment uses OEM codepage */
     OEM_TO_INTERN(envptr, bufptr);
-# endif
-#else /* !((WIN32 || WINDLL) && !_WIN32_WCE) */
+#endif
+#else  /* !((WIN32 || WINDLL) && !_WIN32_WCE) */
     strcpy(bufptr, envptr);
 #endif /* ?((WIN32 || WINDLL) && !_WIN32_WCE) */
 
     /* count the args so we can allocate room for them */
     argc = count_args(bufptr);
     /* allocate a vector large enough for all args */
-    argv = (char **)malloc((argc + *Pargc + 1) * sizeof(char *));
-    if (argv == (char **)NULL) {
+    argv = (char**)malloc((argc + *Pargc + 1) * sizeof(char*));
+    if (argv == (char**)NULL) {
         free(bufptr);
         return PK_MEM;
     }
@@ -106,23 +105,23 @@ int envargs(Pargc, Pargv, envstr, envstr2)
     do {
 #if defined(AMIGA) || defined(UNIX)
         if (*bufptr == '"') {
-            char *argstart = ++bufptr;
+            char* argstart = ++bufptr;
 
             *(argv++) = argstart;
-            for (ch = *bufptr; ch != '\0' && ch != '\"';
-                 ch = *PREINCSTR(bufptr))
+            for (ch = *bufptr; ch != '\0' && ch != '\"'; ch = *PREINCSTR(bufptr))
                 if (ch == '\\' && bufptr[1] != '\0')
-                    ++bufptr;           /* advance to char after backslash */
+                    ++bufptr; /* advance to char after backslash */
             if (ch != '\0')
-                *(bufptr++) = '\0';     /* overwrite trailing " */
+                *(bufptr++) = '\0'; /* overwrite trailing " */
 
             /* remove escape characters */
-            while ((argstart = MBSCHR(argstart, '\\')) != (char *)NULL) {
+            while ((argstart = MBSCHR(argstart, '\\')) != (char*)NULL) {
                 strcpy(argstart, argstart + 1);
                 if (*argstart)
                     ++argstart;
             }
-        } else {
+        }
+        else {
             *(argv++) = bufptr;
             while ((ch = *bufptr) != '\0' && !ISspace(ch))
                 INCSTR(bufptr);
@@ -140,7 +139,8 @@ int envargs(Pargc, Pargv, envstr, envstr2)
                 INCSTR(bufptr);
             if (ch != '\0')
                 *(bufptr++) = '\0';
-        } else {
+        }
+        else {
             *(argv++) = bufptr;
             while ((ch = *bufptr) != '\0' && !ISspace(ch))
                 INCSTR(bufptr);
@@ -165,7 +165,7 @@ int envargs(Pargc, Pargv, envstr, envstr2)
         *(argv++) = *((*Pargv)++);
 
     /* finally, add a NULL after the last arg, like Unix */
-    *argv = (char *)NULL;
+    *argv = (char*)NULL;
 
     /* save the values and return, indicating succes */
     *Pargv = argvect;
@@ -174,10 +174,8 @@ int envargs(Pargc, Pargv, envstr, envstr2)
     return PK_OK;
 }
 
-
-
 static int count_args(s)
-    ZCONST char *s;
+ZCONST char* s;
 {
     int count = 0;
     char ch;
@@ -187,26 +185,27 @@ static int count_args(s)
         ++count;
 #if defined(AMIGA) || defined(UNIX)
         if (*s == '\"') {
-            for (ch = *PREINCSTR(s);  ch != '\0' && ch != '\"';
-                 ch = *PREINCSTR(s))
+            for (ch = *PREINCSTR(s); ch != '\0' && ch != '\"'; ch = *PREINCSTR(s))
                 if (ch == '\\' && s[1] != '\0')
                     ++s;
             if (*s)
-                ++s;        /* trailing quote */
-        } else
+                ++s; /* trailing quote */
+        }
+        else
 #else
 #ifdef DOS_FLX_NLM_OS2_W32
         if (*s == '\"') {
-            ++s;                /* leading quote */
+            ++s; /* leading quote */
             while ((ch = *s) != '\0' && ch != '\"')
                 INCSTR(s);
             if (*s)
-                ++s;        /* trailing quote */
-        } else
-#endif /* DOS_FLX_NLM_OS2_W32 */
-#endif /* ?(AMIGA || UNIX) */
-        while ((ch = *s) != '\0' && !ISspace(ch))  /* note else-clauses above */
-            INCSTR(s);
+                ++s; /* trailing quote */
+        }
+        else
+#endif                                                /* DOS_FLX_NLM_OS2_W32 */
+#endif                                                /* ?(AMIGA || UNIX) */
+            while ((ch = *s) != '\0' && !ISspace(ch)) /* note else-clauses above */
+                INCSTR(s);
         while ((ch = *s) != '\0' && ISspace(ch))
             INCSTR(s);
     } while (ch);
@@ -214,13 +213,11 @@ static int count_args(s)
     return count;
 }
 
-
-
 #ifdef TEST
 
 int main(argc, argv)
-    int argc;
-    char **argv;
+int argc;
+char** argv;
 {
     int err;
 
@@ -234,11 +231,8 @@ int main(argc, argv)
     dump_args(argc, argv);
 }
 
-
-
-void dump_args(argc, argv)
-    int argc;
-    char *argv[];
+void dump_args(argc, argv) int argc;
+char* argv[];
 {
     int i;
 
@@ -249,9 +243,7 @@ void dump_args(argc, argv)
 
 #endif /* TEST */
 
-
-
-#ifdef MSDOS   /* DOS_OS2?  DOS_OS2_W32? */
+#ifdef MSDOS /* DOS_OS2?  DOS_OS2_W32? */
 
 /*
  * void mksargs(int *argcp, char ***argvp)
@@ -273,41 +265,37 @@ void dump_args(argc, argv)
  *
  *    Rich Wales
  */
-void mksargs(argcp, argvp)
-    int *argcp;
-    char ***argvp;
+void mksargs(argcp, argvp) int* argcp;
+char*** argvp;
 {
 #ifndef MSC /* declared differently in MSC 7.0 headers, at least */
 #ifndef __WATCOMC__
-    extern char **environ;          /* environment */
+    extern char** environ; /* environment */
 #endif
 #endif
-    char        **envp;             /* pointer into environment */
-    char        **newargv;          /* new argument list */
-    char        **argp;             /* pointer into new arg list */
-    int         newargc;            /* new argument count */
+    char** envp;    /* pointer into environment */
+    char** newargv; /* new argument list */
+    char** argp;    /* pointer into new arg list */
+    int newargc;    /* new argument count */
 
     /* sanity check */
     if (environ == NULL || argcp == NULL || argvp == NULL || *argvp == NULL)
         return;
 
     /* find out how many environment arguments there are */
-    for (envp = environ, newargc = 0;
-         *envp != NULL && (*envp)[0] == '~';
-         envp++, newargc++)
+    for (envp = environ, newargc = 0; *envp != NULL && (*envp)[0] == '~'; envp++, newargc++)
         ;
     if (newargc == 0)
-        return;     /* no environment arguments */
+        return; /* no environment arguments */
 
     /* set up new argument list */
-    newargv = (char **) malloc(sizeof(char **) * (newargc+1));
+    newargv = (char**)malloc(sizeof(char**) * (newargc + 1));
     if (newargv == NULL)
-        return;     /* malloc failed */
+        return; /* malloc failed */
 
-    for (argp = newargv, envp = environ; *envp != NULL && (*envp)[0] == '~';
-         *argp++ = &(*envp++)[1])
+    for (argp = newargv, envp = environ; *envp != NULL && (*envp)[0] == '~'; *argp++ = &(*envp++)[1])
         ;
-    *argp = NULL;   /* null-terminate the list */
+    *argp = NULL; /* null-terminate the list */
 
     /* substitute new argument list in place of old one */
     *argcp = newargc;

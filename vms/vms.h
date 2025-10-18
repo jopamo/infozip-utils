@@ -62,10 +62,10 @@
 #include <rms.h>
 #endif
 
-#define ERR(s) !((s) & 1)       /* VMS system error */
+#define ERR(s) !((s) & 1) /* VMS system error */
 
 #ifndef SYI$_VERSION
-#define SYI$_VERSION 4096       /* VMS 5.4 definition */
+#define SYI$_VERSION 4096 /* VMS 5.4 definition */
 #endif
 
 /*
@@ -79,141 +79,140 @@
  */
 #define variant_union 1
 #if defined(fib$w_did) || (defined(__union) && (__union == variant_union))
-#  define FIB$W_DID     fib$w_did
-#  define FIB$W_FID     fib$w_fid
-#  define FIB$L_ACCTL   fib$l_acctl
-#  define FIB$W_EXCTL   fib$w_exctl
-#  define FIB$W_NMCTL   fib$w_nmctl
+#define FIB$W_DID fib$w_did
+#define FIB$W_FID fib$w_fid
+#define FIB$L_ACCTL fib$l_acctl
+#define FIB$W_EXCTL fib$w_exctl
+#define FIB$W_NMCTL fib$w_nmctl
 #else
-#  define FIB$W_DID     fib$r_did_overlay.fib$w_did
-#  define FIB$W_FID     fib$r_fid_overlay.fib$w_fid
-#  define FIB$L_ACCTL   fib$r_acctl_overlay.fib$l_acctl
-#  define FIB$W_EXCTL   fib$r_exctl_overlay.fib$w_exctl
-#  define FIB$W_NMCTL   fib$r_nmctl_overlay.fib$w_nmctl
+#define FIB$W_DID fib$r_did_overlay.fib$w_did
+#define FIB$W_FID fib$r_fid_overlay.fib$w_fid
+#define FIB$L_ACCTL fib$r_acctl_overlay.fib$l_acctl
+#define FIB$W_EXCTL fib$r_exctl_overlay.fib$w_exctl
+#define FIB$W_NMCTL fib$r_nmctl_overlay.fib$w_nmctl
 #endif
 #undef variant_union
-
 
 /* 2005-02-10 SMS.  Copied NAM[L] macros here from Zip. */
 
 /* Define macros for use with either NAM or NAML. */
 
-#ifdef NAML$C_MAXRSS            /* NAML is available (ODS5 support...) */
+#ifdef NAML$C_MAXRSS /* NAML is available (ODS5 support...) */
 
-#  ifndef NAM_MAXRSS            /* May have been defined before. */
-#    define NAM_MAXRSS NAML$C_MAXRSS
-#  endif
+#ifndef NAM_MAXRSS /* May have been defined before. */
+#define NAM_MAXRSS NAML$C_MAXRSS
+#endif
 
-#  define NAM_STRUCT NAML
+#define NAM_STRUCT NAML
 
-#  define FAB_OR_NAML(fab, nam) (nam)
-#  define FAB_OR_NAML_DNA naml$l_long_defname
-#  define FAB_OR_NAML_DNS naml$l_long_defname_size
-#  define FAB_OR_NAML_FNA naml$l_long_filename
-#  define FAB_OR_NAML_FNS naml$l_long_filename_size
+#define FAB_OR_NAML(fab, nam) (nam)
+#define FAB_OR_NAML_DNA naml$l_long_defname
+#define FAB_OR_NAML_DNS naml$l_long_defname_size
+#define FAB_OR_NAML_FNA naml$l_long_filename
+#define FAB_OR_NAML_FNS naml$l_long_filename_size
 
-#  define CC_RMS_NAM cc$rms_naml
-#  define FAB_NAM fab$l_naml
+#define CC_RMS_NAM cc$rms_naml
+#define FAB_NAM fab$l_naml
 
-#  define NAM_ESA naml$l_long_expand
-#  define NAM_ESL naml$l_long_expand_size
-#  define NAM_ESS naml$l_long_expand_alloc
-#  define NAM_RSA naml$l_long_result
-#  define NAM_RSL naml$l_long_result_size
-#  define NAM_RSS naml$l_long_result_alloc
-#  define NAM_DID naml$w_did
-#  define NAM_DVI naml$t_dvi
-#  define NAM_FID naml$w_fid
-#  define NAM_FNB naml$l_fnb
-#  define NAM_NOP naml$b_nop
-#  define NAM_M_SYNCHK NAML$M_SYNCHK
-#  define NAM_B_DEV naml$l_long_dev_size
-#  define NAM_L_DEV naml$l_long_dev
-#  define NAM_B_DIR naml$l_long_dir_size
-#  define NAM_L_DIR naml$l_long_dir
-#  define NAM_B_NAME naml$l_long_name_size
-#  define NAM_L_NAME naml$l_long_name
-#  define NAM_B_TYPE naml$l_long_type_size
-#  define NAM_L_TYPE naml$l_long_type
-#  define NAM_B_VER naml$l_long_ver_size
-#  define NAM_L_VER naml$l_long_ver
+#define NAM_ESA naml$l_long_expand
+#define NAM_ESL naml$l_long_expand_size
+#define NAM_ESS naml$l_long_expand_alloc
+#define NAM_RSA naml$l_long_result
+#define NAM_RSL naml$l_long_result_size
+#define NAM_RSS naml$l_long_result_alloc
+#define NAM_DID naml$w_did
+#define NAM_DVI naml$t_dvi
+#define NAM_FID naml$w_fid
+#define NAM_FNB naml$l_fnb
+#define NAM_NOP naml$b_nop
+#define NAM_M_SYNCHK NAML$M_SYNCHK
+#define NAM_B_DEV naml$l_long_dev_size
+#define NAM_L_DEV naml$l_long_dev
+#define NAM_B_DIR naml$l_long_dir_size
+#define NAM_L_DIR naml$l_long_dir
+#define NAM_B_NAME naml$l_long_name_size
+#define NAM_L_NAME naml$l_long_name
+#define NAM_B_TYPE naml$l_long_type_size
+#define NAM_L_TYPE naml$l_long_type
+#define NAM_B_VER naml$l_long_ver_size
+#define NAM_L_VER naml$l_long_ver
 
-#else /* !NAML$C_MAXRSS */      /* NAML is not available.  Use NAM. */
+#else /* !NAML$C_MAXRSS */ /* NAML is not available.  Use NAM. */
 
-#  ifndef NAM_MAXRSS            /* May have been defined before. */
-#    define NAM_MAXRSS NAM$C_MAXRSS
-#  endif
+#ifndef NAM_MAXRSS /* May have been defined before. */
+#define NAM_MAXRSS NAM$C_MAXRSS
+#endif
 
-#  define NAM_STRUCT NAM
+#define NAM_STRUCT NAM
 
-#  define FAB_OR_NAML(fab, nam) (fab)
-#  define FAB_OR_NAML_DNA fab$l_dna
-#  define FAB_OR_NAML_DNS fab$b_dns
-#  define FAB_OR_NAML_FNA fab$l_fna
-#  define FAB_OR_NAML_FNS fab$b_fns
+#define FAB_OR_NAML(fab, nam) (fab)
+#define FAB_OR_NAML_DNA fab$l_dna
+#define FAB_OR_NAML_DNS fab$b_dns
+#define FAB_OR_NAML_FNA fab$l_fna
+#define FAB_OR_NAML_FNS fab$b_fns
 
-#  define CC_RMS_NAM cc$rms_nam
-#  define FAB_NAM fab$l_nam
-#  define NAM_ESA nam$l_esa
-#  define NAM_ESL nam$b_esl
-#  define NAM_ESS nam$b_ess
-#  define NAM_RSA nam$l_rsa
-#  define NAM_RSL nam$b_rsl
-#  define NAM_RSS nam$b_rss
-#  define NAM_DID nam$w_did
-#  define NAM_DVI nam$t_dvi
-#  define NAM_FID nam$w_fid
-#  define NAM_FNB nam$l_fnb
-#  define NAM_NOP nam$b_nop
-#  define NAM_M_SYNCHK NAM$M_SYNCHK
-#  define NAM_B_DEV nam$b_dev
-#  define NAM_L_DEV nam$l_dev
-#  define NAM_B_DIR nam$b_dir
-#  define NAM_L_DIR nam$l_dir
-#  define NAM_B_NAME nam$b_name
-#  define NAM_L_NAME nam$l_name
-#  define NAM_B_TYPE nam$b_type
-#  define NAM_L_TYPE nam$l_type
-#  define NAM_B_VER nam$b_ver
-#  define NAM_L_VER nam$l_ver
+#define CC_RMS_NAM cc$rms_nam
+#define FAB_NAM fab$l_nam
+#define NAM_ESA nam$l_esa
+#define NAM_ESL nam$b_esl
+#define NAM_ESS nam$b_ess
+#define NAM_RSA nam$l_rsa
+#define NAM_RSL nam$b_rsl
+#define NAM_RSS nam$b_rss
+#define NAM_DID nam$w_did
+#define NAM_DVI nam$t_dvi
+#define NAM_FID nam$w_fid
+#define NAM_FNB nam$l_fnb
+#define NAM_NOP nam$b_nop
+#define NAM_M_SYNCHK NAM$M_SYNCHK
+#define NAM_B_DEV nam$b_dev
+#define NAM_L_DEV nam$l_dev
+#define NAM_B_DIR nam$b_dir
+#define NAM_L_DIR nam$l_dir
+#define NAM_B_NAME nam$b_name
+#define NAM_L_NAME nam$l_name
+#define NAM_B_TYPE nam$b_type
+#define NAM_L_TYPE nam$l_type
+#define NAM_B_VER nam$b_ver
+#define NAM_L_VER nam$l_ver
 
 #endif /* ?NAML$C_MAXRSS */
 
-
-struct EB_header    /* Common header of extra block */
-{   ush tag;
+struct EB_header /* Common header of extra block */
+{
+    ush tag;
     ush size;
     uch data[1];
 };
 
 #ifndef EB_HEADSIZE
-#  define EB_HEADSIZE 4
+#define EB_HEADSIZE 4
 #endif
 
 /*------ Old style Info-ZIP extra field definitions -----*/
 
 #if (!defined(VAXC) && !defined(_RMS_H) && !defined(__RMS_LOADED))
 
-struct XAB {                    /* This definition may be skipped */
+struct XAB { /* This definition may be skipped */
     unsigned char xab$b_cod;
     unsigned char xab$b_bln;
     short int xabdef$$_fill_1;
-    char *xab$l_nxt;
+    char* xab$l_nxt;
 };
 
 #endif /* !VAXC && !_RMS_H && !__RMS_LOADED */
 
 #ifndef EB_IZVMS_BCMASK
-#  define EB_IZVMS_BCMASK   07  /* 3 bits for compression type */
+#define EB_IZVMS_BCMASK 07 /* 3 bits for compression type */
 #endif
 #ifndef EB_IZVMS_BCSTOR
-#  define EB_IZVMS_BCSTOR   0   /*  Stored */
+#define EB_IZVMS_BCSTOR 0 /*  Stored */
 #endif
 #ifndef EB_IZVMS_BC00
-#  define EB_IZVMS_BC00     1   /*  0byte -> 0bit compression */
+#define EB_IZVMS_BC00 1 /*  0byte -> 0bit compression */
 #endif
 #ifndef EB_IZVMS_BCDEFL
-#  define EB_IZVMS_BCDEFL   2   /*  Deflated */
+#define EB_IZVMS_BCDEFL 2 /*  Deflated */
 #endif
 
 /*
@@ -229,7 +228,7 @@ struct XAB {                    /* This definition may be skipped */
  *  ....
  */
 
-struct IZ_block                 /* Extra field block header structure */
+struct IZ_block /* Extra field block header structure */
 {
     ush sig;
     ush size;
@@ -237,7 +236,7 @@ struct IZ_block                 /* Extra field block header structure */
     ush flags;
     ush length;
     ulg reserved;
-    uch body[1];                /* The actual size is unknown */
+    uch body[1]; /* The actual size is unknown */
 };
 
 /*
@@ -245,7 +244,7 @@ struct IZ_block                 /* Extra field block header structure */
  */
 
 #define IZ_SIGNATURE "IM"
-#define FABSIG  "VFAB"
+#define FABSIG "VFAB"
 #define XALLSIG "VALL"
 #define XFHCSIG "VFHC"
 #define XDATSIG "VDAT"
@@ -253,29 +252,28 @@ struct IZ_block                 /* Extra field block header structure */
 #define XPROSIG "VPRO"
 #define XKEYSIG "VKEY"
 #define XNAMSIG "VNAM"
-#define VERSIG  "VMSV"
+#define VERSIG "VMSV"
 
 /*
  *   Block sizes
  */
 
-#define FABL    (cc$rms_fab.fab$b_bln)
-#define RABL    (cc$rms_rab.rab$b_bln)
-#define XALLL   (cc$rms_xaball.xab$b_bln)
-#define XDATL   (cc$rms_xabdat.xab$b_bln)
-#define XFHCL   (cc$rms_xabfhc.xab$b_bln)
-#define XKEYL   (cc$rms_xabkey.xab$b_bln)
-#define XPROL   (cc$rms_xabpro.xab$b_bln)
-#define XRDTL   (cc$rms_xabrdt.xab$b_bln)
-#define XSUML   (cc$rms_xabsum.xab$b_bln)
-#define EXTBSL  4               /* Block signature length */
-#define RESL    8               /* Reserved 8 bytes */
-#define EXTHL   (EB_HEADSIZE+EXTBSL+RESL)
+#define FABL (cc$rms_fab.fab$b_bln)
+#define RABL (cc$rms_rab.rab$b_bln)
+#define XALLL (cc$rms_xaball.xab$b_bln)
+#define XDATL (cc$rms_xabdat.xab$b_bln)
+#define XFHCL (cc$rms_xabfhc.xab$b_bln)
+#define XKEYL (cc$rms_xabkey.xab$b_bln)
+#define XPROL (cc$rms_xabpro.xab$b_bln)
+#define XRDTL (cc$rms_xabrdt.xab$b_bln)
+#define XSUML (cc$rms_xabsum.xab$b_bln)
+#define EXTBSL 4 /* Block signature length */
+#define RESL 8   /* Reserved 8 bytes */
+#define EXTHL (EB_HEADSIZE + EXTBSL + RESL)
 
 typedef unsigned char byte;
 
-struct iosb
-{
+struct iosb {
     ush status;
     ush count;
     ulg spec;
@@ -304,21 +302,42 @@ struct iosb
  *  apply structure padding, since this is explicitly forbidden in
  *  the specification (APPNOTE.TXT) for the PK VMS extra field.
  */
-typedef struct PK_info
-{
-    ush tag_ra; ush len_ra;     byte ra[ATR$S_RECATTR];
-    ush tag_uc; ush len_uc;     byte uc[ATR$S_UCHAR];
-    ush tag_jr; ush len_jr;     byte jr[ATR$S_JOURNAL];
-    ush tag_cd; ush len_cd;     byte cd[ATR$S_CREDATE];
-    ush tag_rd; ush len_rd;     byte rd[ATR$S_REVDATE];
-    ush tag_ed; ush len_ed;     byte ed[ATR$S_EXPDATE];
-    ush tag_bd; ush len_bd;     byte bd[ATR$S_BAKDATE];
-    ush tag_rn; ush len_rn;     ush  rn;
-    ush tag_ui; ush len_ui;     byte ui[ATR$S_UIC];
-    ush tag_fp; ush len_fp;     byte fp[ATR$S_FPRO];
-    ush tag_rp; ush len_rp;     byte rp[ATR$S_RPRO];
+typedef struct PK_info {
+    ush tag_ra;
+    ush len_ra;
+    byte ra[ATR$S_RECATTR];
+    ush tag_uc;
+    ush len_uc;
+    byte uc[ATR$S_UCHAR];
+    ush tag_jr;
+    ush len_jr;
+    byte jr[ATR$S_JOURNAL];
+    ush tag_cd;
+    ush len_cd;
+    byte cd[ATR$S_CREDATE];
+    ush tag_rd;
+    ush len_rd;
+    byte rd[ATR$S_REVDATE];
+    ush tag_ed;
+    ush len_ed;
+    byte ed[ATR$S_EXPDATE];
+    ush tag_bd;
+    ush len_bd;
+    byte bd[ATR$S_BAKDATE];
+    ush tag_rn;
+    ush len_rn;
+    ush rn;
+    ush tag_ui;
+    ush len_ui;
+    byte ui[ATR$S_UIC];
+    ush tag_fp;
+    ush len_fp;
+    byte fp[ATR$S_FPRO];
+    ush tag_rp;
+    ush len_rp;
+    byte rp[ATR$S_RPRO];
 } PK_info_t;
-#else /* !VMS_ORIGINAL_PK_LAYOUT */
+#else  /* !VMS_ORIGINAL_PK_LAYOUT */
 /*  The Info-ZIP support for the PK VMS extra field uses a reordered
  *  field layout to achieve ``natural alignment'' of the PK_info structure
  *  members whenever possible.  This rearrangement does not violate the
@@ -327,19 +346,40 @@ typedef struct PK_info
  *  should use the field tag to identify the ATR$ field rather than
  *  assuming a fixed order of ATR$ fields in the PK VMS extra field.)
  */
-typedef struct PK_info
-{
-    ush tag_ra; ush len_ra;     byte ra[ATR$S_RECATTR];
-    ush tag_uc; ush len_uc;     byte uc[ATR$S_UCHAR];
-    ush tag_cd; ush len_cd;     byte cd[ATR$S_CREDATE];
-    ush tag_rd; ush len_rd;     byte rd[ATR$S_REVDATE];
-    ush tag_ed; ush len_ed;     byte ed[ATR$S_EXPDATE];
-    ush tag_bd; ush len_bd;     byte bd[ATR$S_BAKDATE];
-    ush tag_rn; ush len_rn;     ush  rn;
-    ush tag_ui; ush len_ui;     byte ui[ATR$S_UIC];
-    ush tag_fp; ush len_fp;     byte fp[ATR$S_FPRO];
-    ush tag_rp; ush len_rp;     byte rp[ATR$S_RPRO];
-    ush tag_jr; ush len_jr;     byte jr[ATR$S_JOURNAL];
+typedef struct PK_info {
+    ush tag_ra;
+    ush len_ra;
+    byte ra[ATR$S_RECATTR];
+    ush tag_uc;
+    ush len_uc;
+    byte uc[ATR$S_UCHAR];
+    ush tag_cd;
+    ush len_cd;
+    byte cd[ATR$S_CREDATE];
+    ush tag_rd;
+    ush len_rd;
+    byte rd[ATR$S_REVDATE];
+    ush tag_ed;
+    ush len_ed;
+    byte ed[ATR$S_EXPDATE];
+    ush tag_bd;
+    ush len_bd;
+    byte bd[ATR$S_BAKDATE];
+    ush tag_rn;
+    ush len_rn;
+    ush rn;
+    ush tag_ui;
+    ush len_ui;
+    byte ui[ATR$S_UIC];
+    ush tag_fp;
+    ush len_fp;
+    byte fp[ATR$S_FPRO];
+    ush tag_rp;
+    ush len_rp;
+    byte rp[ATR$S_RPRO];
+    ush tag_jr;
+    ush len_jr;
+    byte jr[ATR$S_JOURNAL];
 } PK_info_t;
 #endif /* ?VMS_ORIGINAL_PK_LAYOUT */
 
@@ -354,29 +394,27 @@ typedef struct PK_info
 #endif /* VMS_ZIP */
 
 /* PKWARE "VMS" tag */
-#define PK_SIGNATURE        0x000C
+#define PK_SIGNATURE 0x000C
 
 /* Total number of attributes to be saved */
-#define VMS_ATTR_COUNT  11
-#define VMS_MAX_ATRCNT  20
+#define VMS_ATTR_COUNT 11
+#define VMS_MAX_ATRCNT 20
 
-struct PK_field
-{
-    ush         tag;
-    ush         size;
-    byte        value[1];
+struct PK_field {
+    ush tag;
+    ush size;
+    byte value[1];
 };
 
-#define PK_FLDHDR_SIZE  4
+#define PK_FLDHDR_SIZE 4
 
-struct PK_header
-{
+struct PK_header {
     ush tag;
     ush size;
     ulg crc32;
     byte data[1];
 };
 
-#define PK_HEADER_SIZE  8
+#define PK_HEADER_SIZE 8
 
 #endif /* !__vms_h */
