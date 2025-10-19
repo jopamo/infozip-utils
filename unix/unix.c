@@ -346,11 +346,6 @@ char *do_wild(__G__ wildspec)
 } /* end function do_wild() */
 
 
-#endif /* !SFX */
-
-
-
-
 #ifndef S_ISUID
 #  define S_ISUID  0004000  /* set user id on execution */
 #endif
