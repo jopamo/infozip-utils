@@ -1,12 +1,4 @@
 /*
-  Copyright (c) 1990-2007 Info-ZIP.  All rights reserved.
-
-  See the accompanying file LICENSE, version 2005-Feb-10 or later
-  (the contents of which are also included in (un)zip.h) for terms of use.
-  If, for some reason, all these files are missing, the Info-ZIP license
-  also may be found at:  ftp://ftp.info-zip.org/pub/infozip/license.html
-*/
-/*
   crypt.c (full version) by Info-ZIP.      Last revised:  [see crypt.h]
 
   The main encryption/decryption source code for Info-Zip software was
@@ -43,41 +35,19 @@
 #ifdef ZIP
 /* For the encoding task used in Zip (and ZipCloak), we want to initialize
    the crypt algorithm with some reasonably unpredictable bytes, see
-   the crypthead() function. The standard rand() library function is
-   used to supply these `random' bytes, which in turn is initialized by
-   a srand() call. The srand() function takes an "unsigned" (at least 16bit)
-   seed value as argument to determine the starting point of the rand()
-   pseudo-random number generator.
-   This seed number is constructed as "Seed = Seed1 .XOR. Seed2" with
-   Seed1 supplied by the current time (= "(unsigned)time()") and Seed2
-   as some (hopefully) nondeterministic bitmask. On many (most) systems,
-   we use some "process specific" number, as the PID or something similar,
-   but when nothing unpredictable is available, a fixed number may be
-   sufficient.
-   NOTE:
-   1.) This implementation requires the availability of the following
-       standard UNIX C runtime library functions: time(), rand(), srand().
-       On systems where some of them are missing, the environment that
-       incorporates the crypt routines must supply suitable replacement
-       functions.
-   2.) It is a very bad idea to use a second call to time() to set the
-       "Seed2" number! In this case, both "Seed1" and "Seed2" would be
-       (almost) identical, resulting in a (mostly) "zero" constant seed
-       number passed to srand().
+   the crypthead() function.
 
-   The implementation environment defined in the "zip.h" header should
-   supply a reasonable definition for ZCR_SEED2 (an unsigned number; for
-   most implementations of rand() and srand(), only the lower 16 bits are
-   significant!). An example that works on many systems would be
-        "#define ZCR_SEED2  (unsigned)getpid()".
-   The default definition for ZCR_SEED2 supplied below should be regarded
-   as a fallback to allow successful compilation in "beta state"
-   environments.
+   On Unix we try /dev/urandom first. If that fails, we fall back to
+   srand()/rand() using a mixed seed (time() XOR ZCR_SEED2).
+
+   NOTE:
+   1.) This implementation requires time(), rand(), srand() for the fallback.
+   2.) Do NOT call time() twice for both seed parts; we deliberately XOR a
+       second, independent value (ZCR_SEED2).
  */
-#include <time.h> /* time() function supplies first part of crypt seed */
-                  /* "last resort" source for second part of crypt seed pattern */
+#include <time.h>
 #ifndef ZCR_SEED2
-#define ZCR_SEED2 (unsigned)3141592654L /* use PI as default pattern */
+#define ZCR_SEED2 (unsigned)3141592654L /* PI as last-resort pattern */
 #endif
 #ifdef GLOBAL /* used in Amiga system headers, maybe others too */
 #undef GLOBAL
@@ -190,12 +160,7 @@ void init_keys(__G__ passwd) __GDEF ZCONST char* passwd; /* password string with
 
 /***********************************************************************
  * Initialize the local copy of the table of precomputed crc32 values.
- * Whereas the public crc32-table is optimized for crc32 calculations
- * on arrays of bytes, the crypt code needs the crc32 values in an
- * byte-order-independent form as 32-bit unsigned numbers. On systems
- * with Big-Endian byte order using the optimized crc32 code, this
- * requires inverting the byte-order of the values in the
- * crypt-crc32-table.
+ * See comment in original source.
  */
 #ifdef IZ_CRC_BE_OPTIMIZ
 local z_uint4 near* crytab_init(__G) __GDEF {
@@ -210,40 +175,79 @@ local z_uint4 near* crytab_init(__G) __GDEF {
 
 #ifdef ZIP
 
+/* ------------------ Unix randomness helper (non-fatal) ------------------ */
+#ifdef UNIX
+#include <unistd.h>
+#include <fcntl.h>
+static int unix_fill_random(uch* dst, int n)
+{
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0)
+        return -1;
+    int got = 0;
+    while (got < n) {
+        int r = (int)read(fd, dst + got, (size_t)(n - got));
+        if (r <= 0) { close(fd); return -1; }
+        got += r;
+    }
+    close(fd);
+    return 0;
+}
+#endif /* UNIX */
+
 /***********************************************************************
  * Write encryption header to file zfile using the password passwd
  * and the cyclic redundancy check crc.
+ *
+ * FIX: Only a single encryption pass over the header (no double-encrypt).
+ *      We now generate RAND_HEAD_LEN-2 raw random bytes, then initialize
+ *      the keys once and encrypt all RAND_HEAD_LEN bytes in order, as per
+ *      PKZIP specification.
  */
-void crypthead(passwd, crc, zfile) ZCONST char* passwd; /* password string */
-ulg crc;                                                /* crc of file being encrypted */
-FILE* zfile;                                            /* where to write header */
+void crypthead(passwd, crc, zfile)
+ZCONST char* passwd;  /* password string */
+ulg crc;              /* crc of file being encrypted */
+FILE* zfile;          /* where to write header */
 {
     int n;                     /* index in random header */
-    int t;                     /* temporary */
-    int c;                     /* random byte */
-    uch header[RAND_HEAD_LEN]; /* random header */
-    static unsigned calls = 0; /* ensure different random header each time */
+    int t;                     /* temporary used by zencode */
+    uch header[RAND_HEAD_LEN]; /* random header (plaintext then encrypted) */
+    static unsigned calls = 0; /* ensure different rand() header if used */
 
-    /* First generate RAND_HEAD_LEN-2 random bytes. We encrypt the
-     * output of rand() to get less predictability, since rand() is
-     * often poorly implemented.
-     */
-    if (++calls == 1) {
-        srand((unsigned)time(NULL) ^ ZCR_SEED2);
+    /* 1) Make RAND_HEAD_LEN-2 random bytes (plaintext). Prefer strong RNG. */
+#ifdef UNIX
+    if (unix_fill_random(header, RAND_HEAD_LEN - 2) != 0)
+#endif
+    {
+        /* Fallback: srand/rand() */
+        if (++calls == 1) {
+            srand((unsigned)time(NULL) ^ ZCR_SEED2);
+        }
+        for (n = 0; n < RAND_HEAD_LEN - 2; n++) {
+            header[n] = (uch)((rand() >> 7) & 0xff);
+        }
     }
+
+    /* Append the two check bytes (plaintext) = high CRC word (or time) */
+#ifdef ZIP10
+    /* historical two-byte check (older ZIP) – keep behaviour if enabled */
+    header[RAND_HEAD_LEN - 2] = (uch)((crc >> 16) & 0xff);
+    header[RAND_HEAD_LEN - 1] = (uch)((crc >> 24) & 0xff);
+#else
+    /* pkzip 2.0+: only the MSB is used for the check, but traditional code
+       stores both bytes from the high CRC word before encrypting. */
+    header[RAND_HEAD_LEN - 2] = (uch)((crc >> 16) & 0xff);
+    header[RAND_HEAD_LEN - 1] = (uch)((crc >> 24) & 0xff);
+#endif
+
+    /* 2) Initialize keys and encrypt the entire header exactly once. */
     init_keys(passwd);
-    for (n = 0; n < RAND_HEAD_LEN - 2; n++) {
-        c = (rand() >> 7) & 0xff;
-        header[n] = (uch)zencode(c, t);
-    }
-    /* Encrypt random header (last two bytes is high word of crc) */
-    init_keys(passwd);
-    for (n = 0; n < RAND_HEAD_LEN - 2; n++) {
+    for (n = 0; n < RAND_HEAD_LEN; n++) {
         header[n] = (uch)zencode(header[n], t);
     }
-    header[RAND_HEAD_LEN - 2] = (uch)zencode((int)(crc >> 16) & 0xff, t);
-    header[RAND_HEAD_LEN - 1] = (uch)zencode((int)(crc >> 24) & 0xff, t);
-    fwrite(header, 1, RAND_HEAD_LEN, f);
+
+    /* 3) Write it out. (fix: correct stream variable name) */
+    (void)fwrite(header, 1, RAND_HEAD_LEN, zfile);
 }
 
 #ifdef UTIL
@@ -346,10 +350,6 @@ ZCONST char* passwd; /* password string */
     }
     Trace((stdout, "\n"));
 
-    /* If last two bytes of header don't match crc (or file time in the
-     * case of an extended local header), back up and just copy. For
-     * pkzip 2.0, the check has been reduced to one byte only.
-     */
 #ifdef ZIP10
     if ((ush)(c0 | (c1 << 8)) != (z->flg & 8 ? (ush)z->tim & 0xffff : (ush)(z->crc >> 16))) {
 #else
@@ -401,9 +401,6 @@ ZCONST char* passwd; /* password string */
 /***********************************************************************
  * If requested, encrypt the data in buf, and in any case call fwrite()
  * with the arguments to zfwrite().  Return what fwrite() returns.
- *
- * A bug has been found when encrypting large files.  See trees.c
- * for details and the fix.
  */
 unsigned zfwrite(buf, item_size, nb, f)
 zvoid* buf;       /* data buffer */
@@ -448,13 +445,6 @@ int decrypt(__G__ passwrd) __GDEF ZCONST char* passwrd;
     GLOBAL(pInfo->encrypted) = FALSE;
     defer_leftover_input(__G);
     for (n = 0; n < RAND_HEAD_LEN; n++) {
-        /* 2012-11-23 SMS.  (OUSPG report.)
-         * Quit early if compressed size < HEAD_LEN.  The resulting
-         * error message ("unable to get password") could be improved,
-         * but it's better than trying to read nonexistent data, and
-         * then continuing with a negative G.csize.  (See
-         * fileio.c:readbyte()).
-         */
         if ((b = NEXTBYTE) == (ush)EOF) {
             return PK_ERR;
         }
@@ -521,33 +511,23 @@ local int testp(__G__ h) __GDEF ZCONST uch* h;
     int r;
     char* key_translated;
 
-    /* On systems with "obscure" native character coding (e.g., EBCDIC),
-     * the first test translates the password to the "main standard"
-     * character coding. */
-
 #ifdef STR_TO_CP1
-    /* allocate buffer for translated password */
     if ((key_translated = malloc(strlen(GLOBAL(key)) + 1)) == (char*)NULL)
         return -1;
-    /* first try, test password translated "standard" charset */
     r = testkey(__G__ h, STR_TO_CP1(key_translated, GLOBAL(key)));
-#else  /* !STR_TO_CP1 */
-    /* first try, test password as supplied on the extractor's host */
+#else
     r = testkey(__G__ h, GLOBAL(key));
-#endif /* ?STR_TO_CP1 */
+#endif
 
 #ifdef STR_TO_CP2
     if (r != 0) {
 #ifndef STR_TO_CP1
-        /* now prepare for second (and maybe third) test with translated pwd */
         if ((key_translated = malloc(strlen(GLOBAL(key)) + 1)) == (char*)NULL)
             return -1;
 #endif
-        /* second try, password translated to alternate ("standard") charset */
         r = testkey(__G__ h, STR_TO_CP2(key_translated, GLOBAL(key)));
 #ifdef STR_TO_CP3
         if (r != 0)
-            /* third try, password translated to another "standard" charset */
             r = testkey(__G__ h, STR_TO_CP3(key_translated, GLOBAL(key)));
 #endif
 #ifndef STR_TO_CP1
@@ -559,7 +539,6 @@ local int testp(__G__ h) __GDEF ZCONST uch* h;
 #ifdef STR_TO_CP1
     free(key_translated);
     if (r != 0) {
-        /* last resort, test password as supplied on the extractor's host */
         r = testkey(__G__ h, GLOBAL(key));
     }
 #endif /* STR_TO_CP1 */
@@ -594,8 +573,6 @@ ZCONST char* key; /* decryption password to test */
     Trace((stdout, "\n  lrec.crc= %08lx  crec.crc= %08lx  pInfo->ExtLocHdr= %s\n", GLOBAL(lrec.crc32), GLOBAL(pInfo->crc), GLOBAL(pInfo->ExtLocHdr) ? "true" : "false"));
     Trace((stdout, "  incnt = %d  unzip offset into zipfile = %ld\n", GLOBAL(incnt), GLOBAL(cur_zipfile_bufstart) + (GLOBAL(inptr) - GLOBAL(inbuf))));
 
-    /* same test as in zipbare(): */
-
 #ifdef ZIP10 /* check two bytes */
     c = hh[RAND_HEAD_LEN - 2], b = hh[RAND_HEAD_LEN - 1];
     Trace((stdout,
@@ -606,8 +583,11 @@ ZCONST char* key; /* decryption password to test */
         return -1; /* bad */
 #else
     b = hh[RAND_HEAD_LEN - 1];
-    Trace((stdout, "  b = %02x  (crc >> 24) = %02x  (lrec.time >> 8) = %02x\n", b, (ush)(GLOBAL(lrec.crc32) >> 24), ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff));
-    if (b != (GLOBAL(pInfo->ExtLocHdr) ? ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff : (ush)(GLOBAL(lrec.crc32) >> 24)))
+    Trace((stdout, "  b = %02x  (crc >> 24) = %02x  (lrec.time >> 8) = %02x\n",
+          b, (ush)(GLOBAL(lrec.crc32) >> 24),
+          ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff));
+    if (b != (GLOBAL(pInfo->ExtLocHdr) ? ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff
+                                       : (ush)(GLOBAL(lrec.crc32) >> 24)))
         return -1; /* bad */
 #endif
     /* password OK:  decrypt current buffer contents before leaving */
