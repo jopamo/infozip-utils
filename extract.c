@@ -1931,90 +1931,116 @@ __GDEF
 uch* ef;
 unsigned ef_len;
 {
-    ush ebID;
-    unsigned ebLen;
-    unsigned eb_cmpr_offs = 0;
-    int r;
+    /* Print the file name once if we hit any EF error. */
+#define EF_ERR_PREFIX() \
+    do { if (uO.qflag) Info(slide, 1, ((char*)slide, "%-22s ", FnFilter1(G.filename))); } while (0)
 
-    /* we know the regular compressed file data tested out OK, or else we
-     * wouldn't be here ==> print filename if any extra-field errors found
-     */
     while (ef_len >= EB_HEADSIZE) {
-        ebID = makeword(ef);
-        ebLen = (unsigned)makeword(ef + EB_LEN);
+        const ush ebID  = makeword(ef);
+        const unsigned ebLen = (unsigned)makeword(ef + EB_LEN);
 
-        if (ebLen > (ef_len - EB_HEADSIZE)) {
-            /* Discovered some extra field inconsistency! */
-            if (uO.qflag)
-                Info(slide, 1, ((char*)slide, "%-22s ", FnFilter1(G.filename)));
-            Info(slide, 1, ((char*)slide, LoadFarString(InconsistEFlength), ebLen, (ef_len - EB_HEADSIZE)));
+        /* Basic structural check: header + body must fit. */
+        if (ebLen > ef_len - EB_HEADSIZE) {
+            EF_ERR_PREFIX();
+            Info(slide, 1, ((char*)slide, LoadFarString(InconsistEFlength),
+                            ebLen, (ef_len - EB_HEADSIZE)));
             return PK_ERR;
         }
 
+        /* Pointer to start of EF payload. */
+        uch *ep = ef + EB_HEADSIZE;
+
         switch (ebID) {
+            /* Blocks that may contain compressed sub-blobs we can verify. */
             case EF_OS2:
             case EF_ACL:
             case EF_MAC3:
             case EF_BEOS:
-            case EF_ATHEOS:
+            case EF_ATHEOS: {
+                unsigned cmpr_offs = 0;
+
                 switch (ebID) {
                     case EF_OS2:
                     case EF_ACL:
-                        eb_cmpr_offs = EB_OS2_HLEN;
+                        /* These have a fixed header preceding the compressed payload. */
+                        cmpr_offs = EB_OS2_HLEN;
                         break;
+
                     case EF_MAC3:
-                        if (ebLen >= EB_MAC3_HLEN && (makeword(ef + (EB_HEADSIZE + EB_FLGS_OFFS)) & EB_M3_FL_UNCMPR) && (makelong(ef + EB_HEADSIZE) == ebLen - EB_MAC3_HLEN))
-                            eb_cmpr_offs = 0;
+                        /* If uncompressed flag set and length matches, payload starts immediately. */
+                        if (ebLen >= EB_MAC3_HLEN &&
+                            (makeword(ef + (EB_HEADSIZE + EB_FLGS_OFFS)) & EB_M3_FL_UNCMPR) &&
+                            (makelong(ep) == ebLen - EB_MAC3_HLEN))
+                            cmpr_offs = 0;
                         else
-                            eb_cmpr_offs = EB_MAC3_HLEN;
+                            cmpr_offs = EB_MAC3_HLEN;
                         break;
+
                     case EF_BEOS:
                     case EF_ATHEOS:
-                        if (ebLen >= EB_BEOS_HLEN && (*(ef + (EB_HEADSIZE + EB_FLGS_OFFS)) & EB_BE_FL_UNCMPR) && (makelong(ef + EB_HEADSIZE) == ebLen - EB_BEOS_HLEN))
-                            eb_cmpr_offs = 0;
+                        if (ebLen >= EB_BEOS_HLEN &&
+                            (*(ef + (EB_HEADSIZE + EB_FLGS_OFFS)) & EB_BE_FL_UNCMPR) &&
+                            (makelong(ep) == ebLen - EB_BEOS_HLEN))
+                            cmpr_offs = 0;
                         else
-                            eb_cmpr_offs = EB_BEOS_HLEN;
+                            cmpr_offs = EB_BEOS_HLEN;
                         break;
                 }
-                if ((r = test_compr_eb(__G__ ef, ebLen, eb_cmpr_offs, NULL)) != PK_OK) {
-                    if (uO.qflag)
-                        Info(slide, 1, ((char*)slide, "%-22s ", FnFilter1(G.filename)));
-                    switch (r) {
-                        case IZ_EF_TRUNC:
-                            Info(slide, 1, ((char*)slide, LoadFarString(TruncEAs), ebLen - (eb_cmpr_offs + EB_CMPRHEADLEN), "\n"));
-                            break;
-                        case PK_ERR:
-                            Info(slide, 1, ((char*)slide, LoadFarString(InvalidComprDataEAs)));
-                            break;
-                        case PK_MEM3:
-                        case PK_MEM4:
-                            Info(slide, 1, ((char*)slide, LoadFarString(NotEnoughMemEAs)));
-                            break;
-                        default:
-                            if ((r & 0xff) != PK_ERR)
-                                Info(slide, 1, ((char*)slide, LoadFarString(UnknErrorEAs)));
-                            else {
-                                ush m = (ush)(r >> 8);
-                                if (m == DEFLATED) /* GRR KLUDGE! */
-                                    Info(slide, 1, ((char*)slide, LoadFarString(BadCRC_EAs)));
-                                else
-                                    Info(slide, 1, ((char*)slide, LoadFarString(UnknComprMethodEAs), m));
-                            }
-                            break;
+
+                /* Validate the (possibly) compressed EA block. */
+                {
+                    const int r = test_compr_eb(__G__ ef, ebLen, cmpr_offs, NULL);
+                    if (r != PK_OK) {
+                        EF_ERR_PREFIX();
+                        switch (r) {
+                            case IZ_EF_TRUNC:
+                                Info(slide, 1, ((char*)slide, LoadFarString(TruncEAs),
+                                                ebLen - (cmpr_offs + EB_CMPRHEADLEN), "\n"));
+                                break;
+                            case PK_ERR:
+                                Info(slide, 1, ((char*)slide, LoadFarString(InvalidComprDataEAs)));
+                                break;
+                            case PK_MEM3:
+                            case PK_MEM4:
+                                Info(slide, 1, ((char*)slide, LoadFarString(NotEnoughMemEAs)));
+                                break;
+                            default:
+                                if ((r & 0xff) != PK_ERR) {
+                                    Info(slide, 1, ((char*)slide, LoadFarString(UnknErrorEAs)));
+                                } else {
+                                    const ush m = (ush)(r >> 8);
+                                    if (m == DEFLATED)  /* historical KLUDGE */
+                                        Info(slide, 1, ((char*)slide, LoadFarString(BadCRC_EAs)));
+                                    else
+                                        Info(slide, 1, ((char*)slide, LoadFarString(UnknComprMethodEAs), m));
+                                }
+                                break;
+                        }
+                        return r;
                     }
-                    return r;
                 }
                 break;
+            }
 
-            case EF_NTSD:
+            case EF_NTSD: {
+                /* Check minimal size and supported version, then test payload. */
+                int r;
                 Trace((stderr, "ebID: %i / ebLen: %u\n", ebID, ebLen));
-                r = ebLen < EB_NTSD_L_LEN ? IZ_EF_TRUNC : ((ef[EB_HEADSIZE + EB_NTSD_VERSION] > EB_NTSD_MAX_VER) ? (PK_WARN | 0x4000) : test_compr_eb(__G__ ef, ebLen, EB_NTSD_L_LEN, TEST_NTSD));
+
+                if (ebLen < EB_NTSD_L_LEN) {
+                    r = IZ_EF_TRUNC;
+                } else if (ef[EB_HEADSIZE + EB_NTSD_VERSION] > EB_NTSD_MAX_VER) {
+                    r = (PK_WARN | 0x4000); /* mark as “unsupported version” */
+                } else {
+                    r = test_compr_eb(__G__ ef, ebLen, EB_NTSD_L_LEN, TEST_NTSD);
+                }
+
                 if (r != PK_OK) {
-                    if (uO.qflag)
-                        Info(slide, 1, ((char*)slide, "%-22s ", FnFilter1(G.filename)));
+                    EF_ERR_PREFIX();
                     switch (r) {
                         case IZ_EF_TRUNC:
-                            Info(slide, 1, ((char*)slide, LoadFarString(TruncNTSD), ebLen - (EB_NTSD_L_LEN + EB_CMPRHEADLEN), "\n"));
+                            Info(slide, 1, ((char*)slide, LoadFarString(TruncNTSD),
+                                            ebLen - (EB_NTSD_L_LEN + EB_CMPRHEADLEN), "\n"));
                             break;
 #if (defined(WIN32) && defined(NTSD_EAS))
                         case PK_WARN:
@@ -2029,15 +2055,16 @@ unsigned ef_len;
                             Info(slide, 1, ((char*)slide, LoadFarString(NotEnoughMemEAs)));
                             break;
                         case (PK_WARN | 0x4000):
-                            Info(slide, 1, ((char*)slide, LoadFarString(UnsuppNTSDVersEAs), (int)ef[EB_HEADSIZE + EB_NTSD_VERSION]));
-                            r = PK_WARN;
+                            Info(slide, 1, ((char*)slide, LoadFarString(UnsuppNTSDVersEAs),
+                                            (int)ef[EB_HEADSIZE + EB_NTSD_VERSION]));
+                            r = PK_WARN;  /* normalize */
                             break;
                         default:
-                            if ((r & 0xff) != PK_ERR)
+                            if ((r & 0xff) != PK_ERR) {
                                 Info(slide, 1, ((char*)slide, LoadFarString(UnknErrorEAs)));
-                            else {
-                                ush m = (ush)(r >> 8);
-                                if (m == DEFLATED) /* GRR KLUDGE! */
+                            } else {
+                                const ush m = (ush)(r >> 8);
+                                if (m == DEFLATED)
                                     Info(slide, 1, ((char*)slide, LoadFarString(BadCRC_EAs)));
                                 else
                                     Info(slide, 1, ((char*)slide, LoadFarString(UnknComprMethodEAs), m));
@@ -2047,14 +2074,21 @@ unsigned ef_len;
                     return r;
                 }
                 break;
+            }
+
             case EF_PKVMS:
                 if (ebLen < 4) {
                     Info(slide, 1, ((char*)slide, LoadFarString(TooSmallEBlength), ebLen, 4));
-                }
-                else if (makelong(ef + EB_HEADSIZE) != crc32(CRCVAL_INITIAL, ef + (EB_HEADSIZE + 4), (extent)(ebLen - 4))) {
-                    Info(slide, 1, ((char*)slide, LoadFarString(BadCRC_EAs)));
+                } else {
+                    const ulg stored_crc = makelong(ep);
+                    const extent datalen = (extent)(ebLen - 4);
+                    const ulg calc_crc = crc32(CRCVAL_INITIAL, ep + 4, datalen);
+                    if (stored_crc != calc_crc)
+                        Info(slide, 1, ((char*)slide, LoadFarString(BadCRC_EAs)));
                 }
                 break;
+
+            /* Known-but-unvalidated blocks: silently skip. */
             case EF_PKW32:
             case EF_PKUNIX:
             case EF_ASIUNIX:
@@ -2069,8 +2103,10 @@ unsigned ef_len;
             default:
                 break;
         }
-        ef_len -= (ebLen + EB_HEADSIZE);
-        ef += (ebLen + EB_HEADSIZE);
+
+        /* Advance to next EF block. */
+        ef     += EB_HEADSIZE + ebLen;
+        ef_len -= EB_HEADSIZE + ebLen;
     }
 
     if (!uO.qflag)
@@ -2078,7 +2114,9 @@ unsigned ef_len;
 
     return PK_COOL;
 
+#undef EF_ERR_PREFIX
 } /* end function TestExtraField() */
+
 
 /******************************/
 /*  Function test_compr_eb()  */
