@@ -179,15 +179,17 @@ local z_uint4 near* crytab_init(__G) __GDEF {
 #ifdef UNIX
 #include <unistd.h>
 #include <fcntl.h>
-static int unix_fill_random(uch* dst, int n)
-{
+static int unix_fill_random(uch* dst, int n) {
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0)
         return -1;
     int got = 0;
     while (got < n) {
         int r = (int)read(fd, dst + got, (size_t)(n - got));
-        if (r <= 0) { close(fd); return -1; }
+        if (r <= 0) {
+            close(fd);
+            return -1;
+        }
         got += r;
     }
     close(fd);
@@ -204,10 +206,9 @@ static int unix_fill_random(uch* dst, int n)
  *      the keys once and encrypt all RAND_HEAD_LEN bytes in order, as per
  *      PKZIP specification.
  */
-void crypthead(passwd, crc, zfile)
-ZCONST char* passwd;  /* password string */
-ulg crc;              /* crc of file being encrypted */
-FILE* zfile;          /* where to write header */
+void crypthead(passwd, crc, zfile) ZCONST char* passwd; /* password string */
+ulg crc;                                                /* crc of file being encrypted */
+FILE* zfile;                                            /* where to write header */
 {
     int n;                     /* index in random header */
     int t;                     /* temporary used by zencode */
@@ -583,11 +584,8 @@ ZCONST char* key; /* decryption password to test */
         return -1; /* bad */
 #else
     b = hh[RAND_HEAD_LEN - 1];
-    Trace((stdout, "  b = %02x  (crc >> 24) = %02x  (lrec.time >> 8) = %02x\n",
-          b, (ush)(GLOBAL(lrec.crc32) >> 24),
-          ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff));
-    if (b != (GLOBAL(pInfo->ExtLocHdr) ? ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff
-                                       : (ush)(GLOBAL(lrec.crc32) >> 24)))
+    Trace((stdout, "  b = %02x  (crc >> 24) = %02x  (lrec.time >> 8) = %02x\n", b, (ush)(GLOBAL(lrec.crc32) >> 24), ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff));
+    if (b != (GLOBAL(pInfo->ExtLocHdr) ? ((ush)GLOBAL(lrec.last_mod_dos_datetime) >> 8) & 0xff : (ush)(GLOBAL(lrec.crc32) >> 24)))
         return -1; /* bad */
 #endif
     /* password OK:  decrypt current buffer contents before leaving */

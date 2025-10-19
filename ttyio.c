@@ -125,16 +125,16 @@
  * that are incompatible with the /NAMES=AS_IS qualifier. */
 #define sys$assign SYS$ASSIGN
 #define sys$dassgn SYS$DASSGN
-#define sys$qiow   SYS$QIOW
+#define sys$qiow SYS$QIOW
 #include <starlet.h>
 #include <ssdef.h>
 #else /* !VMS */
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
-#define sgttyb   termios
+#define sgttyb termios
 #define sg_flags c_lflag
-#define GTTY(f, s)  tcgetattr(f, (zvoid*)s)
-#define STTY(f, s)  tcsetattr(f, TCSAFLUSH, (zvoid*)s)
+#define GTTY(f, s) tcgetattr(f, (zvoid*)s)
+#define STTY(f, s) tcsetattr(f, TCSAFLUSH, (zvoid*)s)
 #else                  /* !HAVE_TERMIOS_H */
 #ifdef USE_SYSV_TERMIO /* Amdahl, Cray, all SysV? */
 #ifdef HAVE_TERMIO_H
@@ -147,10 +147,10 @@
 #include <sys/stream.h>
 #include <sys/ptem.h>
 #endif
-#define sgttyb   termio
+#define sgttyb termio
 #define sg_flags c_lflag
-#define GTTY(f, s)  ioctl(f, TCGETA, (zvoid*)s)
-#define STTY(f, s)  ioctl(f, TCSETAW, (zvoid*)s)
+#define GTTY(f, s) ioctl(f, TCGETA, (zvoid*)s)
+#define STTY(f, s) ioctl(f, TCSETAW, (zvoid*)s)
 #else /* !USE_SYSV_TERMIO */
 #ifndef CMS_MVS
 #if (!defined(MINIX) && !defined(GOT_IOCTL_H))
@@ -179,15 +179,17 @@ char* ttyname OF((int));
  * Small helper: read exactly 1 byte from fd into *ch, retrying on EINTR.
  * Returns 0 on success, -1 on error/EOF.
  * ----------------------------------------------------------------------- */
-static int read_one_byte(int fd, char *ch)
-{
+static int read_one_byte(int fd, char* ch) {
     for (;;) {
         ssize_t n = read(fd, ch, 1);
-        if (n == 1) return 0;            /* success */
-        if (n == 0) return -1;           /* EOF */
+        if (n == 1)
+            return 0; /* success */
+        if (n == 0)
+            return -1; /* EOF */
         if (n < 0) {
-            if (errno == EINTR) continue;/* retry on signal */
-            return -1;                   /* real error */
+            if (errno == EINTR)
+                continue; /* retry on signal */
+            return -1;    /* real error */
         }
     }
 }
@@ -195,8 +197,7 @@ static int read_one_byte(int fd, char *ch)
 #ifndef HAVE_WORKING_GETCH
 #ifdef VMS
 
-static struct dsc$descriptor_s DevDesc =
-    {11, DSC$K_DTYPE_T, DSC$K_CLASS_S, "SYS$COMMAND"};
+static struct dsc$descriptor_s DevDesc = {11, DSC$K_DTYPE_T, DSC$K_CLASS_S, "SYS$COMMAND"};
 /* {dsc$w_length, dsc$b_dtype, dsc$b_class, dsc$a_pointer}; */
 
 /*
@@ -216,11 +217,12 @@ int opt;
         return status;
 
     /* sense mode */
-    status = sys$qiow(0, DevChan, IO$_SENSEMODE, &iosb, 0, 0,
-                      ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1)) return status;
+    status = sys$qiow(0, DevChan, IO$_SENSEMODE, &iosb, 0, 0, ttmode, 8, 0, 0, 0, 0);
+    if (!(status & 1))
+        return status;
     status = iosb[0];
-    if (!(status & 1)) return status;
+    if (!(status & 1))
+        return status;
 
     /* modify NOECHO */
     if (opt == 0)                 /* off */
@@ -229,15 +231,17 @@ int opt;
         ttmode[1] &= ~((unsigned long)TT$M_NOECHO); /* clear NOECHO bit */
 
     /* set mode */
-    status = sys$qiow(0, DevChan, IO$_SETMODE, &iosb, 0, 0,
-                      ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1)) return status;
+    status = sys$qiow(0, DevChan, IO$_SETMODE, &iosb, 0, 0, ttmode, 8, 0, 0, 0, 0);
+    if (!(status & 1))
+        return status;
     status = iosb[0];
-    if (!(status & 1)) return status;
+    if (!(status & 1))
+        return status;
 
     /* cleanup */
     status = sys$dassgn(DevChan);
-    if (!(status & 1)) return status;
+    if (!(status & 1))
+        return status;
 
     return SS$_NORMAL;
 }
@@ -255,9 +259,7 @@ int tt_getch() {
     if (!(status & 1))
         return EOF;
 
-    status = sys$qiow(0, DevChan,
-                      IO$_READVBLK | IO$M_NOECHO | IO$M_NOFILTR,
-                      &iosb, 0, 0, &kbbuf, 1, 0, 0, 0, 0);
+    status = sys$qiow(0, DevChan, IO$_READVBLK | IO$M_NOECHO | IO$M_NOFILTR, &iosb, 0, 0, &kbbuf, 1, 0, 0, 0, 0);
     if ((status & 1) == 1)
         status = iosb[0];
 
@@ -322,23 +324,27 @@ int* tt_cols;
             fprintf(stderr, "ttyio.c screensize():  ws_col = %d\n", wsz.ws_col);
         }
 #endif
-        if (tt_rows) *tt_rows = (int)((wsz.ws_row > 0) ? wsz.ws_row : 24);
-        if (tt_cols) *tt_cols = (int)((wsz.ws_col > 0) ? wsz.ws_col : 80);
+        if (tt_rows)
+            *tt_rows = (int)((wsz.ws_row > 0) ? wsz.ws_row : 24);
+        if (tt_cols)
+            *tt_cols = (int)((wsz.ws_col > 0) ? wsz.ws_col : 80);
         return 0;
-    } else {
+    }
+    else {
 #ifdef DEBUG_WINSZ
         if (firsttime) {
             firsttime = FALSE;
-            fprintf(stderr,
-              "ttyio.c screensize():  ioctl(TIOCGWINSZ) failed\n");
+            fprintf(stderr, "ttyio.c screensize():  ioctl(TIOCGWINSZ) failed\n");
         }
 #endif
-        if (tt_rows) *tt_rows = 24;
-        if (tt_cols) *tt_cols = 80;
+        if (tt_rows)
+            *tt_rows = 24;
+        if (tt_cols)
+            *tt_cols = 80;
         return 1;
     }
 }
-#else /* !TIOCGWINSZ */
+#else  /* !TIOCGWINSZ */
 
 int screensize(tt_rows, tt_cols)
 int* tt_rows;
@@ -350,16 +356,20 @@ int* tt_cols;
     if (tt_rows) {
         envptr = getenv("LINES");
         if (envptr == (char*)NULL || (n = atoi(envptr)) < 5) {
-            *tt_rows = 24; errstat = 1;
-        } else {
+            *tt_rows = 24;
+            errstat = 1;
+        }
+        else {
             *tt_rows = n;
         }
     }
     if (tt_cols) {
         envptr = getenv("COLUMNS");
         if (envptr == (char*)NULL || (n = atoi(envptr)) < 5) {
-            *tt_cols = 80; errstat = 1;
-        } else {
+            *tt_cols = 80;
+            errstat = 1;
+        }
+        else {
             *tt_cols = n;
         }
     }
@@ -385,21 +395,21 @@ int zgetch(__G__ f) __GDEF int f; /* file descriptor from which to read */
     sg = sg_saved;
 
 #if (defined(USE_SYSV_TERMIO) || defined(USE_POSIX_TERMIOS))
-    oldmin        = sg.c_cc[VMIN];
-    oldtim        = sg.c_cc[VTIME];
-    sg.c_cc[VMIN] = 1;         /* single char */
-    sg.c_cc[VTIME]= 0;         /* no timeout */
-    sg.sg_flags  &= ~ICANON;   /* canonical mode off */
+    oldmin = sg.c_cc[VMIN];
+    oldtim = sg.c_cc[VTIME];
+    sg.c_cc[VMIN] = 1;      /* single char */
+    sg.c_cc[VTIME] = 0;     /* no timeout */
+    sg.sg_flags &= ~ICANON; /* canonical mode off */
 #else
-    sg.sg_flags  |= CBREAK;    /* cbreak mode on */
+    sg.sg_flags |= CBREAK; /* cbreak mode on */
 #endif
-    sg.sg_flags  &= ~ECHO;     /* echo off */
+    sg.sg_flags &= ~ECHO; /* echo off */
 
     if (STTY(f, &sg) < 0) {
-        return EOF;            /* can't set mode */
+        return EOF; /* can't set mode */
     }
 
-    GLOBAL(echofd) = f;        /* in case ^C hit (still CBREAK) */
+    GLOBAL(echofd) = f; /* in case ^C hit (still CBREAK) */
 
     if (read_one_byte(f, &c) != 0) {
         /* Restore and fail */
@@ -466,36 +476,38 @@ error : This Info - ZIP tool requires zcrypt 2.7 or later.
 #ifndef WINDLL /* WINDLL does not support a console interface */
 #ifndef QDOS   /* QDOS supplies a variant of this function */
 
-char* getp(__G__ m, p, n)
+                    char* getp(__G__ m, p, n)
 __GDEF
 ZCONST char* m; /* prompt for password */
 char* p;        /* return value: line input */
 int n;          /* bytes available in p[] */
 {
-    char c;      /* one-byte buffer */
-    int i;       /* number of characters input */
-    char* w;     /* warning on retry */
+    char c;  /* one-byte buffer */
+    int i;   /* number of characters input */
+    char* w; /* warning on retry */
 
     w = "";
     do {
-        fputs(w, stderr);      /* warning if back again */
-        fputs(m, stderr);      /* display prompt and flush */
+        fputs(w, stderr); /* warning if back again */
+        fputs(m, stderr); /* display prompt and flush */
         fflush(stderr);
         i = 0;
-        do {                   /* read line, keeping first n characters */
+        do { /* read line, keeping first n characters */
             if ((c = (char)getch()) == '\r')
-                c = '\n';      /* until user hits CR */
+                c = '\n'; /* until user hits CR */
             if (c == 8 || c == 127) {
-                if (i > 0) i--;/* backspace/del */
-            } else if (i < n) {
-                p[i++] = c;    /* truncate past n */
+                if (i > 0)
+                    i--; /* backspace/del */
+            }
+            else if (i < n) {
+                p[i++] = c; /* truncate past n */
             }
         } while (c != '\n');
         PUTC('\n', stderr);
         fflush(stderr);
         w = "(line too long--try again)\n";
     } while (p[i - 1] != '\n');
-    p[i - 1] = 0;              /* terminate at newline */
+    p[i - 1] = 0; /* terminate at newline */
 
     return p;
 }
@@ -521,10 +533,10 @@ ZCONST char* m; /* prompt for password */
 char* p;        /* return value: line input */
 int n;          /* bytes available in p[] */
 {
-    char c = 0;   /* one-byte buffer */
-    int  i;       /* number of characters input */
-    char* w;      /* warning on retry */
-    int  f;       /* fd for tty device */
+    char c = 0; /* one-byte buffer */
+    int i;      /* number of characters input */
+    char* w;    /* warning on retry */
+    int f;      /* fd for tty device */
 
 #ifdef PASSWD_FROM_STDIN
     f = 0; /* stdin */
@@ -547,8 +559,10 @@ int n;          /* bytes available in p[] */
 #endif
                 return NULL;
             }
-            if (i < n) p[i++] = c;
-            if (c == '\n') break;
+            if (i < n)
+                p[i++] = c;
+            if (c == '\n')
+                break;
         }
         echon();
         PUTC('\n', stderr);
@@ -556,7 +570,10 @@ int n;          /* bytes available in p[] */
         w = "(line too long--try again)\n";
     } while (i == 0 || p[i - 1] != '\n');
 
-    if (i > 0) p[i - 1] = 0; else p[0] = 0;
+    if (i > 0)
+        p[i - 1] = 0;
+    else
+        p[0] = 0;
 
 #ifndef PASSWD_FROM_STDIN
     close(f);
@@ -574,10 +591,10 @@ ZCONST char* m; /* prompt for password */
 char* p;        /* return value: line input */
 int n;          /* bytes available in p[] */
 {
-    char c;      /* one-byte buffer */
-    int  i;      /* number of characters input */
-    char* w;     /* warning on retry */
-    FILE* f;     /* SYS$COMMAND */
+    char c;  /* one-byte buffer */
+    int i;   /* number of characters input */
+    char* w; /* warning on retry */
+    FILE* f; /* SYS$COMMAND */
 
 #ifdef PASSWD_FROM_STDIN
     f = stdin;
@@ -589,14 +606,17 @@ int n;          /* bytes available in p[] */
     fflush(stdout);
     w = "";
     do {
-        if (*w) fputs(w, stderr);
+        if (*w)
+            fputs(w, stderr);
         fputs(m, stderr);
         fflush(stderr);
         i = 0;
         echoff(f);
         do {
-            if ((c = (char)getc(f)) == '\r') c = '\n';
-            if (i < n) p[i++] = c;
+            if ((c = (char)getc(f)) == '\r')
+                c = '\n';
+            if (i < n)
+                p[i++] = c;
         } while (c != '\n');
         echon();
         PUTC('\n', stderr);

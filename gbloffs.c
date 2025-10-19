@@ -15,45 +15,44 @@
 #include "crypt.h"
 
 #ifndef REENTRANT
-  Uz_Globs G;
+Uz_Globs G;
 #endif
 
-static int asm_setflag(const char *flagname);
-static int ccp_setflag(const char *flagname);
+static int asm_setflag(const char* flagname);
+static int ccp_setflag(const char* flagname);
 
-static int asm_setflag(const char *flagname)
-{
+static int asm_setflag(const char* flagname) {
     static const char asm_flagdef[] = "   IFND %s\n%-15s EQU     1\n   ENDC\n";
     return printf(asm_flagdef, flagname, flagname);
 }
-static int ccp_setflag(const char *flagname)
-{
+static int ccp_setflag(const char* flagname) {
     static const char ccp_flagdef[] = "#ifndef %s\n#  define %s\n#endif\n";
     return printf(ccp_flagdef, flagname, flagname);
 }
 
 int main(argc, argv)
-    int argc;
-    char **argv;
+int argc;
+char** argv;
 {
 #ifdef REENTRANT
-    Uz_Globs *pG = NULL;
+    Uz_Globs* pG = NULL;
 #endif
-    struct huft *t = NULL;
+    struct huft* t = NULL;
     static const char asm_offsdef[] = "%-15s EQU     %lu\n";
     static const char ccp_offsdef[] = "#define %-15s %lu\n";
 
-    const char *out_format;
-    int (*set_flag)(const char *flagname);
+    const char* out_format;
+    int (*set_flag)(const char* flagname);
     int ccp_select = 0;
 
     if (argc > 1 && argv[1] != NULL && !strcmp(argv[1], "-ccp"))
-      ccp_select = 1;
+        ccp_select = 1;
 
     if (ccp_select) {
         out_format = ccp_offsdef;
         set_flag = ccp_setflag;
-    } else {
+    }
+    else {
         out_format = asm_offsdef;
         set_flag = asm_setflag;
     }
@@ -92,9 +91,9 @@ int main(argc, argv)
 #endif
 #ifdef DLL
     (*set_flag)("DLL");
-# ifdef NO_SLIDE_REDIR
+#ifdef NO_SLIDE_REDIR
     (*set_flag)("NO_SLIDE_REDIR");
-# endif
+#endif
 #endif
 #ifdef USE_DEFLATE64
     (*set_flag)("USE_DEFLATE64");

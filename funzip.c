@@ -10,7 +10,6 @@
 
 #define VERSION "3.95 of 20 January 2009"
 
-
 /* Copyright history:
    - Starting with UnZip 5.41 of 16-April-2000, this source file
      is covered by the Info-Zip LICENSE cited above.
@@ -97,7 +96,6 @@
           23 Mar 02  C. Spieler      changed mask_bits[] type to "unsigned"
  */
 
-
 /*
 
    All funzip does is take a zipfile from stdin and decompress the
@@ -112,7 +110,7 @@
  */
 
 #ifndef FUNZIP
-#  define FUNZIP
+#define FUNZIP
 #endif
 #define UNZIP_INTERNAL
 #include "unzip.h"
@@ -121,132 +119,125 @@
 #include "ttyio.h"
 
 #ifdef EBCDIC
-#  undef EBCDIC                 /* don't need ebcdic[] */
+#undef EBCDIC /* don't need ebcdic[] */
 #endif
 
-#ifndef USE_ZLIB  /* zlib's function is called inflate(), too */
-#  define UZinflate inflate
+#ifndef USE_ZLIB /* zlib's function is called inflate(), too */
+#define UZinflate inflate
 #endif
 
 /* PKZIP header definitions */
-#define ZIPMAG 0x4b50           /* two-byte zip lead-in */
-#define LOCREM 0x0403           /* remaining two bytes in zip signature */
-#define LOCSIG 0x04034b50L      /* full signature */
-#define LOCFLG 4                /* offset of bit flag */
-#define  CRPFLG 1               /*  bit for encrypted entry */
-#define  EXTFLG 8               /*  bit for extended local header */
-#define LOCHOW 6                /* offset of compression method */
-#define LOCTIM 8                /* file mod time (for decryption) */
-#define LOCCRC 12               /* offset of crc */
-#define LOCSIZ 16               /* offset of compressed size */
-#define LOCLEN 20               /* offset of uncompressed length */
-#define LOCFIL 24               /* offset of file name field length */
-#define LOCEXT 26               /* offset of extra field length */
-#define LOCHDR 28               /* size of local header, including LOCREM */
-#define EXTHDR 16               /* size of extended local header, inc sig */
+#define ZIPMAG 0x4b50      /* two-byte zip lead-in */
+#define LOCREM 0x0403      /* remaining two bytes in zip signature */
+#define LOCSIG 0x04034b50L /* full signature */
+#define LOCFLG 4           /* offset of bit flag */
+#define CRPFLG 1           /*  bit for encrypted entry */
+#define EXTFLG 8           /*  bit for extended local header */
+#define LOCHOW 6           /* offset of compression method */
+#define LOCTIM 8           /* file mod time (for decryption) */
+#define LOCCRC 12          /* offset of crc */
+#define LOCSIZ 16          /* offset of compressed size */
+#define LOCLEN 20          /* offset of uncompressed length */
+#define LOCFIL 24          /* offset of file name field length */
+#define LOCEXT 26          /* offset of extra field length */
+#define LOCHDR 28          /* size of local header, including LOCREM */
+#define EXTHDR 16          /* size of extended local header, inc sig */
 
 /* GZIP header definitions */
-#define GZPMAG 0x8b1f           /* two-byte gzip lead-in */
-#define GZPHOW 0                /* offset of method number */
-#define GZPFLG 1                /* offset of gzip flags */
-#define  GZPMUL 2               /* bit for multiple-part gzip file */
-#define  GZPISX 4               /* bit for extra field present */
-#define  GZPISF 8               /* bit for filename present */
-#define  GZPISC 16              /* bit for comment present */
-#define  GZPISE 32              /* bit for encryption */
-#define GZPTIM 2                /* offset of Unix file modification time */
-#define GZPEXF 6                /* offset of extra flags */
-#define GZPCOS 7                /* offset of operating system compressed on */
-#define GZPHDR 8                /* length of minimal gzip header */
+#define GZPMAG 0x8b1f /* two-byte gzip lead-in */
+#define GZPHOW 0      /* offset of method number */
+#define GZPFLG 1      /* offset of gzip flags */
+#define GZPMUL 2      /* bit for multiple-part gzip file */
+#define GZPISX 4      /* bit for extra field present */
+#define GZPISF 8      /* bit for filename present */
+#define GZPISC 16     /* bit for comment present */
+#define GZPISE 32     /* bit for encryption */
+#define GZPTIM 2      /* offset of Unix file modification time */
+#define GZPEXF 6      /* offset of extra flags */
+#define GZPCOS 7      /* offset of operating system compressed on */
+#define GZPHDR 8      /* length of minimal gzip header */
 
 #ifdef THEOS
 /* Macros cause stack overflow in compiler */
-ush SH(uch* p) { return ((ush)(uch)((p)[0]) | ((ush)(uch)((p)[1]) << 8)); }
-ulg LG(uch* p) { return ((ulg)(SH(p)) | ((ulg)(SH((p)+2)) << 16)); }
+ush SH(uch* p) {
+    return ((ush)(uch)((p)[0]) | ((ush)(uch)((p)[1]) << 8));
+}
+ulg LG(uch* p) {
+    return ((ulg)(SH(p)) | ((ulg)(SH((p) + 2)) << 16));
+}
 #else /* !THEOS */
 /* Macros for getting two-byte and four-byte header values */
 #define SH(p) ((ush)(uch)((p)[0]) | ((ush)(uch)((p)[1]) << 8))
-#define LG(p) ((ulg)(SH(p)) | ((ulg)(SH((p)+2)) << 16))
+#define LG(p) ((ulg)(SH(p)) | ((ulg)(SH((p) + 2)) << 16))
 #endif /* ?THEOS */
 
 /* Function prototypes */
-static void err OF((int, char *));
+static void err OF((int, char*));
 #if (defined(USE_DEFLATE64) && defined(__16BIT__))
-static int partflush OF((uch *rawbuf, unsigned w));
+static int partflush OF((uch * rawbuf, unsigned w));
 #endif
-int main OF((int, char **));
+int main OF((int, char**));
 
 /* Globals */
-FILE *out;                      /* output file (*in moved to G struct) */
-ulg outsiz;                     /* total bytes written to out */
-int encrypted;                  /* flag to turn on decryption */
+FILE* out;     /* output file (*in moved to G struct) */
+ulg outsiz;    /* total bytes written to out */
+int encrypted; /* flag to turn on decryption */
 
 /* Masks for inflate.c */
-ZCONST unsigned near mask_bits[17] = {
-    0x0000,
-    0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f, 0x007f, 0x00ff,
-    0x01ff, 0x03ff, 0x07ff, 0x0fff, 0x1fff, 0x3fff, 0x7fff, 0xffff
-};
-
+ZCONST unsigned near mask_bits[17] = {0x0000, 0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f, 0x007f, 0x00ff, 0x01ff, 0x03ff, 0x07ff, 0x0fff, 0x1fff, 0x3fff, 0x7fff, 0xffff};
 
 #ifdef USE_ZLIB
 
-int fillinbuf(__G)
-__GDEF
+int fillinbuf(__G) __GDEF
 /* Fill input buffer for pull-model inflate() in zlib.  Return the number of
  * bytes in inbuf. */
 {
-/*   GRR: check return value from fread(): same as read()?  check errno? */
-  if ((G.incnt = fread((char *)G.inbuf, 1, INBUFSIZ, G.in)) <= 0)
-    return 0;
-  G.inptr = G.inbuf;
+    /*   GRR: check return value from fread(): same as read()?  check errno? */
+    if ((G.incnt = fread((char*)G.inbuf, 1, INBUFSIZ, G.in)) <= 0)
+        return 0;
+    G.inptr = G.inbuf;
 
 #if CRYPT
-  if (encrypted) {
-    uch *p;
-    int n;
+    if (encrypted) {
+        uch* p;
+        int n;
 
-    for (n = G.incnt, p = G.inptr;  n--;  p++)
-      zdecode(*p);
-  }
+        for (n = G.incnt, p = G.inptr; n--; p++)
+            zdecode(*p);
+    }
 #endif /* CRYPT */
 
-  return G.incnt;
-
+    return G.incnt;
 }
 
 #endif /* USE_ZLIB */
 
-
-static void err(n, m)
-int n;
-char *m;
+static void err(n, m) int n;
+char* m;
 /* Exit on error with a message and a code */
 {
-  Info(slide, 1, ((char *)slide, "funzip error: %s\n", m));
-  DESTROYGLOBALS();
-  EXIT(n);
+    Info(slide, 1, ((char*)slide, "funzip error: %s\n", m));
+    DESTROYGLOBALS();
+    EXIT(n);
 }
-
 
 #if (defined(USE_DEFLATE64) && defined(__16BIT__))
 
 static int partflush(rawbuf, w)
-uch *rawbuf;     /* start of buffer area to flush */
-extent w;       /* number of bytes to flush */
+uch* rawbuf; /* start of buffer area to flush */
+extent w;    /* number of bytes to flush */
 {
-  G.crc32val = crc32(G.crc32val, rawbuf, (extent)w);
-  if (fwrite((char *)rawbuf,1,(extent)w,out) != (extent)w && !PIPE_ERROR)
-    err(9, "out of space on stdout");
-  outsiz += w;
-  return 0;
+    G.crc32val = crc32(G.crc32val, rawbuf, (extent)w);
+    if (fwrite((char*)rawbuf, 1, (extent)w, out) != (extent)w && !PIPE_ERROR)
+        err(9, "out of space on stdout");
+    outsiz += w;
+    return 0;
 }
 
-
-int flush(w)    /* used by inflate.c (FLUSH macro) */
-ulg w;          /* number of bytes to flush */
+int flush(w) /* used by inflate.c (FLUSH macro) */
+ulg w;       /* number of bytes to flush */
 {
-    uch *rawbuf;
+    uch* rawbuf;
     int ret;
 
     /* On 16-bit systems (MSDOS, OS/2 1.x), the standard C library functions
@@ -266,282 +257,274 @@ ulg w;          /* number of bytes to flush */
 
 #else /* !(USE_DEFLATE64 && __16BIT__) */
 
-int flush(w)    /* used by inflate.c (FLUSH macro) */
-ulg w;          /* number of bytes to flush */
+int flush(w) /* used by inflate.c (FLUSH macro) */
+ulg w;       /* number of bytes to flush */
 {
-  G.crc32val = crc32(G.crc32val, slide, (extent)w);
-  if (fwrite((char *)slide,1,(extent)w,out) != (extent)w && !PIPE_ERROR)
-    err(9, "out of space on stdout");
-  outsiz += w;
-  return 0;
+    G.crc32val = crc32(G.crc32val, slide, (extent)w);
+    if (fwrite((char*)slide, 1, (extent)w, out) != (extent)w && !PIPE_ERROR)
+        err(9, "out of space on stdout");
+    outsiz += w;
+    return 0;
 }
 
 #endif /* ?(USE_DEFLATE64 && __16BIT__) */
 
-
 int main(argc, argv)
 int argc;
-char **argv;
+char** argv;
 /* Given a zipfile on stdin, decompress the first entry to stdout. */
 {
-  ush n;
-  uch h[LOCHDR];                /* first local header (GZPHDR < LOCHDR) */
-  int g = 0;                    /* true if gzip format */
-  unsigned method = 0;          /* initialized here to shut up gcc warning */
+    ush n;
+    uch h[LOCHDR];       /* first local header (GZPHDR < LOCHDR) */
+    int g = 0;           /* true if gzip format */
+    unsigned method = 0; /* initialized here to shut up gcc warning */
 #if CRYPT
-  char *s = " [-password]";
-  char *p;                      /* password */
-#else /* !CRYPT */
-  char *s = "";
-#endif /* ?CRYPT */
-  CONSTRUCTGLOBALS();
+    char* s = " [-password]";
+    char* p; /* password */
+#else        /* !CRYPT */
+    char* s = "";
+#endif       /* ?CRYPT */
+    CONSTRUCTGLOBALS();
 
-  /* skip executable name */
-  argc--;
-  argv++;
-
-#if CRYPT
-  /* get the command line password, if any */
-  p = (char *)NULL;
-  if (argc && **argv == '-')
-  {
+    /* skip executable name */
     argc--;
-    p = 1 + *argv++;
-  }
+    argv++;
+
+#if CRYPT
+    /* get the command line password, if any */
+    p = (char*)NULL;
+    if (argc && **argv == '-') {
+        argc--;
+        p = 1 + *argv++;
+    }
 #endif /* CRYPT */
 
 #ifdef MALLOC_WORK
-  /* The following expression is a cooked-down simplyfication of the
-     calculation for the work area size of UnZip (see unzip.c).  For
-     fUnZip, the work area does not need to match the granularity
-     of the complex unshrink structures, because it only supports
-     inflation.  But, like in UnZip, the zcalloc() wrapper function
-     is needed for the allocation, to support the 64kByte buffer on
-     16-bit systems.
-   */
-# define UZ_SLIDE_CHUNK (sizeof(shrint)+sizeof(uch)+sizeof(uch))
-# define UZ_NUMOF_CHUNKS (unsigned)( (WSIZE+UZ_SLIDE_CHUNK-1)/UZ_SLIDE_CHUNK )
-  G.area.Slide = (uch *)zcalloc(UZ_NUMOF_CHUNKS, UZ_SLIDE_CHUNK);
-# undef UZ_SLIDE_CHUNK
-# undef UZ_NUMOF_CHUNKS
+    /* The following expression is a cooked-down simplyfication of the
+       calculation for the work area size of UnZip (see unzip.c).  For
+       fUnZip, the work area does not need to match the granularity
+       of the complex unshrink structures, because it only supports
+       inflation.  But, like in UnZip, the zcalloc() wrapper function
+       is needed for the allocation, to support the 64kByte buffer on
+       16-bit systems.
+     */
+#define UZ_SLIDE_CHUNK (sizeof(shrint) + sizeof(uch) + sizeof(uch))
+#define UZ_NUMOF_CHUNKS (unsigned)((WSIZE + UZ_SLIDE_CHUNK - 1) / UZ_SLIDE_CHUNK)
+    G.area.Slide = (uch*)zcalloc(UZ_NUMOF_CHUNKS, UZ_SLIDE_CHUNK);
+#undef UZ_SLIDE_CHUNK
+#undef UZ_NUMOF_CHUNKS
 #endif
 
-  /* if no file argument and stdin not redirected, give the user help */
-  if (argc == 0 && isatty(0))
-  {
-    Info(slide, 1, ((char *)slide, "fUnZip (filter UnZip), version %s\n",
-      VERSION));
-    Info(slide, 1, ((char *)slide, "usage: ... | funzip%s | ...\n", s));
-    Info(slide, 1, ((char *)slide, "       ... | funzip%s > outfile\n", s));
-    Info(slide, 1, ((char *)slide, "       funzip%s infile.zip > outfile\n",s));
-    Info(slide, 1, ((char *)slide, "       funzip%s infile.gz > outfile\n", s));
-    Info(slide, 1, ((char *)slide, "Extracts to stdout the gzip file or first\
+    /* if no file argument and stdin not redirected, give the user help */
+    if (argc == 0 && isatty(0)) {
+        Info(slide, 1, ((char*)slide, "fUnZip (filter UnZip), version %s\n", VERSION));
+        Info(slide, 1, ((char*)slide, "usage: ... | funzip%s | ...\n", s));
+        Info(slide, 1, ((char*)slide, "       ... | funzip%s > outfile\n", s));
+        Info(slide, 1, ((char*)slide, "       funzip%s infile.zip > outfile\n", s));
+        Info(slide, 1, ((char*)slide, "       funzip%s infile.gz > outfile\n", s));
+        Info(slide, 1,
+             ((char*)slide,
+              "Extracts to stdout the gzip file or first\
  zip entry of stdin or the given file.\n"));
-    DESTROYGLOBALS();
-    EXIT(3);
-  }
+        DESTROYGLOBALS();
+        EXIT(3);
+    }
 
-  /* prepare to be a binary filter */
-  if (argc)
-  {
-    if ((G.in = fopen(*argv, FOPR)) == (FILE *)NULL)
-      err(2, "cannot find input file");
-  }
-  else
-  {
+    /* prepare to be a binary filter */
+    if (argc) {
+        if ((G.in = fopen(*argv, FOPR)) == (FILE*)NULL)
+            err(2, "cannot find input file");
+    }
+    else {
 #ifdef DOS_FLX_NLM_OS2_W32
 #if (defined(__HIGHC__) && !defined(FLEXOS))
-    setmode(stdin, _BINARY);
+        setmode(stdin, _BINARY);
 #else
-    setmode(0, O_BINARY);  /* some buggy C libraries require BOTH setmode() */
-#endif                     /*  call AND the fdopen() in binary mode :-( */
+        setmode(0, O_BINARY); /* some buggy C libraries require BOTH setmode() */
+#endif /*  call AND the fdopen() in binary mode :-( */
 #endif /* DOS_FLX_NLM_OS2_W32 */
 
 #ifdef RISCOS
-    G.in = stdin;
+        G.in = stdin;
 #else
-    if ((G.in = fdopen(0, FOPR)) == (FILE *)NULL)
-      err(2, "cannot find stdin");
+        if ((G.in = fdopen(0, FOPR)) == (FILE*)NULL)
+            err(2, "cannot find stdin");
 #endif
-  }
+    }
 
 #ifdef DOS_FLX_H68_NLM_OS2_W32
 #if (defined(__HIGHC__) && !defined(FLEXOS))
-  setmode(stdout, _BINARY);
+    setmode(stdout, _BINARY);
 #else
-  setmode(1, O_BINARY);
+    setmode(1, O_BINARY);
 #endif
 #endif /* DOS_FLX_H68_NLM_OS2_W32 */
 
 #ifdef RISCOS
-  out = stdout;
+    out = stdout;
 #else
-  if ((out = fdopen(1, FOPW)) == (FILE *)NULL)
-    err(2, "cannot write to stdout");
+    if ((out = fdopen(1, FOPW)) == (FILE*)NULL)
+        err(2, "cannot write to stdout");
 #endif
 
-  /* read local header, check validity, and skip name and extra fields */
-  n = getc(G.in);  n |= getc(G.in) << 8;
-  if (n == ZIPMAG)
-  {
-    if (fread((char *)h, 1, LOCHDR, G.in) != LOCHDR || SH(h) != LOCREM)
-      err(3, "invalid zipfile");
-    switch (method = SH(h + LOCHOW)) {
-      case STORED:
-      case DEFLATED:
+    /* read local header, check validity, and skip name and extra fields */
+    n = getc(G.in);
+    n |= getc(G.in) << 8;
+    if (n == ZIPMAG) {
+        if (fread((char*)h, 1, LOCHDR, G.in) != LOCHDR || SH(h) != LOCREM)
+            err(3, "invalid zipfile");
+        switch (method = SH(h + LOCHOW)) {
+            case STORED:
+            case DEFLATED:
 #ifdef USE_DEFLATE64
-      case ENHDEFLATED:
+            case ENHDEFLATED:
 #endif
-        break;
-      default:
-        err(3, "first entry not deflated or stored--cannot unpack");
-        break;
+                break;
+            default:
+                err(3, "first entry not deflated or stored--cannot unpack");
+                break;
+        }
+        for (n = SH(h + LOCFIL); n--;)
+            g = getc(G.in);
+        for (n = SH(h + LOCEXT); n--;)
+            g = getc(G.in);
+        g = 0;
+        encrypted = h[LOCFLG] & CRPFLG;
     }
-    for (n = SH(h + LOCFIL); n--; ) g = getc(G.in);
-    for (n = SH(h + LOCEXT); n--; ) g = getc(G.in);
-    g = 0;
-    encrypted = h[LOCFLG] & CRPFLG;
-  }
-  else if (n == GZPMAG)
-  {
-    if (fread((char *)h, 1, GZPHDR, G.in) != GZPHDR)
-      err(3, "invalid gzip file");
-    if ((method = h[GZPHOW]) != DEFLATED && method != ENHDEFLATED)
-      err(3, "gzip file not deflated");
-    if (h[GZPFLG] & GZPMUL)
-      err(3, "cannot handle multi-part gzip files");
-    if (h[GZPFLG] & GZPISX)
-    {
-      n = getc(G.in);  n |= getc(G.in) << 8;
-      while (n--) g = getc(G.in);
+    else if (n == GZPMAG) {
+        if (fread((char*)h, 1, GZPHDR, G.in) != GZPHDR)
+            err(3, "invalid gzip file");
+        if ((method = h[GZPHOW]) != DEFLATED && method != ENHDEFLATED)
+            err(3, "gzip file not deflated");
+        if (h[GZPFLG] & GZPMUL)
+            err(3, "cannot handle multi-part gzip files");
+        if (h[GZPFLG] & GZPISX) {
+            n = getc(G.in);
+            n |= getc(G.in) << 8;
+            while (n--)
+                g = getc(G.in);
+        }
+        if (h[GZPFLG] & GZPISF)
+            while ((g = getc(G.in)) != 0 && g != EOF)
+                ;
+        if (h[GZPFLG] & GZPISC)
+            while ((g = getc(G.in)) != 0 && g != EOF)
+                ;
+        g = 1;
+        encrypted = h[GZPFLG] & GZPISE;
     }
-    if (h[GZPFLG] & GZPISF)
-      while ((g = getc(G.in)) != 0 && g != EOF) ;
-    if (h[GZPFLG] & GZPISC)
-      while ((g = getc(G.in)) != 0 && g != EOF) ;
-    g = 1;
-    encrypted = h[GZPFLG] & GZPISE;
-  }
-  else
-    err(3, "input not a zip or gzip file");
+    else
+        err(3, "input not a zip or gzip file");
 
-  /* if entry encrypted, decrypt and validate encryption header */
-  if (encrypted)
+    /* if entry encrypted, decrypt and validate encryption header */
+    if (encrypted)
 #if CRYPT
     {
-      ush i, e;
+        ush i, e;
 
-      if (p == (char *)NULL) {
-        if ((p = (char *)malloc(IZ_PWLEN+1)) == (char *)NULL)
-          err(1, "out of memory");
-        else if ((p = getp("Enter password: ", p, IZ_PWLEN+1)) == (char *)NULL)
-          err(1, "no tty to prompt for password");
-      }
-      /* initialize crc_32_tab pointer for decryption */
-      CRC_32_TAB = get_crc_table();
-      /* prepare the decryption keys for extraction and check the password */
-      init_keys(p);
-      for (i = 0; i < RAND_HEAD_LEN; i++)
-        e = NEXTBYTE;
-      if (e != (ush)(h[LOCFLG] & EXTFLG ? h[LOCTIM + 1] : h[LOCCRC + 3]))
-        err(3, "incorrect password for first entry");
+        if (p == (char*)NULL) {
+            if ((p = (char*)malloc(IZ_PWLEN + 1)) == (char*)NULL)
+                err(1, "out of memory");
+            else if ((p = getp("Enter password: ", p, IZ_PWLEN + 1)) == (char*)NULL)
+                err(1, "no tty to prompt for password");
+        }
+        /* initialize crc_32_tab pointer for decryption */
+        CRC_32_TAB = get_crc_table();
+        /* prepare the decryption keys for extraction and check the password */
+        init_keys(p);
+        for (i = 0; i < RAND_HEAD_LEN; i++)
+            e = NEXTBYTE;
+        if (e != (ush)(h[LOCFLG] & EXTFLG ? h[LOCTIM + 1] : h[LOCCRC + 3]))
+            err(3, "incorrect password for first entry");
     }
-#else /* !CRYPT */
-    err(3, "cannot decrypt entry (need to recompile with full crypt.c)");
+#else  /* !CRYPT */
+        err(3, "cannot decrypt entry (need to recompile with full crypt.c)");
 #endif /* ?CRYPT */
 
-  /* prepare output buffer and crc */
-  G.outptr = slide;
-  G.outcnt = 0L;
-  outsiz = 0L;
-  G.crc32val = CRCVAL_INITIAL;
+    /* prepare output buffer and crc */
+    G.outptr = slide;
+    G.outcnt = 0L;
+    outsiz = 0L;
+    G.crc32val = CRCVAL_INITIAL;
 
-  /* decompress */
-  if (g || h[LOCHOW])
-  {                             /* deflated entry */
-    int r;
+    /* decompress */
+    if (g || h[LOCHOW]) { /* deflated entry */
+        int r;
 
 #ifdef USE_ZLIB
-    /* need to allocate and prepare input buffer */
-    if ((G.inbuf = (uch *)malloc(INBUFSIZ)) == (uch *)NULL)
-       err(1, "out of memory");
+        /* need to allocate and prepare input buffer */
+        if ((G.inbuf = (uch*)malloc(INBUFSIZ)) == (uch*)NULL)
+            err(1, "out of memory");
 #endif /* USE_ZLIB */
-    if ((r = UZinflate(__G__ (method == ENHDEFLATED))) != 0) {
-      if (r == 3)
-        err(1, "out of memory");
-      else
-        err(4, "invalid compressed data--format violated");
+        if ((r = UZinflate(__G__(method == ENHDEFLATED))) != 0) {
+            if (r == 3)
+                err(1, "out of memory");
+            else
+                err(4, "invalid compressed data--format violated");
+        }
+        inflate_free(__G);
     }
-    inflate_free(__G);
-  }
-  else
-  {                             /* stored entry */
-    register ulg n;
+    else { /* stored entry */
+        register ulg n;
 
-    n = LG(h + LOCLEN);
+        n = LG(h + LOCLEN);
 #if CRYPT
-    if (n != LG(h + LOCSIZ) - (encrypted ? RAND_HEAD_LEN : 0)) {
+        if (n != LG(h + LOCSIZ) - (encrypted ? RAND_HEAD_LEN : 0)) {
 #else
-    if (n != LG(h + LOCSIZ)) {
+        if (n != LG(h + LOCSIZ)) {
 #endif
-      Info(slide, 1, ((char *)slide, "len %ld, siz %ld\n", n, LG(h + LOCSIZ)));
-      err(4, "invalid compressed data--length mismatch");
-    }
-    while (n--) {
-      ush c = getc(G.in);
+            Info(slide, 1, ((char*)slide, "len %ld, siz %ld\n", n, LG(h + LOCSIZ)));
+            err(4, "invalid compressed data--length mismatch");
+        }
+        while (n--) {
+            ush c = getc(G.in);
 #if CRYPT
-      if (encrypted)
-        zdecode(c);
+            if (encrypted)
+                zdecode(c);
 #endif
-      *G.outptr++ = (uch)c;
+            *G.outptr++ = (uch)c;
 #if (defined(USE_DEFLATE64) && defined(__16BIT__))
-      if (++G.outcnt == (WSIZE>>1))     /* do FlushOutput() */
+            if (++G.outcnt == (WSIZE >> 1)) /* do FlushOutput() */
 #else
-      if (++G.outcnt == WSIZE)    /* do FlushOutput() */
+            if (++G.outcnt == WSIZE) /* do FlushOutput() */
 #endif
-      {
-        G.crc32val = crc32(G.crc32val, slide, (extent)G.outcnt);
-        if (fwrite((char *)slide, 1,(extent)G.outcnt,out) != (extent)G.outcnt
-            && !PIPE_ERROR)
-          err(9, "out of space on stdout");
-        outsiz += G.outcnt;
-        G.outptr = slide;
-        G.outcnt = 0L;
-      }
+            {
+                G.crc32val = crc32(G.crc32val, slide, (extent)G.outcnt);
+                if (fwrite((char*)slide, 1, (extent)G.outcnt, out) != (extent)G.outcnt && !PIPE_ERROR)
+                    err(9, "out of space on stdout");
+                outsiz += G.outcnt;
+                G.outptr = slide;
+                G.outcnt = 0L;
+            }
+        }
     }
-  }
-  if (G.outcnt)   /* flush one last time; no need to reset G.outptr/outcnt */
-  {
-    G.crc32val = crc32(G.crc32val, slide, (extent)G.outcnt);
-    if (fwrite((char *)slide, 1,(extent)G.outcnt,out) != (extent)G.outcnt
-        && !PIPE_ERROR)
-      err(9, "out of space on stdout");
-    outsiz += G.outcnt;
-  }
-  fflush(out);
+    if (G.outcnt) /* flush one last time; no need to reset G.outptr/outcnt */
+    {
+        G.crc32val = crc32(G.crc32val, slide, (extent)G.outcnt);
+        if (fwrite((char*)slide, 1, (extent)G.outcnt, out) != (extent)G.outcnt && !PIPE_ERROR)
+            err(9, "out of space on stdout");
+        outsiz += G.outcnt;
+    }
+    fflush(out);
 
-  /* if extended header, get it */
-  if (g)
-  {
-    if (fread((char *)h + LOCCRC, 1, 8, G.in) != 8)
-      err(3, "gzip file ended prematurely");
-  }
-  else
-    if ((h[LOCFLG] & EXTFLG) &&
-        fread((char *)h + LOCCRC - 4, 1, EXTHDR, G.in) != EXTHDR)
-      err(3, "zipfile ended prematurely");
+    /* if extended header, get it */
+    if (g) {
+        if (fread((char*)h + LOCCRC, 1, 8, G.in) != 8)
+            err(3, "gzip file ended prematurely");
+    }
+    else if ((h[LOCFLG] & EXTFLG) && fread((char*)h + LOCCRC - 4, 1, EXTHDR, G.in) != EXTHDR)
+        err(3, "zipfile ended prematurely");
 
-  /* validate decompression */
-  if (LG(h + LOCCRC) != G.crc32val)
-    err(4, "invalid compressed data--crc error");
-  // if (LG((g ? (h + LOCSIZ) : (h + LOCLEN))) != outsiz)
-  //   err(4, "invalid compressed data--length error");
+    /* validate decompression */
+    if (LG(h + LOCCRC) != G.crc32val)
+        err(4, "invalid compressed data--crc error");
+    // if (LG((g ? (h + LOCSIZ) : (h + LOCLEN))) != outsiz)
+    //   err(4, "invalid compressed data--length error");
 
-  /* check if there are more entries */
-  if (!g && fread((char *)h, 1, 4, G.in) == 4 && LG(h) == LOCSIG)
-    Info(slide, 1, ((char *)slide,
-      "funzip warning: zipfile has more than one entry--rest ignored\n"));
+    /* check if there are more entries */
+    if (!g && fread((char*)h, 1, 4, G.in) == 4 && LG(h) == LOCSIG)
+        Info(slide, 1, ((char*)slide, "funzip warning: zipfile has more than one entry--rest ignored\n"));
 
-  DESTROYGLOBALS();
-  RETURN (0);
+    DESTROYGLOBALS();
+    RETURN(0);
 }
