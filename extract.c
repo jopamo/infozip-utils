@@ -835,149 +835,189 @@ int extract_or_test_files(__G)  /* return PK-type error code */
 /***************************/
 
 static int store_info(__G) /* return 0 if skipping, 1 if OK */
-    __GDEF {
+    __GDEF
+{
+    /* -------------------------
+       Compression support gates
+       ------------------------- */
 #ifdef USE_BZIP2
-#define UNKN_BZ2 (G.crec.compression_method != BZIPPED)
+#  define KNOWN_BZ2   (G.crec.compression_method == BZIPPED)
 #else
-#define UNKN_BZ2 TRUE /* bzip2 unknown */
+#  define KNOWN_BZ2   0
 #endif
 
 #ifdef USE_LZMA
-#define UNKN_LZMA (G.crec.compression_method != LZMAED)
+#  define KNOWN_LZMA  (G.crec.compression_method == LZMAED)
 #else
-#define UNKN_LZMA TRUE /* LZMA unknown */
+#  define KNOWN_LZMA  0
 #endif
 
 #ifdef USE_WAVP
-#define UNKN_WAVP (G.crec.compression_method != WAVPACKED)
+#  define KNOWN_WAVP  (G.crec.compression_method == WAVPACKED)
 #else
-#define UNKN_WAVP TRUE /* WavPack unknown */
+#  define KNOWN_WAVP  0
 #endif
 
 #ifdef USE_PPMD
-#define UNKN_PPMD (G.crec.compression_method != PPMDED)
+#  define KNOWN_PPMD  (G.crec.compression_method == PPMDED)
 #else
-#define UNKN_PPMD TRUE /* PPMd unknown */
+#  define KNOWN_PPMD  0
+#endif
+
+#ifdef USE_DEFLATE64
+#  define KNOWN_DEFLATE_OR_BETTER \
+     (G.crec.compression_method == STORED || \
+      G.crec.compression_method == DEFLATED || \
+      (G.crec.compression_method >= ENHDEFLATED && G.crec.compression_method <= DEFLATE64))
+#else
+#  define KNOWN_DEFLATE_OR_BETTER \
+     (G.crec.compression_method == STORED || \
+      G.crec.compression_method == DEFLATED)
 #endif
 
 #ifdef SFX
-#ifdef USE_DEFLATE64
-#define UNKN_COMPR (G.crec.compression_method != STORED && G.crec.compression_method < DEFLATED && G.crec.compression_method > ENHDEFLATED && UNKN_BZ2 && UNKN_LZMA && UNKN_WAVP && UNKN_PPMD)
+    /* SFX builds support only a narrow set of methods plus optional plugins. */
+#  define METHOD_KNOWN (KNOWN_DEFLATE_OR_BETTER || KNOWN_BZ2 || KNOWN_LZMA || KNOWN_WAVP || KNOWN_PPMD)
 #else
-#define UNKN_COMPR (G.crec.compression_method != STORED && G.crec.compression_method != DEFLATED && UNKN_BZ2 && UNKN_LZMA && UNKN_WAVP && UNKN_PPMD)
-#endif
-#else
-#ifdef COPYRIGHT_CLEAN /* no reduced files */
-#define UNKN_RED (G.crec.compression_method >= REDUCED1 && G.crec.compression_method <= REDUCED4)
-#else
-#define UNKN_RED FALSE /* reducing not unknown */
-#endif
-#ifdef LZW_CLEAN /* no shrunk files */
-#define UNKN_SHR (G.crec.compression_method == SHRUNK)
-#else
-#define UNKN_SHR FALSE /* unshrinking not unknown */
-#endif
-#ifdef USE_DEFLATE64
-#define UNKN_COMPR (UNKN_RED || UNKN_SHR || G.crec.compression_method == TOKENIZED || (G.crec.compression_method > ENHDEFLATED && UNKN_BZ2 && UNKN_LZMA && UNKN_WAVP && UNKN_PPMD))
-#else
-#define UNKN_COMPR (UNKN_RED || UNKN_SHR || G.crec.compression_method == TOKENIZED || (G.crec.compression_method > DEFLATED && UNKN_BZ2 && UNKN_LZMA && UNKN_WAVP && UNKN_PPMD))
-#endif
-#endif
+    /* Full builds may or may not include ancient methods depending on license flags. */
+#  ifdef COPYRIGHT_CLEAN /* no reduced files */
+#    define ALLOW_REDUCED 0
+#  else
+#    define ALLOW_REDUCED 1
+#  endif
+#  ifdef LZW_CLEAN /* no shrunk files */
+#    define ALLOW_SHRUNK  0
+#  else
+#    define ALLOW_SHRUNK  1
+#  endif
 
+#  define IS_REDUCED (G.crec.compression_method >= REDUCED1 && G.crec.compression_method <= REDUCED4)
+#  define IS_SHRUNK  (G.crec.compression_method == SHRUNK)
+#  define IS_TOKEN   (G.crec.compression_method == TOKENIZED)
+
+#  define METHOD_KNOWN ( \
+        (ALLOW_REDUCED && IS_REDUCED) || \
+        (ALLOW_SHRUNK  && IS_SHRUNK)  || \
+        (!IS_TOKEN && KNOWN_DEFLATE_OR_BETTER) || \
+        KNOWN_BZ2 || KNOWN_LZMA || KNOWN_WAVP || KNOWN_PPMD )
+#endif /* !SFX */
+
+    /* Version-gating for bzip2: some builds bumped minimum unzip version */
 #if (defined(USE_BZIP2) && (UNZIP_VERSION < UNZIP_BZ2VERS))
-    int unzvers_support = (UNKN_BZ2 ? UNZIP_VERSION : UNZIP_BZ2VERS);
-#define UNZVERS_SUPPORT unzvers_support
+    {
+        int unzvers_support = (KNOWN_BZ2 ? UNZIP_BZ2VERS : UNZIP_VERSION);
+#       undef  UNZVERS_SUPPORT
+#       define UNZVERS_SUPPORT unzvers_support
+    }
 #else
-#define UNZVERS_SUPPORT UNZIP_VERSION
+#   define UNZVERS_SUPPORT UNZIP_VERSION
 #endif
 
-    /*---------------------------------------------------------------------------
-        Check central directory info for version/compatibility requirements.
-      ---------------------------------------------------------------------------*/
+    /* -------------------------------------------
+       Fill per-entry info and basic mode decisions
+       ------------------------------------------- */
+    G.pInfo->encrypted   = (G.crec.general_purpose_bit_flag & 1) != 0;
+    G.pInfo->ExtLocHdr   = (G.crec.general_purpose_bit_flag & 8) == 8;
+    G.pInfo->textfile    = (G.crec.internal_file_attributes & 1) != 0;
+    G.pInfo->crc         = G.crec.crc32;
+    G.pInfo->compr_size  = G.crec.csize;
+    G.pInfo->uncompr_size= G.crec.ucsize;
 
-    G.pInfo->encrypted = G.crec.general_purpose_bit_flag & 1;        /* bit field */
-    G.pInfo->ExtLocHdr = (G.crec.general_purpose_bit_flag & 8) == 8; /* bit */
-    G.pInfo->textfile = G.crec.internal_file_attributes & 1;         /* bit field */
-    G.pInfo->crc = G.crec.crc32;
-    G.pInfo->compr_size = G.crec.csize;
-    G.pInfo->uncompr_size = G.crec.ucsize;
+    /* textmode: 0=never, 1=auto from header, 2=always */
+    G.pInfo->textmode = (uO.aflag == 2) ? TRUE :
+                        (uO.aflag == 1) ? G.pInfo->textfile : FALSE;
 
-    switch (uO.aflag) {
-        case 0:
-            G.pInfo->textmode = FALSE; /* bit field */
-            break;
-        case 1:
-            G.pInfo->textmode = G.pInfo->textfile; /* auto-convert mode */
-            break;
-        default: /* case 2: */
-            G.pInfo->textmode = TRUE;
-            break;
-    }
-
+    /* --------------------------------
+       Version-needed compatibility gate
+       -------------------------------- */
     if (G.crec.version_needed_to_extract[1] == VMS_) {
+        /* VMS-specific features required */
         if (G.crec.version_needed_to_extract[0] > VMS_UNZIP_VERSION) {
-            if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2)))
-                Info(slide, 0x401,
-                     ((char*)slide, LoadFarString(VersionMsg), FnFilter1(G.filename), "VMS", G.crec.version_needed_to_extract[0] / 10, G.crec.version_needed_to_extract[0] % 10, VMS_UNZIP_VERSION / 10,
-                      VMS_UNZIP_VERSION % 10));
+            if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
+                Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
+                    FnFilter1(G.filename), "VMS",
+                    G.crec.version_needed_to_extract[0] / 10,
+                    G.crec.version_needed_to_extract[0] % 10,
+                    VMS_UNZIP_VERSION / 10, VMS_UNZIP_VERSION % 10));
+            }
             return 0;
         }
-#ifndef VMS                                      /* won't be able to use extra field, but still have data */
-        else if (!uO.tflag && !IS_OVERWRT_ALL) { /* if -o, extract anyway */
-            Info(slide, 0x481, ((char*)slide, LoadFarString(VMSFormatQuery), FnFilter1(G.filename)));
-            fgets(G.answerbuf, sizeof(G.answerbuf), stdin);
-            if ((*G.answerbuf != 'y') && (*G.answerbuf != 'Y'))
+#ifndef VMS
+        /* Non-VMS: ask before extracting when VMS attributes present (unless -o or -t) */
+        if (!uO.tflag && !IS_OVERWRT_ALL) {
+            Info(slide, 0x481, ((char*)slide, LoadFarString(VMSFormatQuery),
+                 FnFilter1(G.filename)));
+            if (fgets(G.answerbuf, sizeof(G.answerbuf), stdin) == NULL ||
+                (*G.answerbuf != 'y' && *G.answerbuf != 'Y'))
                 return 0;
         }
-#endif /* !VMS */
-        /* usual file type:  don't need VMS to extract */
-    }
-    else if (G.crec.version_needed_to_extract[0] > UNZVERS_SUPPORT) {
-        if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2)))
-            Info(slide, 0x401,
-                 ((char*)slide, LoadFarString(VersionMsg), FnFilter1(G.filename), "PK", G.crec.version_needed_to_extract[0] / 10, G.crec.version_needed_to_extract[0] % 10, UNZVERS_SUPPORT / 10,
-                  UNZVERS_SUPPORT % 10));
-        return 0;
+#endif
+    } else {
+        /* Generic PK version-needed */
+        if (G.crec.version_needed_to_extract[0] > UNZVERS_SUPPORT) {
+            if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
+                Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
+                    FnFilter1(G.filename), "PK",
+                    G.crec.version_needed_to_extract[0] / 10,
+                    G.crec.version_needed_to_extract[0] % 10,
+                    UNZVERS_SUPPORT / 10, UNZVERS_SUPPORT % 10));
+            }
+            return 0;
+        }
     }
 
-    if (UNKN_COMPR) {
+    /* -------------------------
+       Unknown/unsupported method
+       ------------------------- */
+    if (!METHOD_KNOWN) {
         if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
 #ifndef SFX
-            unsigned cmpridx;
-
-            if ((cmpridx = find_compr_idx(G.crec.compression_method)) < NUM_METHODS)
-                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName), FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
-            else
+            {
+                unsigned cmpridx = find_compr_idx(G.crec.compression_method);
+                if (cmpridx < NUM_METHODS)
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName),
+                         FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
+                else
 #endif
-                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum), FnFilter1(G.filename), G.crec.compression_method));
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum),
+                         FnFilter1(G.filename), G.crec.compression_method));
+#ifndef SFX
+            }
+#endif
         }
         return 0;
     }
+
 #if (!CRYPT)
     if (G.pInfo->encrypted) {
         if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2)))
-            Info(slide, 0x401, ((char*)slide, LoadFarString(SkipEncrypted), FnFilter1(G.filename)));
+            Info(slide, 0x401, ((char*)slide, LoadFarString(SkipEncrypted),
+                 FnFilter1(G.filename)));
         return 0;
     }
 #endif /* !CRYPT */
 
 #ifndef SFX
-    /* store a copy of the central header filename for later comparison */
-    if ((G.pInfo->cfilname = zfmalloc(strlen(G.filename) + 1)) == NULL) {
-        Info(slide, 0x401, ((char*)slide, LoadFarString(WarnNoMemCFName), FnFilter1(G.filename)));
-    }
-    else
+    /* Keep a copy of the name from the central header for later comparison. */
+    G.pInfo->cfilname = zfmalloc(strlen(G.filename) + 1);
+    if (G.pInfo->cfilname == NULL) {
+        Info(slide, 0x401, ((char*)slide, LoadFarString(WarnNoMemCFName),
+             FnFilter1(G.filename)));
+    } else {
         zfstrcpy(G.pInfo->cfilname, G.filename);
+    }
 #endif /* !SFX */
 
-    /* map whatever file attributes we have into the local format */
-    mapattr(__G); /* GRR:  worry about return value later */
+    /* Map attributes to local format (ignore return for now, matches legacy). */
+    mapattr(__G);
 
+    /* Persist location for later local header seek. */
     G.pInfo->diskstart = G.crec.disk_number_start;
-    G.pInfo->offset = (zoff_t)G.crec.relative_offset_local_header;
-    return 1;
+    G.pInfo->offset    = (zoff_t)G.crec.relative_offset_local_header;
 
+    return 1;
 } /* end function store_info() */
+
 
 #ifndef SFX
 /*******************************/
