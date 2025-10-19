@@ -30,50 +30,83 @@
 #define UNZIP_INTERNAL
 #include "unzip.h"
 
+/* ----- Standard/portable headers we rely on in this block ----- */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
+#if defined(HAVE_SYS_TYPES_H)
+#  include <sys/types.h>
+#endif
+
+/* ------------------------------------------------------------------
+   Directory entry header selection
+
+   Preference order:
+     1) POSIX <dirent.h>
+     2) Historical System V ndir variants
+     3) Historical BSD <sys/dir.h>
+   ------------------------------------------------------------------ */
+
+#if defined(_POSIX_VERSION)      || \
+    defined(__unix__)            || \
+    defined(__APPLE__)           || \
+    defined(__linux__)           || \
+    defined(__CYGWIN__)          || \
+    defined(__MINGW32__)         || \
+    defined(_AIX)                || \
+    defined(__hpux)              || \
+    defined(__sun)               || \
+    defined(__mpexl)             || \
+    defined(__convexc__)         || \
+    defined(BSD4_4)              || \
+    defined(CRAY)
+#  define USE_DIRENT
+#endif
+
 #ifdef SCO_XENIX
-#  define SYSNDIR
-#else  /* SCO Unix, AIX, DNIX, TI SysV, Coherent 4.x, ... */
-#  if defined(__convexc__) || defined(SYSV) || defined(CRAY) || defined(BSD4_4)
-#    define DIRENT
-#  endif
+/* Old SCO Xenix had sys/ndir.h */
+#  define USE_SYS_NDIR
 #endif
-#if defined(_AIX) || defined(__mpexl)
-#  define DIRENT
-#endif
+
 #ifdef COHERENT
 #  if defined(_I386) || (defined(__COHERENT__) && (__COHERENT__ >= 0x420))
-#    define DIRENT
+#    define USE_DIRENT
 #  endif
 #endif
 
-#ifdef _POSIX_VERSION
-#  ifndef DIRENT
-#    define DIRENT
-#  endif
+/* If nothing selected yet but we have POSIX advertised, use dirent. */
+#if defined(_POSIX_VERSION) && !defined(USE_DIRENT)
+#  define USE_DIRENT
 #endif
 
-#ifdef DIRENT
+#ifdef USE_DIRENT
 #  include <dirent.h>
 #else
-#  ifdef SYSV
-#    ifdef SYSNDIR
-#      include <sys/ndir.h>
-#    else
+#  ifdef USE_SYS_NDIR
+#    include <sys/ndir.h>
+#  else
+#    ifdef SYSV
 #      include <ndir.h>
+#    else
+#      ifndef NO_SYSDIR
+#        include <sys/dir.h>
+#      endif
 #    endif
-#  else /* !SYSV */
-#    ifndef NO_SYSDIR
-#      include <sys/dir.h>
-#    endif
-#  endif /* ?SYSV */
+#  endif
+/* Some ancient headers used struct direct; map it if dirent not present. */
 #  ifndef dirent
 #    define dirent direct
 #  endif
-#endif /* ?DIRENT */
+#endif /* USE_DIRENT */
 
+/* ------------------------------------------------------------------ */
+/* Deferred attribute application for directories                      */
+/* ------------------------------------------------------------------ */
 #ifdef SET_DIR_ATTRIB
-typedef struct uxdirattr {      /* struct for holding unix style directory */
-    struct uxdirattr *next;     /*  info until can be sorted and set at end */
+typedef struct uxdirattr {      /* hold unix-style directory info until final */
+    struct uxdirattr *next;
     char *fn;                   /* filename of directory */
     union {
         iztimes t3;             /* mtime, atime, ctime */
@@ -84,7 +117,7 @@ typedef struct uxdirattr {      /* struct for holding unix style directory */
     ulg uidgid[2];
     char fnbuf[1];              /* buffer stub for directory name */
 } uxdirattr;
-#define UxAtt(d)  ((uxdirattr *)d)    /* typecast shortcut */
+#  define UxAtt(d)  ((uxdirattr *)(d))
 #endif /* SET_DIR_ATTRIB */
 
 #ifdef ACORN_FTYPE_NFS
@@ -97,20 +130,16 @@ typedef struct {
   uch execaddr[4];
   uch attr[4];
 } RO_extra_block;
-
 #endif /* ACORN_FTYPE_NFS */
 
-/* static int created_dir;      */      /* used in mapname(), checkdir() */
-/* static int renamed_fullpath; */      /* ditto */
+/* static int created_dir;       */     /* used in mapname(), checkdir() */
+/* static int renamed_fullpath;  */     /* ditto */
 
 static unsigned filtattr OF((__GPRO__ unsigned perms));
 
-
 /*****************************/
-/* Strings used multiple     */
-/* times in unix.c           */
+/* Strings reused in unix.c  */
 /*****************************/
-
 #ifndef MTS
 /* messages of code for setting file/directory attributes */
 static ZCONST char CannotSetItemUidGid[] =
@@ -123,63 +152,77 @@ static ZCONST char CannotSetTimestamps[] =
   " (warning) cannot set modif./access times\n          %s";
 #endif /* !MTS */
 
-
+/* ------------------------------------------------------------------ */
+/* Very old systems without directory library support (AT&T 3B1, etc) */
+/* Provide a minimal emulation so caller code can iterate entries.     */
+/* Guarded by NO_DIR like the original code.                           */
+/* ------------------------------------------------------------------ */
 #ifndef SFX
-#ifdef NO_DIR                  /* for AT&T 3B1 */
+#ifdef NO_DIR
 
-#define opendir(path) fopen(path,"r")
-#define closedir(dir) fclose(dir)
-typedef FILE DIR;
-typedef struct zdir {
+/* Minimal DIR wrapper: keep a FILE* and a single dirent instance */
+typedef struct {
     FILE *dirhandle;
-    struct dirent *entry;
-} DIR
-DIR *opendir OF((ZCONST char *dirspec));
-void closedir OF((DIR *dirp));
-struct dirent *readdir OF((DIR *dirp));
+    struct dirent entry; /* read directly into this */
+} DIR;
 
-DIR *opendir(dirspec)
-    ZCONST char *dirspec;
+/* Prototypes (ANSI) */
+static DIR *opendir(const char *dirspec);
+static void closedir(DIR *dirp);
+static struct dirent *readdir(DIR *dirp);
+
+static DIR *opendir(const char *dirspec)
 {
-    DIR *dirp;
+    DIR *dirp = (DIR *)malloc(sizeof(*dirp));
+    if (!dirp)
+        return NULL;
 
-    if ((dirp = malloc(sizeof(DIR)) != NULL) {
-        if ((dirp->dirhandle = fopen(dirspec, "r")) == NULL) {
-            free(dirp);
-            dirp = NULL;
-        }
+    dirp->dirhandle = fopen(dirspec, "r");
+    if (!dirp->dirhandle) {
+        free(dirp);
+        return NULL;
     }
+    memset(&dirp->entry, 0, sizeof(dirp->entry));
     return dirp;
 }
 
-void closedir(dirp)
-    DIR *dirp;
+static void closedir(DIR *dirp)
 {
-    fclose(dirp->dirhandle);
+    if (!dirp) return;
+    if (dirp->dirhandle)
+        fclose(dirp->dirhandle);
     free(dirp);
 }
 
 /*
- *  Apparently originally by Rich Salz.
- *  Cleaned up and modified by James W. Birdsall.
+ * Apparently originally by Rich Salz.
+ * Cleaned up and modified by James W. Birdsall.
+ * Modernized for safety: clear EOF vs. short-read, return NULL on EOF.
  */
-struct dirent *readdir(dirp)
-    DIR *dirp;
+static struct dirent *readdir(DIR *dirp)
 {
-
-    if (dirp == NULL)
+    if (!dirp || !dirp->dirhandle)
         return NULL;
 
-    for (;;)
-        if (fread(&(dirp->entry), sizeof (struct dirent), 1,
-                  dirp->dirhandle) == 0)
-            return (struct dirent *)NULL;
-        else if ((dirp->entry).d_ino)
-            return &(dirp->entry);
-
-} /* end function readdir() */
+    for (;;) {
+        size_t n = fread(&dirp->entry, sizeof(dirp->entry), 1, dirp->dirhandle);
+        if (n != 1) {
+            /* EOF or read error */
+            return NULL;
+        }
+        /* Original code tested d_ino as a validity marker */
+        /* Keep that behavior if present; otherwise return the record. */
+#if defined(HAVE_STRUCT_DIRENT_D_INO) || defined(d_ino)
+        if (dirp->entry.d_ino)
+            return &dirp->entry;
+#else
+        return &dirp->entry;
+#endif
+    }
+}
 
 #endif /* NO_DIR */
+#endif /* !SFX */
 
 
 /**********************/
@@ -763,129 +806,118 @@ int checkdir(__G__ pathcomp, flag)
  *  MPN_NOMEM       - can't allocate memory for filename buffers
  */
 {
- /* static int rootlen = 0; */  /* length of rootpath */
- /* static char *rootpath;  */  /* user's "extract-to" directory */
- /* static char *buildpath; */  /* full path (so far) to extracted file */
- /* static char *end;       */  /* pointer to end of buildpath ('\0') */
+    /* static int   rootlen;       */  /* length of rootpath */
+    /* static char *rootpath;      */  /* user's "extract-to" directory */
+    /* static char *buildpath;     */  /* full path (so far) to extracted file */
+    /* static char *end;           */  /* pointer to end of buildpath ('\0') */
 
 #   define FN_MASK   7
 #   define FUNCTION  (flag & FN_MASK)
 
-
-
-/*---------------------------------------------------------------------------
-    APPEND_DIR:  append the path component to the path being built and check
-    for its existence.  If doesn't exist and we are creating directories, do
-    so for this one; else signal success or error as appropriate.
-  ---------------------------------------------------------------------------*/
-
+    /*-----------------------------------------------------------------------
+        APPEND_DIR: append a directory component; create it if permitted.
+      -----------------------------------------------------------------------*/
     if (FUNCTION == APPEND_DIR) {
         int too_long = FALSE;
 #ifdef SHORT_NAMES
-        char *old_end = end;
+        char *old_end = G.end;
 #endif
 
         Trace((stderr, "appending dir segment [%s]\n", FnFilter1(pathcomp)));
+
+        /* Append segment */
         while ((*G.end = *pathcomp++) != '\0')
             ++G.end;
+
 #ifdef SHORT_NAMES   /* path components restricted to 14 chars, typically */
-        if ((G.end-old_end) > FILENAME_MAX)  /* GRR:  proper constant? */
+        if ((G.end - old_end) > FILENAME_MAX)          /* GRR: proper constant? */
             *(G.end = old_end + FILENAME_MAX) = '\0';
 #endif
 
-        /* GRR:  could do better check, see if overrunning buffer as we go:
-         * check end-buildpath after each append, set warning variable if
-         * within 20 of FILNAMSIZ; then if var set, do careful check when
-         * appending.  Clear variable when begin new path. */
+        /* Need space for '/', at least one-char name (already appended), and '\0' */
+        if ((G.end - G.buildpath) > (ptrdiff_t)(FILNAMSIZ - 3))
+            too_long = TRUE;
 
-        /* next check: need to append '/', at least one-char name, '\0' */
-        if ((G.end-G.buildpath) > FILNAMSIZ-3)
-            too_long = TRUE;                    /* check if extracting dir? */
         if (SSTAT(G.buildpath, &G.statbuf)) {   /* path doesn't exist */
-            if (!G.create_dirs) { /* told not to create (freshening) */
+            if (!G.create_dirs) {
                 free(G.buildpath);
-                return MPN_INF_SKIP;    /* path doesn't exist: nothing to do */
+                return MPN_INF_SKIP;            /* nothing to do */
             }
             if (too_long) {
                 Info(slide, 1, ((char *)slide,
                   "checkdir error:  path too long: %s\n",
                   FnFilter1(G.buildpath)));
                 free(G.buildpath);
-                /* no room for filenames:  fatal */
                 return MPN_ERR_TOOLONG;
             }
-            if (mkdir(G.buildpath, 0777) == -1) {   /* create the directory */
+            if (mkdir(G.buildpath, 0777) == -1) {
                 Info(slide, 1, ((char *)slide,
-                  "checkdir error:  cannot create %s\n\
-                 %s\n\
-                 unable to process %s.\n",
+                  "checkdir error:  cannot create %s\n"
+                  "                 %s\n"
+                  "                 unable to process %s.\n",
                   FnFilter2(G.buildpath),
                   strerror(errno),
                   FnFilter1(G.filename)));
                 free(G.buildpath);
-                /* path didn't exist, tried to create, failed */
-                return MPN_ERR_SKIP;
+                return MPN_ERR_SKIP;            /* create failed */
             }
             G.created_dir = TRUE;
         } else if (!S_ISDIR(G.statbuf.st_mode)) {
             Info(slide, 1, ((char *)slide,
-              "checkdir error:  %s exists but is not directory\n\
-                 unable to process %s.\n",
+              "checkdir error:  %s exists but is not directory\n"
+              "                 unable to process %s.\n",
               FnFilter2(G.buildpath), FnFilter1(G.filename)));
             free(G.buildpath);
-            /* path existed but wasn't dir */
             return MPN_ERR_SKIP;
         }
+
         if (too_long) {
             Info(slide, 1, ((char *)slide,
               "checkdir error:  path too long: %s\n", FnFilter1(G.buildpath)));
             free(G.buildpath);
-            /* no room for filenames:  fatal */
             return MPN_ERR_TOOLONG;
         }
+
         *G.end++ = '/';
-        *G.end = '\0';
+        *G.end   = '\0';
         Trace((stderr, "buildpath now = [%s]\n", FnFilter1(G.buildpath)));
-        return MPN_OK;
-
-    } /* end if (FUNCTION == APPEND_DIR) */
-
-/*---------------------------------------------------------------------------
-    GETPATH:  copy full path to the string pointed at by pathcomp, and free
-    G.buildpath.
-  ---------------------------------------------------------------------------*/
-
-    if (FUNCTION == GETPATH) {
-        strcpy(pathcomp, G.buildpath);
-        Trace((stderr, "getting and freeing path [%s]\n",
-          FnFilter1(pathcomp)));
-        free(G.buildpath);
-        G.buildpath = G.end = (char *)NULL;
         return MPN_OK;
     }
 
-/*---------------------------------------------------------------------------
-    APPEND_NAME:  assume the path component is the filename; append it and
-    return without checking for existence.
-  ---------------------------------------------------------------------------*/
+    /*-----------------------------------------------------------------------
+        GETPATH: copy full path out to caller and free build buffer.
+      -----------------------------------------------------------------------*/
+    if (FUNCTION == GETPATH) {
+        if (G.buildpath != (char *)NULL) {
+            strcpy(pathcomp, G.buildpath);
+            Trace((stderr, "getting and freeing path [%s]\n", FnFilter1(pathcomp)));
+            free(G.buildpath);
+        }
+        G.buildpath = (char *)NULL;
+        G.end       = (char *)NULL;
+        return MPN_OK;
+    }
 
+    /*-----------------------------------------------------------------------
+        APPEND_NAME: append filename without checking for existence.
+      -----------------------------------------------------------------------*/
     if (FUNCTION == APPEND_NAME) {
 #ifdef SHORT_NAMES
-        char *old_end = end;
+        char *old_end = G.end;
 #endif
 
         Trace((stderr, "appending filename [%s]\n", FnFilter1(pathcomp)));
         while ((*G.end = *pathcomp++) != '\0') {
             ++G.end;
 #ifdef SHORT_NAMES  /* truncate name at 14 characters, typically */
-            if ((G.end-old_end) > FILENAME_MAX)    /* GRR:  proper constant? */
+            if ((G.end - old_end) > FILENAME_MAX)      /* GRR: proper constant? */
                 *(G.end = old_end + FILENAME_MAX) = '\0';
 #endif
-            if ((G.end-G.buildpath) >= FILNAMSIZ) {
+            if ((G.end - G.buildpath) >= (ptrdiff_t)FILNAMSIZ) {
                 *--G.end = '\0';
                 Info(slide, 0x201, ((char *)slide,
-                  "checkdir warning:  path too long; truncating\n\
-                   %s\n                -> %s\n",
+                  "checkdir warning:  path too long; truncating\n"
+                  "                   %s\n                -> %s\n",
                   FnFilter1(G.filename), FnFilter2(G.buildpath)));
                 return MPN_INF_TRUNC;   /* filename truncated */
             }
@@ -895,24 +927,25 @@ int checkdir(__G__ pathcomp, flag)
         return MPN_OK;
     }
 
-/*---------------------------------------------------------------------------
-    INIT:  allocate and initialize buffer space for the file currently being
-    extracted.  If file was renamed with an absolute path, don't prepend the
-    extract-to path.
-  ---------------------------------------------------------------------------*/
-
-/* GRR:  for VMS and TOPS-20, add up to 13 to strlen */
-
+    /*-----------------------------------------------------------------------
+        INIT: allocate and initialize build buffer for current file.
+      -----------------------------------------------------------------------*/
     if (FUNCTION == INIT) {
+        size_t need;
         Trace((stderr, "initializing buildpath to "));
 #ifdef ACORN_FTYPE_NFS
-        if ((G.buildpath = (char *)malloc(strlen(G.filename)+G.rootlen+
-                                          (uO.acorn_nfs_ext ? 5 : 1)))
+        need = strlen(G.filename) + (size_t)G.rootlen + (uO.acorn_nfs_ext ? 5u : 1u);
 #else
-        if ((G.buildpath = (char *)malloc(strlen(G.filename)+G.rootlen+1))
+        need = strlen(G.filename) + (size_t)G.rootlen + 1u;
 #endif
-            == (char *)NULL)
+        /* Simple wrap guard: if addition overflowed, need rolled over. */
+        if (need < (size_t)G.rootlen + 1u)
             return MPN_NOMEM;
+
+        G.buildpath = (char *)malloc(need);
+        if (G.buildpath == (char *)NULL)
+            return MPN_NOMEM;
+
         if ((G.rootlen > 0) && !G.renamed_fullpath) {
             strcpy(G.buildpath, G.rootpath);
             G.end = G.buildpath + G.rootlen;
@@ -924,74 +957,80 @@ int checkdir(__G__ pathcomp, flag)
         return MPN_OK;
     }
 
-/*---------------------------------------------------------------------------
-    ROOT:  if appropriate, store the path in rootpath and create it if
-    necessary; else assume it's a zipfile member and return.  This path
-    segment gets used in extracting all members from every zipfile specified
-    on the command line.
-  ---------------------------------------------------------------------------*/
-
+    /*-----------------------------------------------------------------------
+        ROOT: set/validate/create rootpath used for all subsequent members.
+      -----------------------------------------------------------------------*/
 #if (!defined(SFX) || defined(SFX_EXDIR))
     if (FUNCTION == ROOT) {
-        Trace((stderr, "initializing root path to [%s]\n",
-          FnFilter1(pathcomp)));
+        Trace((stderr, "initializing root path to [%s]\n", FnFilter1(pathcomp)));
+
         if (pathcomp == (char *)NULL) {
             G.rootlen = 0;
             return MPN_OK;
         }
-        if (G.rootlen > 0)      /* rootpath was already set, nothing to do */
+        if (G.rootlen > 0)      /* already set; nothing to do */
             return MPN_OK;
-        if ((G.rootlen = strlen(pathcomp)) > 0) {
+
+        G.rootlen = (int)strlen(pathcomp);
+        if (G.rootlen > 0) {
             char *tmproot;
 
-            if ((tmproot = (char *)malloc(G.rootlen+2)) == (char *)NULL) {
+            /* +2 for possible '/' and trailing '\0' */
+            tmproot = (char *)malloc((size_t)G.rootlen + 2u);
+            if (tmproot == (char *)NULL) {
                 G.rootlen = 0;
                 return MPN_NOMEM;
             }
+
             strcpy(tmproot, pathcomp);
-            if (tmproot[G.rootlen-1] == '/') {
+            if (tmproot[G.rootlen - 1] == '/') {
                 tmproot[--G.rootlen] = '\0';
             }
-            if (G.rootlen > 0 && (SSTAT(tmproot, &G.statbuf) ||
-                                  !S_ISDIR(G.statbuf.st_mode)))
-            {   /* path does not exist */
+
+            if (G.rootlen > 0 &&
+                (SSTAT(tmproot, &G.statbuf) || !S_ISDIR(G.statbuf.st_mode)))
+            {   /* path does not exist or exists but not a dir */
                 if (!G.create_dirs /* || iswild(tmproot) */ ) {
                     free(tmproot);
                     G.rootlen = 0;
-                    /* skip (or treat as stored file) */
-                    return MPN_INF_SKIP;
+                    return MPN_INF_SKIP;    /* skip (or treat as stored file) */
                 }
-                /* create the directory (could add loop here scanning tmproot
-                 * to create more than one level, but why really necessary?) */
                 if (mkdir(tmproot, 0777) == -1) {
                     Info(slide, 1, ((char *)slide,
-                      "checkdir:  cannot create extraction directory: %s\n\
-           %s\n",
+                      "checkdir:  cannot create extraction directory: %s\n"
+                      "           %s\n",
                       FnFilter1(tmproot), strerror(errno)));
                     free(tmproot);
                     G.rootlen = 0;
-                    /* path didn't exist, tried to create, and failed: */
-                    /* file exists, or 2+ subdir levels required */
-                    return MPN_ERR_SKIP;
+                    return MPN_ERR_SKIP;    /* create failed */
                 }
             }
+
+            /* Ensure trailing '/' */
             tmproot[G.rootlen++] = '/';
-            tmproot[G.rootlen] = '\0';
-            if ((G.rootpath = (char *)realloc(tmproot, G.rootlen+1)) == NULL) {
-                free(tmproot);
-                G.rootlen = 0;
-                return MPN_NOMEM;
+            tmproot[G.rootlen]   = '\0';
+
+            /* Commit realloc via a temporary to avoid use-after-free patterns. */
+            {
+                char *newroot = (char *)realloc(tmproot, (size_t)G.rootlen + 1u);
+                if (newroot == (char *)NULL) {
+                    /* On failure, tmproot is still valid. Free and bail. */
+                    free(tmproot);
+                    G.rootlen = 0;
+                    return MPN_NOMEM;
+                }
+                G.rootpath = newroot;
             }
+
             Trace((stderr, "rootpath now = [%s]\n", FnFilter1(G.rootpath)));
         }
         return MPN_OK;
     }
 #endif /* !SFX || SFX_EXDIR */
 
-/*---------------------------------------------------------------------------
-    END:  free rootpath, immediately prior to program exit.
-  ---------------------------------------------------------------------------*/
-
+    /*-----------------------------------------------------------------------
+        END: free rootpath just before exit.
+      -----------------------------------------------------------------------*/
     if (FUNCTION == END) {
         Trace((stderr, "freeing rootpath\n"));
         if (G.rootlen > 0) {
@@ -1002,12 +1041,7 @@ int checkdir(__G__ pathcomp, flag)
     }
 
     return MPN_INVALID; /* should never reach */
-
-} /* end function checkdir() */
-
-
-
-
+}
 
 #ifdef NO_MKDIR
 
