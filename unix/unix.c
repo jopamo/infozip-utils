@@ -233,119 +233,118 @@ char *do_wild(__G__ wildspec)
     __GDEF
     ZCONST char *wildspec;  /* only used first time on a given dir */
 {
-/* these statics are now declared in SYSTEM_SPECIFIC_GLOBALS in unxcfg.h:
-    static DIR *wild_dir = (DIR *)NULL;
-    static ZCONST char *wildname;
-    static char *dirname, matchname[FILNAMSIZ];
-    static int notfirstcall=FALSE, have_dirname, dirnamelen;
-*/
     struct dirent *file;
 
-    /* Even when we're just returning wildspec, we *always* do so in
-     * matchname[]--calling routine is allowed to append four characters
-     * to the returned string, and wildspec may be a pointer to argv[].
-     */
-    if (!G.notfirstcall) {  /* first call:  must initialize everything */
+    /* Always return within G.matchname so callers can safely append chars. */
+    if (!G.notfirstcall) {  /* first call: initialize scanner state */
         G.notfirstcall = TRUE;
 
+        /* No wildcards?  Just return the spec itself (bounded). */
         if (!iswild(wildspec)) {
-            strncpy(G.matchname, wildspec, FILNAMSIZ);
-            G.matchname[FILNAMSIZ-1] = '\0';
+            (void)snprintf(G.matchname, FILNAMSIZ, "%s", wildspec);
             G.have_dirname = FALSE;
-            G.wild_dir = NULL;
+            G.wild_dir = (zvoid *)NULL;
             return G.matchname;
         }
 
-        /* break the wildspec into a directory part and a wildcard filename */
-        if ((G.wildname = (ZCONST char *)strrchr(wildspec, '/')) == NULL) {
-            G.dirname = ".";
-            G.dirnamelen = 1;
+        /* Split wildspec into dirname and wildcard tail. */
+        G.wildname = (ZCONST char *)strrchr(wildspec, '/');
+        if (G.wildname == NULL) {
+            G.dirname     = ".";
+            G.dirnamelen  = 1;
             G.have_dirname = FALSE;
-            G.wildname = wildspec;
+            G.wildname    = wildspec;
         } else {
-            ++G.wildname;     /* point at character after '/' */
-            G.dirnamelen = G.wildname - wildspec;
-            if ((G.dirname = (char *)malloc(G.dirnamelen+1)) == (char *)NULL) {
+            ++G.wildname;  /* char after '/' */
+            G.dirnamelen = (int)(G.wildname - wildspec);
+            G.dirname = (char *)malloc((size_t)G.dirnamelen + 1u);
+            if (G.dirname == (char *)NULL) {
                 Info(slide, 0x201, ((char *)slide,
-                  "warning:  cannot allocate wildcard buffers\n"));
-                strncpy(G.matchname, wildspec, FILNAMSIZ);
-                G.matchname[FILNAMSIZ-1] = '\0';
-                return G.matchname; /* but maybe filespec was not a wildcard */
+                    "warning:  cannot allocate wildcard buffers\n"));
+                (void)snprintf(G.matchname, FILNAMSIZ, "%s", wildspec);
+                /* Maybe spec wasn’t actually wild; return it verbatim. */
+                return G.matchname;
             }
-            strncpy(G.dirname, wildspec, G.dirnamelen);
-            G.dirname[G.dirnamelen] = '\0';   /* terminate for strcpy below */
+            memcpy(G.dirname, wildspec, (size_t)G.dirnamelen);
+            G.dirname[G.dirnamelen] = '\0';
             G.have_dirname = TRUE;
         }
 
-        if ((G.wild_dir = (zvoid *)opendir(G.dirname)) != (zvoid *)NULL) {
-            while ((file = readdir((DIR *)G.wild_dir)) !=
-                   (struct dirent *)NULL) {
-                Trace((stderr, "do_wild:  readdir returns %s\n",
-                  FnFilter1(file->d_name)));
-                if (file->d_name[0] == '.' && G.wildname[0] != '.')
-                    continue; /* Unix:  '*' and '?' do not match leading dot */
-                if (match(file->d_name, G.wildname, 0 WISEP) &&/*0=case sens.*/
-                    /* skip "." and ".." directory entries */
-                    strcmp(file->d_name, ".") && strcmp(file->d_name, "..")) {
-                    Trace((stderr, "do_wild:  match() succeeds\n"));
-                    if (G.have_dirname) {
-                        strcpy(G.matchname, G.dirname);
-                        strcpy(G.matchname+G.dirnamelen, file->d_name);
-                    } else
-                        strcpy(G.matchname, file->d_name);
-                    return G.matchname;
-                }
-            }
-            /* if we get to here directory is exhausted, so close it */
-            closedir((DIR *)G.wild_dir);
-            G.wild_dir = (zvoid *)NULL;
+        /* Open directory (or leave NULL if it fails). */
+        G.wild_dir = (zvoid *)opendir(G.dirname);
+        if (G.wild_dir == (zvoid *)NULL) {
+            Trace((stderr, "do_wild:  opendir(%s) returns NULL\n",
+                   FnFilter1(G.dirname)));
+            /* Return raw spec so non-wild readable file can still work. */
+            (void)snprintf(G.matchname, FILNAMSIZ, "%s", wildspec);
+            return G.matchname;
         }
-        Trace((stderr, "do_wild:  opendir(%s) returns NULL\n",
-          FnFilter1(G.dirname)));
 
-        /* return the raw wildspec in case that works (e.g., directory not
-         * searchable, but filespec was not wild and file is readable) */
-        strncpy(G.matchname, wildspec, FILNAMSIZ);
-        G.matchname[FILNAMSIZ-1] = '\0';
-        return G.matchname;
+        /* If we have a dirname, pre-copy it into match buffer once. */
+        if (G.have_dirname) {
+            size_t n = (size_t)G.dirnamelen;
+            if (n >= FILNAMSIZ) n = FILNAMSIZ - 1;
+            memcpy(G.matchname, G.dirname, n);
+            G.matchname[n] = '\0';
+        }
     }
 
-    /* last time through, might have failed opendir but returned raw wildspec */
+    /* If directory was never opened, we previously returned the raw spec.
+       Nothing left to do—clean up and signal end. */
     if ((DIR *)G.wild_dir == (DIR *)NULL) {
-        G.notfirstcall = FALSE; /* nothing left--reset for new wildspec */
-        if (G.have_dirname)
+        G.notfirstcall = FALSE;
+        if (G.have_dirname && G.dirname != NULL && G.dirname != (char *)".")
             free(G.dirname);
+        G.have_dirname = FALSE;
+        G.dirname = NULL;
         return (char *)NULL;
     }
 
-    /* If we've gotten this far, we've read and matched at least one entry
-     * successfully (in a previous call), so dirname has been copied into
-     * matchname already.
-     */
+    /* Enumerate entries to find the next match. */
     while ((file = readdir((DIR *)G.wild_dir)) != (struct dirent *)NULL) {
-        Trace((stderr, "do_wild:  readdir returns %s\n",
-          FnFilter1(file->d_name)));
+        Trace((stderr, "do_wild:  readdir returns %s\n", FnFilter1(file->d_name)));
+
+        /* Unix rule: '*' and '?' do not match a leading dot unless pattern starts with dot. */
         if (file->d_name[0] == '.' && G.wildname[0] != '.')
-            continue;   /* Unix:  '*' and '?' do not match leading dot */
-        if (match(file->d_name, G.wildname, 0 WISEP)) { /* 0 == case sens. */
+            continue;
+
+        /* Skip "." and ".." explicitly. */
+        if (strcmp(file->d_name, ".") == 0 || strcmp(file->d_name, "..") == 0)
+            continue;
+
+        if (match(file->d_name, G.wildname, 0 WISEP)) { /* 0 == case sensitive */
             Trace((stderr, "do_wild:  match() succeeds\n"));
+
             if (G.have_dirname) {
-                /* strcpy(G.matchname, G.dirname); */
-                strcpy(G.matchname+G.dirnamelen, file->d_name);
-            } else
-                strcpy(G.matchname, file->d_name);
+                /* Compose dirname + filename; guard against overflow. */
+                size_t base = (size_t)G.dirnamelen;
+                size_t need = base + strlen(file->d_name) + 1u;
+                if (need > (size_t)FILNAMSIZ) {
+                    /* Name would overflow our contract; skip it. */
+                    Trace((stderr, "do_wild:  skip too-long path\n"));
+                    continue;
+                }
+                memcpy(G.matchname + base, file->d_name, strlen(file->d_name) + 1u);
+            } else {
+                (void)snprintf(G.matchname, FILNAMSIZ, "%s", file->d_name);
+            }
             return G.matchname;
         }
     }
 
-    closedir((DIR *)G.wild_dir);  /* at least one entry read; nothing left */
+    /* Exhausted directory: close and reset state. */
+    closedir((DIR *)G.wild_dir);
     G.wild_dir = (zvoid *)NULL;
-    G.notfirstcall = FALSE;       /* reset for new wildspec */
-    if (G.have_dirname)
-        free(G.dirname);
-    return (char *)NULL;
+    G.notfirstcall = FALSE;
 
+    if (G.have_dirname && G.dirname != NULL && G.dirname != (char *)".")
+        free(G.dirname);
+    G.have_dirname = FALSE;
+    G.dirname = NULL;
+
+    return (char *)NULL;
 } /* end function do_wild() */
+
 
 #endif /* !SFX */
 
@@ -353,37 +352,34 @@ char *do_wild(__G__ wildspec)
 
 
 #ifndef S_ISUID
-# define S_ISUID        0004000 /* set user id on execution */
+#  define S_ISUID  0004000  /* set user id on execution */
 #endif
 #ifndef S_ISGID
-# define S_ISGID        0002000 /* set group id on execution */
+#  define S_ISGID  0002000  /* set group id on execution */
 #endif
 #ifndef S_ISVTX
-# define S_ISVTX        0001000 /* save swapped text even after use */
+#  define S_ISVTX  0001000  /* sticky bit */
+#endif
+
+/* Consolidate the “security-sensitive” permission bits we may strip. */
+#ifndef SECURE_MODE_BITS
+#  define SECURE_MODE_BITS (S_ISUID | S_ISGID | S_ISVTX)
 #endif
 
 /************************/
 /*  Function filtattr() */
 /************************/
-/* This is used to clear or keep the SUID and SGID bits on file permissions.
- * It's possible that a file in an archive could have one of these bits set
- * and, unknown to the person unzipping, could allow others to execute the
- * file as the user or group.  The new option -K bypasses this check.
+/* Clear SUID/SGID/Sticky unless -K is used.
+ * We do NOT truncate the mode to 16 bits: some systems use a wider mode_t.
  */
-
-static unsigned filtattr(__G__ perms)
+static unsigned filtattr(__G__ unsigned perms)
     __GDEF
-    unsigned perms;
 {
-    /* keep setuid/setgid/tacky perms? */
-    if (!uO.K_flag)
-        perms &= ~(S_ISUID | S_ISGID | S_ISVTX);
-
-    return (0xffff & perms);
-} /* end function filtattr() */
-
-
-
+    if (!uO.K_flag) {
+        perms &= ~((unsigned)SECURE_MODE_BITS);
+    }
+    return perms; /* leave all other mode bits unchanged */
+}
 
 
 /**********************/
