@@ -864,16 +864,23 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
 #  define KNOWN_PPMD  0
 #endif
 
-#ifdef USE_DEFLATE64
-#  define KNOWN_DEFLATE_OR_BETTER \
-     (G.crec.compression_method == STORED || \
-      G.crec.compression_method == DEFLATED || \
-      (G.crec.compression_method >= ENHDEFLATED && G.crec.compression_method <= DEFLATE64))
+/* Avoid undefined-symbol build breaks: gate optional methods. */
+#ifdef ENHDEFLATED
+#  define IS_ENHDEFL   (G.crec.compression_method == ENHDEFLATED)
 #else
-#  define KNOWN_DEFLATE_OR_BETTER \
-     (G.crec.compression_method == STORED || \
-      G.crec.compression_method == DEFLATED)
+#  define IS_ENHDEFL   0
 #endif
+
+#ifdef DEFLATE64
+#  define IS_DEFLATE64 (G.crec.compression_method == DEFLATE64)
+#else
+#  define IS_DEFLATE64 0
+#endif
+
+#define KNOWN_DEFLATE_OR_BETTER \
+    (G.crec.compression_method == STORED   || \
+     G.crec.compression_method == DEFLATED || \
+     IS_ENHDEFL || IS_DEFLATE64)
 
 #ifdef SFX
     /* SFX builds: core set plus optional plugins. */
@@ -926,17 +933,42 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
         /* --------------------------------
            Version-needed compatibility gate
            -------------------------------- */
-        if (G.crec.version_needed_to_extract[0] > unzvers_support) {
-            if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
-                Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
-                    FnFilter1(G.filename), "PK",
-                    G.crec.version_needed_to_extract[0] / 10,
-                    G.crec.version_needed_to_extract[0] % 10,
-                    unzvers_support / 10, unzvers_support % 10));
+        if (G.crec.version_needed_to_extract[1] == VMS_) {
+            /* VMS-specific features required */
+            if (G.crec.version_needed_to_extract[0] > VMS_UNZIP_VERSION) {
+                if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
+                        FnFilter1(G.filename), "VMS",
+                        G.crec.version_needed_to_extract[0] / 10,
+                        G.crec.version_needed_to_extract[0] % 10,
+                        VMS_UNZIP_VERSION / 10, VMS_UNZIP_VERSION % 10));
+                }
+                return 0;
             }
-            return 0;
+#ifndef VMS
+            /* Non-VMS: ask before extracting when VMS attributes present (unless -o or -t) */
+            if (!uO.tflag && !IS_OVERWRT_ALL) {
+                Info(slide, 0x481, ((char*)slide, LoadFarString(VMSFormatQuery),
+                     FnFilter1(G.filename)));
+                if (fgets(G.answerbuf, sizeof(G.answerbuf), stdin) == NULL ||
+                    (*G.answerbuf != 'y' && *G.answerbuf != 'Y')))
+                    return 0;
+            }
+#endif
+        } else {
+            /* Generic PK version-needed */
+            if (G.crec.version_needed_to_extract[0] > unzvers_support) {
+                if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
+                        FnFilter1(G.filename), "PK",
+                        G.crec.version_needed_to_extract[0] / 10,
+                        G.crec.version_needed_to_extract[0] % 10,
+                        unzvers_support / 10, unzvers_support % 10));
+                }
+                return 0;
+            }
         }
-    }
+    } /* end local scope for unzvers_support */
 
     /* -------------------------
        Unknown/unsupported method
@@ -944,14 +976,18 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
     if (!METHOD_KNOWN) {
         if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
 #ifndef SFX
-            unsigned cmpridx = find_compr_idx(G.crec.compression_method);
-            if (cmpridx < NUM_METHODS)
-                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName),
-                     FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
-            else
+            {
+                unsigned cmpridx = find_compr_idx(G.crec.compression_method);
+                if (cmpridx < NUM_METHODS)
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName),
+                         FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
+                else
 #endif
-                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum),
-                     FnFilter1(G.filename), G.crec.compression_method));
+                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum),
+                         FnFilter1(G.filename), G.crec.compression_method));
+#ifndef SFX
+            }
+#endif
         }
         return 0;
     }
@@ -976,7 +1012,7 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
     }
 #endif /* !SFX */
 
-    /* Map attributes to local (Unix) format. */
+    /* Map attributes to local format (ignore return for now, matches legacy). */
     mapattr(__G);
 
     /* Persist location for later local header seek. */
@@ -985,6 +1021,7 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
 
     return 1;
 } /* end function store_info() */
+
 
 #ifndef SFX
 /*******************************/
