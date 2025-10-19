@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <utime.h>
 
 #if defined(HAVE_SYS_TYPES_H)
 #  include <sys/types.h>
@@ -387,21 +388,21 @@ int mapattr(__G)
     int r;
     ulg tmp = G.crec.external_file_attributes;
 
-    G.pInfo->file_attr = 0;
-    /* initialized to 0 for check in "default" branch below... */
+    G.pInfo->file_attr = 0;   /* initialized to 0 for check in default branch below */
 
     switch (G.pInfo->hostnum) {
         case AMIGA_:
-            tmp = (unsigned)(tmp>>17 & 7);   /* Amiga RWE bits */
-            G.pInfo->file_attr = (unsigned)(tmp<<6 | tmp<<3 | tmp);
+            tmp = (unsigned)(tmp >> 17 & 7);   /* Amiga RWE bits */
+            G.pInfo->file_attr = (unsigned)(tmp << 6 | tmp << 3 | tmp);
             break;
+
         case THEOS_:
             tmp &= 0xF1FFFFFFL;
             if ((tmp & 0xF0000000L) != 0x40000000L)
                 tmp &= 0x01FFFFFFL;     /* not a dir, mask all ftype bits */
             else
                 tmp &= 0x41FFFFFFL;     /* leave directory bit as set */
-            /* fall through! */
+            /* fall through */
         case UNIX_:
         case VMS_:
         case ACORN_:
@@ -413,116 +414,86 @@ int mapattr(__G)
             r = FALSE;
             G.pInfo->file_attr = (unsigned)(tmp >> 16);
             if (G.pInfo->file_attr == 0 && G.extra_field) {
-                /* Some (non-Info-ZIP) implementations of Zip for Unix and
-                 * VMS (and probably others ??) leave 0 in the upper 16-bit
-                 * part of the external_file_attributes field. Instead, they
-                 * store file permission attributes in some extra field.
-                 * As a work-around, we search for the presence of one of
-                 * these extra fields and fall back to the MSDOS compatible
-                 * part of external_file_attributes if one of the known
-                 * e.f. types has been detected.
-                 * Later, we might implement extraction of the permission
-                 * bits from the VMS extra field. But for now, the work-around
-                 * should be sufficient to provide "readable" extracted files.
-                 * (For ASI Unix e.f., an experimental remap of the e.f.
-                 * mode value IS already provided!)
-                 */
+                /* Some implementations store perms in extra fields instead of upper 16 bits */
                 ush ebID;
                 unsigned ebLen;
                 uch *ef = G.extra_field;
                 unsigned ef_len = G.crec.extra_field_length;
 
                 while (!r && ef_len >= EB_HEADSIZE) {
-                    ebID = makeword(ef);
-                    ebLen = (unsigned)makeword(ef+EB_LEN);
+                    ebID  = makeword(ef);
+                    ebLen = (unsigned)makeword(ef + EB_LEN);
                     if (ebLen > (ef_len - EB_HEADSIZE))
-                        /* discoverd some e.f. inconsistency! */
-                        break;
+                        break;  /* discovered extra field inconsistency */
+
                     switch (ebID) {
                       case EF_ASIUNIX:
-                        if (ebLen >= (EB_ASI_MODE+2)) {
+                        if (ebLen >= (EB_ASI_MODE + 2)) {
                             G.pInfo->file_attr =
-                              (unsigned)makeword(ef+(EB_HEADSIZE+EB_ASI_MODE));
-                            /* force stop of loop: */
+                                (unsigned)makeword(ef + (EB_HEADSIZE + EB_ASI_MODE));
+                            /* force stop of loop */
                             ef_len = (ebLen + EB_HEADSIZE);
                             break;
                         }
-                        /* else: fall through! */
+                        /* fall through */
                       case EF_PKVMS:
-                        /* "found nondecypherable e.f. with perm. attr" */
+                        /* found non-decypherable extra field with perm attributes */
                         r = TRUE;
                       default:
                         break;
                     }
                     ef_len -= (ebLen + EB_HEADSIZE);
-                    ef += (ebLen + EB_HEADSIZE);
+                    ef     += (ebLen + EB_HEADSIZE);
                 }
             }
             if (!r) {
 #ifdef SYMLINKS
-                /* Check if the file is a (POSIX-compatible) symbolic link.
-                 * We restrict symlink support to those "made-by" hosts that
-                 * are known to support symbolic links.
-                 */
+                /* Check if the file is a POSIX symlink for hosts that support symlinks */
                 G.pInfo->symlink = S_ISLNK(G.pInfo->file_attr) &&
                                    SYMLINK_HOST(G.pInfo->hostnum);
 #endif
                 return 0;
             }
-            /* fall through! */
-        /* all remaining cases:  expand MSDOS read-only bit into write perms */
+            /* fall through */
+
+        /* all remaining cases: expand DOS read-only bit into write perms */
         case FS_FAT_:
-            /* PKWARE's PKZip for Unix marks entries as FS_FAT_, but stores the
-             * Unix attributes in the upper 16 bits of the external attributes
-             * field, just like Info-ZIP's Zip for Unix.  We try to use that
-             * value, after a check for consistency with the MSDOS attribute
-             * bits (see below).
-             */
+            /* PKZip for Unix may mark FS_FAT_ but store Unix perms in upper 16 bits */
             G.pInfo->file_attr = (unsigned)(tmp >> 16);
-            /* fall through! */
+            /* fall through */
+
         case FS_HPFS_:
         case FS_NTFS_:
         case MAC_:
         case TOPS20_:
         default:
-            /* Ensure that DOS subdir bit is set when the entry's name ends
-             * in a '/'.  Some third-party Zip programs fail to set the subdir
-             * bit for directory entries.
-             */
+            /* ensure DOS subdir bit is set when name ends with '/' */
             if ((tmp & 0x10) == 0) {
                 extent fnlen = strlen(G.filename);
-                if (fnlen > 0 && G.filename[fnlen-1] == '/')
+                if (fnlen > 0 && G.filename[fnlen - 1] == '/')
                     tmp |= 0x10;
             }
-            /* read-only bit --> write perms; subdir bit --> dir exec bit */
-            tmp = !(tmp & 1) << 1  |  (tmp & 0x10) >> 4;
-            if ((G.pInfo->file_attr & 0700) == (unsigned)(0400 | tmp<<6)) {
-                /* keep previous G.pInfo->file_attr setting, when its "owner"
-                 * part appears to be consistent with DOS attribute flags!
-                 */
+            /* read-only bit -> write perms, subdir bit -> exec bit */
+            tmp = !(tmp & 1) << 1 | (tmp & 0x10) >> 4;
+
+            if ((G.pInfo->file_attr & 0700) == (unsigned)(0400 | tmp << 6)) {
 #ifdef SYMLINKS
-                /* Entries "made by FS_FAT_" could have been zipped on a
-                 * system that supports POSIX-style symbolic links.
-                 */
+                /* FS_FAT_ entries could still be symlinks on POSIX systems */
                 G.pInfo->symlink = S_ISLNK(G.pInfo->file_attr) &&
                                    (G.pInfo->hostnum == FS_FAT_);
 #endif
                 return 0;
             }
-            G.pInfo->file_attr = (unsigned)(0444 | tmp<<6 | tmp<<3 | tmp);
+            G.pInfo->file_attr = (unsigned)(0444 | tmp << 6 | tmp << 3 | tmp);
             break;
     } /* end switch (host-OS-created-by) */
 
-    /* for originating systems with no concept of "group," "other," "system": */
-    umask( (int)(tmp=umask(0)) );    /* apply mask to expanded r/w(/x) perms */
+    /* for originating systems with no concept of group/other/system */
+    umask((int)(tmp = umask(0)));    /* apply mask to expanded r/w(/x) perms */
     G.pInfo->file_attr &= ~tmp;
 
     return 0;
-
 } /* end function mapattr() */
-
-
-
 
 
 /************************/
@@ -1120,6 +1091,9 @@ static int get_extattribs(__G__ pzt, z_uidgid)
 
 #ifndef MTS
 
+/* include needed for struct utimbuf and utime */
+#include <utime.h>  /* required for utime */
+
 /****************************/
 /* Function close_outfile() */
 /****************************/
@@ -1139,12 +1113,16 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 /*---------------------------------------------------------------------------
     If symbolic links are supported, allocate storage for a symlink control
     structure, put the uncompressed "data" and other required info in it, and
-    add the structure to the "deferred symlinks" chain.  Since we know it's a
-    symbolic link to start with, we shouldn't have to worry about overflowing
-    unsigned ints with unsigned longs.
+    add the structure to the "deferred symlinks" chain
   ---------------------------------------------------------------------------*/
 
 #ifdef SYMLINKS
+/* make sure the typedef name slinkentry refers to the existing struct */
+#ifndef SLINKENTRY_TYPEDEF_COMPAT
+#define SLINKENTRY_TYPEDEF_COMPAT
+typedef struct slinkentry slinkentry;  /* do not define the struct here */
+#endif
+
     if (G.symlnk) {
         extent ucsize = (extent)G.lrec.ucsize;
 # ifdef SET_SYMLINK_ATTRIBS
@@ -1153,14 +1131,10 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 # else
         extent attribsize = 0;
 # endif
-        /* size of the symlink entry is the sum of
-         *  (struct size (includes 1st '\0') + 1 additional trailing '\0'),
-         *  system specific attribute data size (might be 0),
-         *  and the lengths of name and link target.
-         */
-        extent slnk_entrysize = (sizeof(slinkentry) + 1) + attribsize +
+        /* size = struct + extra NUL + attribute bytes + data + name length */
+        extent slnk_entrysize = (sizeof(struct slinkentry) + 1) + attribsize +
                                 ucsize + strlen(G.filename);
-        slinkentry *slnk_entry;
+        struct slinkentry *slnk_entry;
 
         if (slnk_entrysize < ucsize) {
             Info(slide, 0x201, ((char *)slide,
@@ -1170,7 +1144,7 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
             return;
         }
 
-        if ((slnk_entry = (slinkentry *)malloc(slnk_entrysize)) == NULL) {
+        if ((slnk_entry = (struct slinkentry *)malloc(slnk_entrysize)) == NULL) {
             Info(slide, 0x201, ((char *)slide,
               "warning:  symbolic link (%s) failed: no mem\n",
               FnFilter1(G.filename)));
@@ -1181,20 +1155,18 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
         slnk_entry->targetlen = ucsize;
         slnk_entry->attriblen = attribsize;
 # ifdef SET_SYMLINK_ATTRIBS
-        memcpy(slnk_entry->buf, &(G.pInfo->file_attr),
-               sizeof(unsigned));
+        memcpy(slnk_entry->buf, &(G.pInfo->file_attr), sizeof(unsigned));
         if (have_uidgid_flg)
-            memcpy(slnk_entry->buf + 4, z_uidgid, sizeof(z_uidgid));
+            memcpy(slnk_entry->buf + sizeof(unsigned), z_uidgid, sizeof(z_uidgid));
 # endif
         slnk_entry->target = slnk_entry->buf + slnk_entry->attriblen;
         slnk_entry->fname = slnk_entry->target + ucsize + 1;
         strcpy(slnk_entry->fname, G.filename);
 
-        /* move back to the start of the file to re-read the "link data" */
+        /* move back to the start of the file to re-read the link data */
         rewind(G.outfile);
 
-        if (fread(slnk_entry->target, 1, ucsize, G.outfile) != ucsize)
-        {
+        if (fread(slnk_entry->target, 1, ucsize, G.outfile) != ucsize) {
             Info(slide, 0x201, ((char *)slide,
               "warning:  symbolic link (%s) failed\n",
               FnFilter1(G.filename)));
@@ -1202,7 +1174,7 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
             fclose(G.outfile);
             return;
         }
-        fclose(G.outfile);                  /* close "link" file for good... */
+        fclose(G.outfile);                  /* close link file for good */
         slnk_entry->target[ucsize] = '\0';
         if (QCOND2)
             Info(slide, 0, ((char *)slide, "-> %s ",
@@ -1258,7 +1230,7 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 #if (!defined(NO_FCHOWN) && !defined(NO_FCHMOD))
 /*---------------------------------------------------------------------------
     Change the file permissions from default ones to those stored in the
-    zipfile.
+    zipfile
   ---------------------------------------------------------------------------*/
 
     if (fchmod(fileno(G.outfile), filtattr(__G__ G.pInfo->file_attr)))
@@ -1269,8 +1241,11 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 
     /* skip restoring time stamps on user's request */
     if (uO.D_flag <= 1) {
-        /* set the file's access and modification times */
-        if (utime(G.filename, &(zt.t2))) {
+        /* convert ztimbuf to system utimbuf and set access and modification times */
+        struct utimbuf tp;
+        tp.actime  = zt.t2.actime;
+        tp.modtime = zt.t2.modtime;
+        if (utime(G.filename, &tp)) {
             if (uO.qflag)
                 Info(slide, 0x201, ((char *)slide, CannotSetItemTimestamps,
                   FnFilter1(G.filename), strerror(errno)));
@@ -1283,7 +1258,7 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 #if (defined(NO_FCHOWN) || defined(NO_FCHMOD))
 /*---------------------------------------------------------------------------
     Change the file permissions from default ones to those stored in the
-    zipfile.
+    zipfile
   ---------------------------------------------------------------------------*/
 
 #ifndef NO_CHMOD
@@ -1300,7 +1275,7 @@ void close_outfile(__G)    /* GRR: change to return PK-style warning level */
 #if (defined(SYMLINKS) && defined(SET_SYMLINK_ATTRIBS))
 int set_symlnk_attribs(__G__ slnk_entry)
     __GDEF
-    slinkentry *slnk_entry;
+    struct slinkentry *slnk_entry;
 {
     if (slnk_entry->attriblen > 0) {
 # if (!defined(NO_LCHOWN))
@@ -1332,7 +1307,7 @@ int set_symlnk_attribs(__G__ slnk_entry)
           perror("lchmod (file attributes) error");
 # endif /* !NO_LCHMOD */
     }
-    /* currently, no error propagation... */
+    /* currently, no error propagation */
     return PK_OK;
 } /* end function set_symlnk_attribs() */
 #endif /* SYMLINKS && SET_SYMLINK_ATTRIBS */
@@ -1345,18 +1320,22 @@ int set_symlnk_attribs(__G__ slnk_entry)
     "warning:  cannot set permissions for %s\n          %s\n";
 #  endif
 
+#include <utime.h>  /* for struct utimbuf and utime */
 
+/* defer_dir_attribs queues a directory's attributes for later application */
 int defer_dir_attribs(__G__ pd)
     __GDEF
     direntry **pd;
 {
     uxdirattr *d_entry;
 
-    d_entry = (uxdirattr *)malloc(sizeof(uxdirattr) + strlen(G.filename));
-    *pd = (direntry *)d_entry;
+    /* +1 for terminating NUL of filename buffer */
+    d_entry = (uxdirattr *)malloc(sizeof(uxdirattr) + strlen(G.filename) + 1);
     if (d_entry == (uxdirattr *)NULL) {
         return PK_MEM;
     }
+    *pd = (direntry *)d_entry;
+
     d_entry->fn = d_entry->fnbuf;
     strcpy(d_entry->fn, G.filename);
 
@@ -1367,7 +1346,7 @@ int defer_dir_attribs(__G__ pd)
     return PK_OK;
 } /* end function defer_dir_attribs() */
 
-
+/* set_direc_attribs applies queued ownership, times, and chmod to a directory */
 int set_direc_attribs(__G__ d)
     __GDEF
     direntry *d;
@@ -1387,16 +1366,22 @@ int set_direc_attribs(__G__ d)
         if (!errval)
             errval = PK_WARN;
     }
-    /* Skip restoring directory time stamps on user' request. */
+
+    /* skip restoring directory time stamps on user's request */
     if (uO.D_flag <= 0) {
-        /* restore directory timestamps */
-        if (utime(d->fn, &UxAtt(d)->u.t2)) {
+        /* convert project ztimbuf to system struct utimbuf then set times */
+        struct utimbuf dtp;
+        dtp.actime  = UxAtt(d)->u.t2.actime;
+        dtp.modtime = UxAtt(d)->u.t2.modtime;
+
+        if (utime(d->fn, &dtp)) {
             Info(slide, 0x201, ((char *)slide, CannotSetItemTimestamps,
               FnFilter1(d->fn), strerror(errno)));
             if (!errval)
                 errval = PK_WARN;
         }
     }
+
 #ifndef NO_CHMOD
     if (chmod(d->fn, UxAtt(d)->perms)) {
         Info(slide, 0x201, ((char *)slide, DirlistChmodFailed,
@@ -1405,12 +1390,11 @@ int set_direc_attribs(__G__ d)
             errval = PK_WARN;
     }
 #endif /* !NO_CHMOD */
+
     return errval;
 } /* end function set_direc_attribs() */
 
 #endif /* SET_DIR_ATTRIB */
-
-
 
 
 #ifdef TIMESTAMP
@@ -1419,16 +1403,17 @@ int set_direc_attribs(__G__ d)
 /*  Function stamp_file()  */
 /***************************/
 
+/* requires <utime.h> for struct utimbuf and utime */
+
 int stamp_file(fname, modtime)
     ZCONST char *fname;
     time_t modtime;
 {
-    ztimbuf tp;
-
-    tp.modtime = tp.actime = modtime;
-    return (utime(fname, &tp));
-
-} /* end function stamp_file() */
+    struct utimbuf stp; /* convert to system utimbuf */
+    stp.actime  = modtime;
+    stp.modtime = modtime;
+    return utime(fname, &stp);
+}
 
 #endif /* TIMESTAMP */
 
