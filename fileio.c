@@ -1099,13 +1099,7 @@ static int disk_error(__G) __GDEF {
     /* OK to use slide[] here because this file is finished regardless */
     Info(slide, 0x4a1, ((char*)slide, LoadFarString(DiskFullQuery), FnFilter1(G.filename)));
 
-#ifndef WINDLL
-    fgets(G.answerbuf, sizeof(G.answerbuf), stdin);
-    if (*G.answerbuf == 'y') /* stop writing to this file */
-        G.disk_full = 1;     /*  (outfile bad?), but new OK */
-    else
-#endif
-        G.disk_full = 2; /* no:  exit program */
+    G.disk_full = 2; /* no:  exit program */
 
     return PK_DISK;
 
@@ -1153,14 +1147,7 @@ int flag;  /* flag bits */
     if (MSG_NO_DLL2(flag)) /* if OS/2 DLL bit is set, do NOT print this msg */
         return 0;
 #endif
-#ifdef WINDLL
-    if (MSG_NO_WDLL(flag))
-        return 0;
-#endif
-#ifdef WINDLL
-    if (MSG_NO_WGUI(flag))
-        return 0;
-#endif
+
 /*
 #ifdef ACORN_GUI
     if (MSG_NO_AGUI(flag))
