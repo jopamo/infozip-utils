@@ -876,25 +876,23 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
 #endif
 
 #ifdef SFX
-    /* SFX builds support only a narrow set of methods plus optional plugins. */
+    /* SFX builds: core set plus optional plugins. */
 #  define METHOD_KNOWN (KNOWN_DEFLATE_OR_BETTER || KNOWN_BZ2 || KNOWN_LZMA || KNOWN_WAVP || KNOWN_PPMD)
 #else
-    /* Full builds may or may not include ancient methods depending on license flags. */
-#  ifdef COPYRIGHT_CLEAN /* no reduced files */
+    /* Full builds may include legacy methods depending on license flags. */
+#  ifdef COPYRIGHT_CLEAN
 #    define ALLOW_REDUCED 0
 #  else
 #    define ALLOW_REDUCED 1
 #  endif
-#  ifdef LZW_CLEAN /* no shrunk files */
+#  ifdef LZW_CLEAN
 #    define ALLOW_SHRUNK  0
 #  else
 #    define ALLOW_SHRUNK  1
 #  endif
-
 #  define IS_REDUCED (G.crec.compression_method >= REDUCED1 && G.crec.compression_method <= REDUCED4)
 #  define IS_SHRUNK  (G.crec.compression_method == SHRUNK)
 #  define IS_TOKEN   (G.crec.compression_method == TOKENIZED)
-
 #  define METHOD_KNOWN ( \
         (ALLOW_REDUCED && IS_REDUCED) || \
         (ALLOW_SHRUNK  && IS_SHRUNK)  || \
@@ -902,65 +900,39 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
         KNOWN_BZ2 || KNOWN_LZMA || KNOWN_WAVP || KNOWN_PPMD )
 #endif /* !SFX */
 
-    /* Version-gating for bzip2: some builds bumped minimum unzip version */
-#if (defined(USE_BZIP2) && (UNZIP_VERSION < UNZIP_BZ2VERS))
+    /* Effective “unzip version supported” (bzip2 may raise this). */
     {
-        int unzvers_support = (KNOWN_BZ2 ? UNZIP_BZ2VERS : UNZIP_VERSION);
-#       undef  UNZVERS_SUPPORT
-#       define UNZVERS_SUPPORT unzvers_support
-    }
+        const int unzvers_support =
+#if defined(USE_BZIP2) && (UNZIP_VERSION < UNZIP_BZ2VERS)
+            (KNOWN_BZ2 ? UNZIP_BZ2VERS : UNZIP_VERSION);
 #else
-#   define UNZVERS_SUPPORT UNZIP_VERSION
+            UNZIP_VERSION;
 #endif
 
-    /* -------------------------------------------
-       Fill per-entry info and basic mode decisions
-       ------------------------------------------- */
-    G.pInfo->encrypted   = (G.crec.general_purpose_bit_flag & 1) != 0;
-    G.pInfo->ExtLocHdr   = (G.crec.general_purpose_bit_flag & 8) == 8;
-    G.pInfo->textfile    = (G.crec.internal_file_attributes & 1) != 0;
-    G.pInfo->crc         = G.crec.crc32;
-    G.pInfo->compr_size  = G.crec.csize;
-    G.pInfo->uncompr_size= G.crec.ucsize;
+        /* -------------------------------------------
+           Fill per-entry info and basic mode decisions
+           ------------------------------------------- */
+        G.pInfo->encrypted    = (G.crec.general_purpose_bit_flag & 1) != 0;
+        G.pInfo->ExtLocHdr    = (G.crec.general_purpose_bit_flag & 8) == 8;
+        G.pInfo->textfile     = (G.crec.internal_file_attributes & 1) != 0;
+        G.pInfo->crc          = G.crec.crc32;
+        G.pInfo->compr_size   = G.crec.csize;
+        G.pInfo->uncompr_size = G.crec.ucsize;
 
-    /* textmode: 0=never, 1=auto from header, 2=always */
-    G.pInfo->textmode = (uO.aflag == 2) ? TRUE :
-                        (uO.aflag == 1) ? G.pInfo->textfile : FALSE;
+        /* textmode: 0=never, 1=auto from header, 2=always */
+        G.pInfo->textmode = (uO.aflag == 2) ? TRUE :
+                            (uO.aflag == 1) ? G.pInfo->textfile : FALSE;
 
-    /* --------------------------------
-       Version-needed compatibility gate
-       -------------------------------- */
-    if (G.crec.version_needed_to_extract[1] == VMS_) {
-        /* VMS-specific features required */
-        if (G.crec.version_needed_to_extract[0] > VMS_UNZIP_VERSION) {
-            if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
-                Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
-                    FnFilter1(G.filename), "VMS",
-                    G.crec.version_needed_to_extract[0] / 10,
-                    G.crec.version_needed_to_extract[0] % 10,
-                    VMS_UNZIP_VERSION / 10, VMS_UNZIP_VERSION % 10));
-            }
-            return 0;
-        }
-#ifndef VMS
-        /* Non-VMS: ask before extracting when VMS attributes present (unless -o or -t) */
-        if (!uO.tflag && !IS_OVERWRT_ALL) {
-            Info(slide, 0x481, ((char*)slide, LoadFarString(VMSFormatQuery),
-                 FnFilter1(G.filename)));
-            if (fgets(G.answerbuf, sizeof(G.answerbuf), stdin) == NULL ||
-                (*G.answerbuf != 'y' && *G.answerbuf != 'Y'))
-                return 0;
-        }
-#endif
-    } else {
-        /* Generic PK version-needed */
-        if (G.crec.version_needed_to_extract[0] > UNZVERS_SUPPORT) {
+        /* --------------------------------
+           Version-needed compatibility gate
+           -------------------------------- */
+        if (G.crec.version_needed_to_extract[0] > unzvers_support) {
             if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
                 Info(slide, 0x401, ((char*)slide, LoadFarString(VersionMsg),
                     FnFilter1(G.filename), "PK",
                     G.crec.version_needed_to_extract[0] / 10,
                     G.crec.version_needed_to_extract[0] % 10,
-                    UNZVERS_SUPPORT / 10, UNZVERS_SUPPORT % 10));
+                    unzvers_support / 10, unzvers_support % 10));
             }
             return 0;
         }
@@ -972,18 +944,14 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
     if (!METHOD_KNOWN) {
         if (!((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))) {
 #ifndef SFX
-            {
-                unsigned cmpridx = find_compr_idx(G.crec.compression_method);
-                if (cmpridx < NUM_METHODS)
-                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName),
-                         FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
-                else
+            unsigned cmpridx = find_compr_idx(G.crec.compression_method);
+            if (cmpridx < NUM_METHODS)
+                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgName),
+                     FnFilter1(G.filename), LoadFarStringSmall(ComprNames[cmpridx])));
+            else
 #endif
-                    Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum),
-                         FnFilter1(G.filename), G.crec.compression_method));
-#ifndef SFX
-            }
-#endif
+                Info(slide, 0x401, ((char*)slide, LoadFarString(ComprMsgNum),
+                     FnFilter1(G.filename), G.crec.compression_method));
         }
         return 0;
     }
@@ -1008,7 +976,7 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
     }
 #endif /* !SFX */
 
-    /* Map attributes to local format (ignore return for now, matches legacy). */
+    /* Map attributes to local (Unix) format. */
     mapattr(__G);
 
     /* Persist location for later local header seek. */
@@ -1017,7 +985,6 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
 
     return 1;
 } /* end function store_info() */
-
 
 #ifndef SFX
 /*******************************/
