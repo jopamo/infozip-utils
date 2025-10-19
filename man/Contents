@@ -1,9 +1,7 @@
 Contents of the "man" subdirectory for UnZip 5.41 and later:
 
   Contents      this file
-  funzip.1      fUnZip manual page, nroff format
   unzip.1       UnZip manual page, nroff format
-  unzipsfx.1    UnZipSFX manual page, nroff format
   zipgrep.1     ZipGrep manual page, nroff format
   zipinfo.1     ZipInfo manual page, nroff format
 
