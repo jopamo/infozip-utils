@@ -428,132 +428,91 @@ ulg filetime(f, a, n, t)
 
 #ifndef QLZIP /* QLZIP Unix2QDOS cross-Zip supplies an extended variant */
 
-int set_new_unix_extra_field(z, s)
-  struct zlist far *z;
-  z_stat *s;
-  /* New unix extra field.
-     Currently only UIDs and GIDs are stored. */
+int set_new_unix_extra_field(struct zlist far *z, z_stat *s)
+  /* New unix extra field. Currently only UIDs and GIDs are stored. */
 {
-  int uid_size;
-  int gid_size;
-  int ef_data_size;
-  char *extra;
-  char *cextra;
-  ulg id;
-  int b;
+  size_t uid_size;
+  size_t gid_size;
+  size_t ef_data_size;
+  size_t need_local;
+  size_t need_central;
+  char *extra = NULL;
+  char *cextra = NULL;
+  unsigned long id;
+  size_t b;
+  size_t i;
 
   uid_size = sizeof(s->st_uid);
   gid_size = sizeof(s->st_gid);
 
-/* New extra field
-   tag       (2 bytes)
-   size      (2 bytes)
-   version   (1 byte)
-   uid_size  (1 byte - size in bytes)
-   uid       (variable)
-   gid_size  (1 byte - size in bytes)
-   gid       (variable)
- */
-
+  /* New extra field layout:
+     tag       (2 bytes) = 'u''x'
+     size      (2 bytes) = len(data), little-endian
+     version   (1 byte)  = 1
+     uid_size  (1 byte)
+     uid       (uid_size bytes, little-endian)
+     gid_size  (1 byte)
+     gid       (gid_size bytes, little-endian)
+   */
   ef_data_size = 1 + 1 + uid_size + 1 + gid_size;
 
-  if ((extra = (char *)malloc(z->ext + 4 + ef_data_size)) == NULL)
-    return ZE_MEM;
-  if ((cextra = (char *)malloc(z->ext + 4 + ef_data_size)) == NULL)
-    return ZE_MEM;
+  /* Guard and size computations (treat negative ext/cext as 0). */
+  if ((int)z->ext  < 0) z->ext  = 0;
+  if ((int)z->cext < 0) z->cext = 0;
 
-  if (z->ext)
-    memcpy(extra, z->extra, z->ext);
-  if (z->cext)
-    memcpy(cextra, z->cextra, z->cext);
+  need_local   = (size_t)z->ext  + 4u + ef_data_size;
+  need_central = (size_t)z->cext + 4u + ef_data_size;
+
+  /* Allocate fresh buffers, preserving existing contents. */
+  extra = (char *)calloc(1, need_local);
+  if (extra == NULL)
+    return ZE_MEM;
+  cextra = (char *)calloc(1, need_central);
+  if (cextra == NULL) {
+    free(extra);
+    return ZE_MEM;
+  }
+
+  if (z->ext  && z->extra)  memcpy(extra,  z->extra,  (size_t)z->ext);
+  if (z->cext && z->cextra) memcpy(cextra, z->cextra, (size_t)z->cext);
 
   free(z->extra);
   z->extra = extra;
   free(z->cextra);
   z->cextra = cextra;
 
+  /* Local header extra field: 'ux' + size (LE) + version. */
   z->extra[z->ext + 0] = 'u';
   z->extra[z->ext + 1] = 'x';
-  z->extra[z->ext + 2] = (char)ef_data_size;     /* length of data part */
-  z->extra[z->ext + 3] = 0;
-  z->extra[z->ext + 4] = 1;                      /* version */
+  z->extra[z->ext + 2] = (char)(ef_data_size & 0xFF);
+  z->extra[z->ext + 3] = (char)((ef_data_size >> 8) & 0xFF);
+  z->extra[z->ext + 4] = 1;
 
   /* UID */
-  z->extra[z->ext + 5] = (char)(uid_size);       /* uid size in bytes */
-  b = 6;
-  id = (ulg)(s->st_uid);
-  z->extra[z->ext + b] = (char)(id & 0xFF);
-  if (uid_size > 1) {
-    b++;
-    id = id >> 8;
-    z->extra[z->ext + b] = (char)(id & 0xFF);
-    if (uid_size > 2) {
-      b++;
-      id = id >> 8;
-      z->extra[z->ext + b] = (char)(id & 0xFF);
-      b++;
-      id = id >> 8;
-      z->extra[z->ext + b] = (char)(id & 0xFF);
-      if (uid_size == 8) {
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-      }
-    }
+  z->extra[z->ext + 5] = (char)uid_size;
+  b = (size_t)z->ext + 6;
+  id = (unsigned long)(s->st_uid);
+  for (i = 0; i < uid_size; ++i) {
+    z->extra[b++] = (char)(id & 0xFF);
+    id >>= 8;
   }
 
   /* GID */
-  b++;
-  z->extra[z->ext + b] = (char)(gid_size);       /* gid size in bytes */
-  b++;
-  id = (ulg)(s->st_gid);
-  z->extra[z->ext + b] = (char)(id & 0xFF);
-  if (gid_size > 1) {
-    b++;
-    id = id >> 8;
-    z->extra[z->ext + b] = (char)(id & 0xFF);
-    if (gid_size > 2) {
-      b++;
-      id = id >> 8;
-      z->extra[z->ext + b] = (char)(id & 0xFF);
-      b++;
-      id = id >> 8;
-      z->extra[z->ext + b] = (char)(id & 0xFF);
-      if (gid_size == 8) {
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-        b++;
-        id = id >> 8;
-        z->extra[z->ext + b] = (char)(id & 0xFF);
-      }
-    }
+  z->extra[b++] = (char)gid_size;
+  id = (unsigned long)(s->st_gid);
+  for (i = 0; i < gid_size; ++i) {
+    z->extra[b++] = (char)(id & 0xFF);
+    id >>= 8;
   }
 
-  /* copy local extra field to central directory extra field */
-  memcpy((z->cextra) + z->cext, (z->extra) + z->ext, 4 + ef_data_size);
+  /* Mirror local extra field into central directory extra field. */
+  memcpy(z->cextra + z->cext, z->extra + z->ext, (size_t)(4 + ef_data_size));
 
-  z->ext = z->ext + 4 + ef_data_size;
-  z->cext = z->cext + 4 + ef_data_size;
+  z->ext  += (unsigned)(4 + ef_data_size);
+  z->cext += (unsigned)(4 + ef_data_size);
 
   return ZE_OK;
 }
-
 
 int set_extra_field(z, z_utim)
   struct zlist far *z;

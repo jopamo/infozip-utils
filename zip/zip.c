@@ -25,7 +25,7 @@
 #endif
 #define DEFCPYRT        /* main module: enable copyright string defines! */
 #include "revision.h"
-#include "crc32.h"
+#include "common/crc32.h"
 #include "crypt.h"
 #include "ttyio.h"
 #include <ctype.h>

@@ -39,7 +39,7 @@
 #endif
 #endif
 #if defined(DYNALLOC_CRCTAB) || defined(UNICODE_SUPPORT)
-#include "crc32.h"
+#include "common/crc32.h"
 #endif
 
 static int do_seekable OF((__GPRO__ int lastchance));

@@ -41,7 +41,7 @@
 #include "windll/windll.h"
 #endif
 #endif
-#include "crc32.h"
+#include "common/crc32.h"
 #include "crypt.h"
 
 #define GRRDUMP(buf, len)                                  \

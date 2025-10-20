@@ -25,7 +25,7 @@
 #ifndef UTIL            /* This module contains no code for Zip Utilities */
 
 #include "revision.h"
-#include "crc32.h"
+#include "common/crc32.h"
 #include "crypt.h"
 #ifdef USE_ZLIB
 #  include "zlib.h"

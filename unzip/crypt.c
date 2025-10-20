@@ -99,7 +99,7 @@ local z_uint4 keys[3]; /* keys defining the pseudo-random sequence */
 #endif
 #endif
 
-#include "crc32.h"
+#include "common/crc32.h"
 
 #ifdef IZ_CRC_BE_OPTIMIZ
 local z_uint4 near crycrctab[256];

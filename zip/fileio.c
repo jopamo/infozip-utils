@@ -4,7 +4,7 @@
 #define __FILEIO_C
 
 #include "zip.h"
-#include "crc32.h"
+#include "common/crc32.h"
 
 #ifdef MACOS
 #  include "helpers.h"

@@ -1,138 +1,35 @@
-/*
-  Copyright (c) 1990-2007 Info-ZIP.  All rights reserved.
-
-  See the accompanying file LICENSE, version 2007-Mar-04 or later
-  (the contents of which are also included in unzip.h) for terms of use.
-  If, for some reason, all these files are missing, the Info-ZIP license
-  also may be found at:  ftp://ftp.info-zip.org/pub/infozip/license.html
-*/
-/* explode.c -- by Mark Adler
-   version c17d, 01 December 2007 */
-
-/* Copyright history:
-   - Starting with UnZip 5.41 of 16-April-2000, this source file
-     is covered by the Info-Zip LICENSE cited above.
-   - Prior versions of this source file, found in UnZip source packages
-     up to UnZip 5.40, were put in the public domain.
-     The original copyright note by Mark Adler was:
-         "You can do whatever you like with this source file,
-         though I would prefer that if you modify it and
-         redistribute it that you include comments to that effect
-         with your name and the date.  Thank you."
-
-   History:
-   vers    date          who           what
-   ----  ---------  --------------  ------------------------------------
-    c1   30 Mar 92  M. Adler        explode that uses huft_build from inflate
-                                    (this gives over a 70% speed improvement
-                                    over the original unimplode.c, which
-                                    decoded a bit at a time)
-    c2    4 Apr 92  M. Adler        fixed bug for file sizes a multiple of 32k.
-    c3   10 Apr 92  M. Adler        added a little memory tracking if DEBUG
-    c4   11 Apr 92  M. Adler        added NOMEMCPY do kill use of memcpy()
-    c5   21 Apr 92  M. Adler        added the WSIZE #define to allow reducing
-                                    the 32K window size for specialized
-                                    applications.
-    c6   31 May 92  M. Adler        added typecasts to eliminate some warnings
-    c7   27 Jun 92  G. Roelofs      added more typecasts.
-    c8   17 Oct 92  G. Roelofs      changed ULONG/UWORD/byte to ulg/ush/uch.
-    c9   19 Jul 93  J. Bush         added more typecasts (to return values);
-                                    made l[256] array static for Amiga.
-    c10   8 Oct 93  G. Roelofs      added used_csize for diagnostics; added
-                                    buf and unshrink arguments to flush();
-                                    undef'd various macros at end for Turbo C;
-                                    removed NEXTBYTE macro (now in unzip.h)
-                                    and bytebuf variable (not used); changed
-                                    memset() to memzero().
-    c11   9 Jan 94  M. Adler        fixed incorrect used_csize calculation.
-    c12   9 Apr 94  G. Roelofs      fixed split comments on preprocessor lines
-                                    to avoid bug in Encore compiler.
-    c13  25 Aug 94  M. Adler        fixed distance-length comment (orig c9 fix)
-    c14  22 Nov 95  S. Maxwell      removed unnecessary "static" on auto array
-    c15   6 Jul 96  W. Haidinger    added ulg typecasts to flush() calls.
-    c16   8 Feb 98  C. Spieler      added ZCONST modifiers to const tables
-                                    and #ifdef DEBUG around debugging code.
-    c16b 25 Mar 98  C. Spieler      modified DLL code for slide redirection.
-    c16d 05 Jul 99  C. Spieler      take care of flush() return values and
-                                    stop processing in case of errors
-    c17  04 Feb 01  C. Spieler      reorganized code to reduce repetitions
-                                    of large code parts; adapted huft decoding
-                                    to the changes in inflate's huft_build()
-                                    due to support of deflate64; fixed memory
-                                    leaks (huft tables were not free'd when
-                                    get_tree() failed).
-    c17b 16 Feb 02  C. Spieler      changed type of the "extra lengths" array
-                                    "extra" from ush into uch (to save space)
-    c17c 10 Aug 04  NN              file sizes use zoff_t.
-    c17d 01 Dec 07  C. Spieler      type for file sizes changed from zoff_t
-                                    into zusz_t.
- */
-
-/*
-   Explode imploded (PKZIP method 6 compressed) data.  This compression
-   method searches for as much of the current string of bytes (up to a length
-   of ~320) in the previous 4K or 8K bytes.  If it doesn't find any matches
-   (of at least length 2 or 3), it codes the next byte.  Otherwise, it codes
-   the length of the matched string and its distance backwards from the
-   current position.  Single bytes ("literals") are preceded by a one (a
-   single bit) and are either uncoded (the eight bits go directly into the
-   compressed stream for a total of nine bits) or Huffman coded with a
-   supplied literal code tree.  If literals are coded, then the minimum match
-   length is three, otherwise it is two.
-
-   There are therefore four kinds of imploded streams: 8K search with coded
-   literals (min match = 3), 4K search with coded literals (min match = 3),
-   8K with uncoded literals (min match = 2), and 4K with uncoded literals
-   (min match = 2).  The kind of stream is identified in two bits of a
-   general purpose bit flag that is outside of the compressed stream.
-
-   Distance-length pairs for matched strings are preceded by a zero bit (to
-   distinguish them from literals) and are always coded.  The distance comes
-   first and is either the low six (4K) or low seven (8K) bits of the
-   distance (uncoded), followed by the high six bits of the distance coded.
-   Then the length is six bits coded (0..63 + min match length), and if the
-   maximum such length is coded, then it's followed by another eight bits
-   (uncoded) to be added to the coded length.  This gives a match length
-   range of 2..320 or 3..321 bytes.
-
-   The literal, length, and distance codes are all represented in a slightly
-   compressed form themselves.  What is sent are the lengths of the codes for
-   each value, which is sufficient to construct the codes.  Each byte of the
-   code representation is the code length (the low four bits representing
-   1..16), and the number of values sequentially with that length (the high
-   four bits also representing 1..16).  There are 256 literal code values (if
-   literals are coded), 64 length code values, and 64 distance code values,
-   in that order at the beginning of the compressed stream.  Each set of code
-   values is preceded (redundantly) with a byte indicating how many bytes are
-   in the code description that follows, in the range 1..256.
-
-   The codes themselves are decoded using tables made by huft_build() from
-   the bit lengths.  That routine and its comments are in the inflate.c
-   module.
+/* explode.c
  */
 
 #define __EXPLODE_C /* identifies this source module */
 #define UNZIP_INTERNAL
-#include "unzip.h" /* must supply slide[] (uch) array and NEXTBYTE macro */
+#include "unzip.h"  /* must supply slide[] (uch) array and NEXTBYTE macro */
+#include <string.h> /* memcpy, memset */
 
 #ifndef WSIZE
-#define WSIZE 0x8000 /* window size--must be a power of two, and */
-#endif               /* at least 8K for zip's implode method */
+#define WSIZE 0x8000 /* window size--must be a power of two, and at least 8K */
+#endif
 
-#if (defined(DLL) && !defined(NO_SLIDE_REDIR))
-#define wszimpl (unsigned)(G._wsize)
-#else
-#if defined(USE_DEFLATE64) && defined(INT_16BIT)
-#define wszimpl (unsigned)(WSIZE >> 1)
-#else /* !(USE_DEFLATE64 && INT_16BIT) */
+/* On modern 64-bit Linux we always use the full 32 KiB window. */
 #define wszimpl WSIZE
-#endif /* !(USE_DEFLATE64 && INT_16BIT) */
+
+/* Compiler hints (GCC/Clang). */
+#if defined(__GNUC__) || defined(__clang__)
+#define HOT __attribute__((hot))
+#define COLD __attribute__((cold))
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define HOT
+#define COLD
+#define LIKELY(x) (x)
+#define UNLIKELY(x) (x)
 #endif
 
 /* routines here */
 static int get_tree OF((__GPRO__ unsigned* l, unsigned n));
-static int explode_lit OF((__GPRO__ struct huft * tb, struct huft* tl, struct huft* td, unsigned bb, unsigned bl, unsigned bd, unsigned bdl));
-static int explode_nolit OF((__GPRO__ struct huft * tl, struct huft* td, unsigned bl, unsigned bd, unsigned bdl));
+static int HOT explode_lit OF((__GPRO__ struct huft * tb, struct huft* tl, struct huft* td, unsigned bb, unsigned bl, unsigned bd, unsigned bdl));
+static int HOT explode_nolit OF((__GPRO__ struct huft * tl, struct huft* td, unsigned bl, unsigned bd, unsigned bdl));
 int explode OF((__GPRO));
 
 /* The implode algorithm uses a sliding 4K or 8K byte window on the
@@ -164,19 +61,7 @@ static ZCONST ush cpdist8[] = {1,    129,  257,  385,  513,  641,  769,  897,  1
                                2817, 2945, 3073, 3201, 3329, 3457, 3585, 3713, 3841, 3969, 4097, 4225, 4353, 4481, 4609, 4737, 4865, 4993, 5121, 5249, 5377, 5505,
                                5633, 5761, 5889, 6017, 6145, 6273, 6401, 6529, 6657, 6785, 6913, 7041, 7169, 7297, 7425, 7553, 7681, 7809, 7937, 8065};
 
-/* Macros for inflate() bit peeking and grabbing.
-   The usage is:
-
-        NEEDBITS(j)
-        x = b & mask_bits[j];
-        DUMPBITS(j)
-
-   where NEEDBITS makes sure that b has at least j bits in it, and
-   DUMPBITS removes the bits from b.  The macros use the variable k
-   for the number of bits in b.  Normally, b and k are register
-   variables for speed.
- */
-
+/* Macros for inflate() bit peeking and grabbing. */
 #define NEEDBITS(n)                    \
     {                                  \
         while (k < (n)) {              \
@@ -192,16 +77,16 @@ static ZCONST ush cpdist8[] = {1,    129,  257,  385,  513,  641,  769,  897,  1
 
 #define DECODEHUFT(htab, bits, mask)                      \
     {                                                     \
-        NEEDBITS((unsigned)(bits))                        \
+        NEEDBITS((unsigned)(bits));                       \
         t = (htab) + ((~(unsigned)b) & (mask));           \
         while (1) {                                       \
-            DUMPBITS(t->b)                                \
-            if ((e = t->e) <= 32)                         \
+            DUMPBITS(t->b);                               \
+            if (LIKELY((e = t->e) <= 32))                 \
                 break;                                    \
-            if (IS_INVALID_CODE(e))                       \
+            if (UNLIKELY(IS_INVALID_CODE(e)))             \
                 return 1;                                 \
             e &= 31;                                      \
-            NEEDBITS(e)                                   \
+            NEEDBITS(e);                                  \
             t = t->v.t + ((~(unsigned)b) & mask_bits[e]); \
         }                                                 \
     }
@@ -210,8 +95,8 @@ static int get_tree(__G__ l, n)
 __GDEF
 unsigned* l; /* bit lengths */
 unsigned n;  /* number expected */
-/* Get the bit lengths for a code representation from the compressed
-   stream.  If get_tree() returns 4, then there is an error in the data.
+/* Get the bit lengths for a code representation from the compressed stream.
+   If get_tree() returns 4, then there is an error in the data.
    Otherwise zero is returned. */
 {
     unsigned i; /* bytes remaining in list */
@@ -264,12 +149,12 @@ unsigned bdl;              /* number of distance low bits */
     s = G.lrec.ucsize;
     while (s > 0) /* do until ucsize bytes uncompressed */
     {
-        NEEDBITS(1)
-        if (b & 1) /* then literal--decode it */
+        NEEDBITS(1);
+        if (LIKELY(b & 1)) /* then literal--decode it */
         {
-            DUMPBITS(1)
+            DUMPBITS(1);
             s--;
-            DECODEHUFT(tb, bb, mb) /* get coded literal */
+            DECODEHUFT(tb, bb, mb); /* get coded literal */
             redirSlide[w++] = (uch)t->v.n;
             if (w == wszimpl) {
                 if ((retval = flush(__G__ redirSlide, (ulg)w, 0)) != 0)
@@ -279,45 +164,36 @@ unsigned bdl;              /* number of distance low bits */
         }
         else /* else distance/length */
         {
-            DUMPBITS(1)
-            NEEDBITS(bdl) /* get distance low bits */
+            DUMPBITS(1);
+            NEEDBITS(bdl); /* get distance low bits */
             d = (unsigned)b & mdl;
-            DUMPBITS(bdl)
-            DECODEHUFT(td, bd, md) /* get coded distance high bits */
-            d = w - d - t->v.n;    /* construct offset */
-            DECODEHUFT(tl, bl, ml) /* get coded length */
+            DUMPBITS(bdl);
+            DECODEHUFT(td, bd, md); /* get coded distance high bits */
+            d = w - d - t->v.n;     /* construct offset */
+            DECODEHUFT(tl, bl, ml); /* get coded length */
             n = t->v.n;
-            if (e) /* get length extra bits */
+            if (UNLIKELY(e)) /* get length extra bits */
             {
-                NEEDBITS(8)
+                NEEDBITS(8);
                 n += (unsigned)b & 0xff;
-                DUMPBITS(8)
+                DUMPBITS(8);
             }
 
             /* do the copy */
             s = (s > (zusz_t)n ? s - (zusz_t)n : 0);
             do {
-#if (defined(DLL) && !defined(NO_SLIDE_REDIR))
-                if (G.redirect_slide) {
-                    /* &= w/ wszimpl not needed and wrong if redirect */
-                    if (d >= wszimpl)
-                        return 1;
-                    e = wszimpl - (d > w ? d : w);
-                }
-                else
-#endif
-                    e = wszimpl - ((d &= wszimpl - 1) > w ? d : w);
+                e = wszimpl - ((d &= wszimpl - 1) > w ? d : w);
                 if (e > n)
                     e = n;
                 n -= e;
                 if (u && w <= d) {
-                    memzero(redirSlide + w, e);
+                    memset(redirSlide + w, 0, e);
                     w += e;
                     d += e;
                 }
                 else
 #ifndef NOMEMCPY
-                    if (w - d >= e) /* (this test assumes unsigned comparison) */
+                    if (w - d >= e) /* (unsigned compare: non-overlap fast path) */
                 {
                     memcpy(redirSlide + w, redirSlide + d, e);
                     w += e;
@@ -325,9 +201,11 @@ unsigned bdl;              /* number of distance low bits */
                 }
                 else /* do it slow to avoid memcpy() overlap */
 #endif               /* !NOMEMCPY */
+                {
                     do {
                         redirSlide[w++] = redirSlide[d++];
                     } while (--e);
+                }
                 if (w == wszimpl) {
                     if ((retval = flush(__G__ redirSlide, (ulg)w, 0)) != 0)
                         return retval;
@@ -377,61 +255,52 @@ unsigned bdl;         /* number of distance low bits */
     s = G.lrec.ucsize;
     while (s > 0) /* do until ucsize bytes uncompressed */
     {
-        NEEDBITS(1)
-        if (b & 1) /* then literal--get eight bits */
+        NEEDBITS(1);
+        if (LIKELY(b & 1)) /* then literal--get eight bits */
         {
-            DUMPBITS(1)
+            DUMPBITS(1);
             s--;
-            NEEDBITS(8)
+            NEEDBITS(8);
             redirSlide[w++] = (uch)b;
             if (w == wszimpl) {
                 if ((retval = flush(__G__ redirSlide, (ulg)w, 0)) != 0)
                     return retval;
                 w = u = 0;
             }
-            DUMPBITS(8)
+            DUMPBITS(8);
         }
         else /* else distance/length */
         {
-            DUMPBITS(1)
-            NEEDBITS(bdl) /* get distance low bits */
+            DUMPBITS(1);
+            NEEDBITS(bdl); /* get distance low bits */
             d = (unsigned)b & mdl;
-            DUMPBITS(bdl)
-            DECODEHUFT(td, bd, md) /* get coded distance high bits */
-            d = w - d - t->v.n;    /* construct offset */
-            DECODEHUFT(tl, bl, ml) /* get coded length */
+            DUMPBITS(bdl);
+            DECODEHUFT(td, bd, md); /* get coded distance high bits */
+            d = w - d - t->v.n;     /* construct offset */
+            DECODEHUFT(tl, bl, ml); /* get coded length */
             n = t->v.n;
-            if (e) /* get length extra bits */
+            if (UNLIKELY(e)) /* get length extra bits */
             {
-                NEEDBITS(8)
+                NEEDBITS(8);
                 n += (unsigned)b & 0xff;
-                DUMPBITS(8)
+                DUMPBITS(8);
             }
 
             /* do the copy */
             s = (s > (zusz_t)n ? s - (zusz_t)n : 0);
             do {
-#if (defined(DLL) && !defined(NO_SLIDE_REDIR))
-                if (G.redirect_slide) {
-                    /* &= w/ wszimpl not needed and wrong if redirect */
-                    if (d >= wszimpl)
-                        return 1;
-                    e = wszimpl - (d > w ? d : w);
-                }
-                else
-#endif
-                    e = wszimpl - ((d &= wszimpl - 1) > w ? d : w);
+                e = wszimpl - ((d &= wszimpl - 1) > w ? d : w);
                 if (e > n)
                     e = n;
                 n -= e;
                 if (u && w <= d) {
-                    memzero(redirSlide + w, e);
+                    memset(redirSlide + w, 0, e);
                     w += e;
                     d += e;
                 }
                 else
 #ifndef NOMEMCPY
-                    if (w - d >= e) /* (this test assumes unsigned comparison) */
+                    if (w - d >= e) /* (unsigned compare: non-overlap fast path) */
                 {
                     memcpy(redirSlide + w, redirSlide + d, e);
                     w += e;
@@ -439,9 +308,11 @@ unsigned bdl;         /* number of distance low bits */
                 }
                 else /* do it slow to avoid memcpy() overlap */
 #endif               /* !NOMEMCPY */
+                {
                     do {
                         redirSlide[w++] = redirSlide[d++];
                     } while (--e);
+                }
                 if (w == wszimpl) {
                     if ((retval = flush(__G__ redirSlide, (ulg)w, 0)) != 0)
                         return retval;
@@ -485,25 +356,19 @@ int explode(__G) __GDEF
 #if (defined(DLL) && !defined(NO_SLIDE_REDIR))
     if (G.redirect_slide)
         /* For 16-bit systems, it has already been checked at DLL entrance that
-         * the buffer size in G.redirect_size does not exceed unsigned range.
-         */
+         * the buffer size in G.redirect_size does not exceed unsigned range. */
         G._wsize = G.redirect_size, redirSlide = G.redirect_buffer;
     else
 #if defined(USE_DEFLATE64) && defined(INT_16BIT)
         /* For systems using 16-bit ints, reduce the used buffer size below
-         * the limit of "unsigned int" numbers range.
-         */
+         * the limit of "unsigned int" numbers range. */
         G._wsize = WSIZE >> 1, redirSlide = slide;
 #else  /* !(USE_DEFLATE64 && INT_16BIT) */
         G._wsize = WSIZE, redirSlide = slide;
 #endif /* !(USE_DEFLATE64 && INT_16BIT) */
 #endif /* DLL && !NO_SLIDE_REDIR */
 
-    /* Tune base table sizes.  Note: I thought that to truly optimize speed,
-       I would have to select different bl, bd, and bb values for different
-       compressed file sizes.  I was surprised to find out that the values of
-       7, 7, and 9 worked best over a very wide range of sizes, except that
-       bd = 8 worked marginally better for large compressed sizes. */
+    /* Tune base table sizes. */
     bl = 7;
     bd = (G.csize + G.incnt) > 200000L ? 8 : 7;
 

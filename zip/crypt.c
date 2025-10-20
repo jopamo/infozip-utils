@@ -106,7 +106,7 @@
 #  endif
 #endif
 
-#include "crc32.h"
+#include "common/crc32.h"
 
 #ifdef IZ_CRC_BE_OPTIMIZ
    local z_uint4 near crycrctab[256];

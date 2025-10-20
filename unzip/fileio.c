@@ -67,7 +67,7 @@
 #endif
 #include <setjmp.h>
 #endif
-#include "crc32.h"
+#include "common/crc32.h"
 #include "crypt.h"
 #include "ttyio.h"
 
