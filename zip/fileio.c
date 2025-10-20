@@ -1,14 +1,4 @@
 /*
-  fileio.c - Zip 3
-
-  Copyright (c) 1990-2008 Info-ZIP.  All rights reserved.
-
-  See the accompanying file LICENSE, version 2007-Mar-4 or later
-  (the contents of which are also included in zip.h) for terms of use.
-  If, for some reason, all these files are missing, the Info-ZIP license
-  also may be found at:  ftp://ftp.info-zip.org/pub/infozip/license.html
-*/
-/*
  *  fileio.c by Mark Adler
  */
 #define __FILEIO_C
