@@ -1417,304 +1417,162 @@ int error_in_archive;
 #define wsize WSIZE /* wsize is a constant */
 #endif
 
-/***************************************/
-/*  Function extract_or_test_member()  */
-/***************************************/
+/*******************************************/
+/*  Function extract_or_test_member (UNIX) */
+/*******************************************/
 
 static int extract_or_test_member(__G) /* return PK-type error code */
     __GDEF {
-    char *nul = "[empty] ", *txt = "[text]  ", *bin = "[binary]";
-#ifdef CMS_MVS
-    char* ebc = "[ebcdic]";
-#endif
-    register int b;
+    const char* nul = "[empty] ";
+    const char* txt = "[text]  ";
+    const char* bin = "[binary]";
     int r, error = PK_COOL;
 
-    /*---------------------------------------------------------------------------
-        Initialize variables, buffers, etc.
-      ---------------------------------------------------------------------------*/
-
+    /* initialize per-entry state */
     G.bits_left = 0;
-    G.bitbuf = 0L; /* unreduce and unshrink only */
+    G.bitbuf = 0L;
     G.zipeof = 0;
     G.newfile = TRUE;
     G.crc32val = CRCVAL_INITIAL;
 
 #ifdef SYMLINKS
-    /* If file is a (POSIX-compatible) symbolic link and we are extracting
-     * to disk, prepare to restore the link. */
     G.symlnk = (G.pInfo->symlink && !uO.tflag && !uO.cflag && (G.lrec.ucsize > 0));
-#endif /* SYMLINKS */
+#else
+    G.symlnk = FALSE;
+#endif
 
+    /* announce intent and open output if needed */
     if (uO.tflag) {
         if (!uO.qflag)
             Info(slide, 0, ((char*)slide, LoadFarString(ExtractMsg), "test", FnFilter1(G.filename), "", ""));
     }
     else {
-#ifdef DLL
-        if (uO.cflag && !G.redirect_data)
-#else
-        if (uO.cflag)
-#endif
-        {
-#if (defined(OS2) && defined(__IBMC__) && (__IBMC__ >= 200))
-            G.outfile = freopen("", "wb", stdout); /* VAC++ ignores setmode */
-#else
+        if (uO.cflag) {
             G.outfile = stdout;
-#endif
-#ifdef DOS_FLX_NLM_OS2_W32
-#if (defined(__HIGHC__) && !defined(FLEXOS))
-            setmode(G.outfile, _BINARY);
-#else  /* !(defined(__HIGHC__) && !defined(FLEXOS)) */
-            setmode(fileno(G.outfile), O_BINARY);
-#endif /* ?(defined(__HIGHC__) && !defined(FLEXOS)) */
-#define NEWLINE "\r\n"
-#else /* !DOS_FLX_NLM_OS2_W32 */
 #define NEWLINE "\n"
-#endif /* ?DOS_FLX_NLM_OS2_W32 */
-#ifdef VMS
-            /* VMS:  required even for stdout! */
-            if ((r = open_outfile(__G)) != 0)
-                switch (r) {
-                    case OPENOUT_SKIPOK:
-                        return PK_OK;
-                    case OPENOUT_SKIPWARN:
-                        return PK_WARN;
-                    default:
-                        return PK_DISK;
-                }
         }
-        else if ((r = open_outfile(__G)) != 0)
-            switch (r) {
-                case OPENOUT_SKIPOK:
-                    return PK_OK;
-                case OPENOUT_SKIPWARN:
-                    return PK_WARN;
-                default:
-                    return PK_DISK;
-            }
-#else  /* !VMS */
-        }
-        else if (open_outfile(__G))
+        else if (open_outfile(__G)) {
             return PK_DISK;
-#endif /* ?VMS */
+        }
     }
 
-    /*---------------------------------------------------------------------------
-        Unpack the file.
-      ---------------------------------------------------------------------------*/
+    /* prepare input stream state */
+    defer_leftover_input(__G);
 
-    defer_leftover_input(__G); /* so NEXTBYTE bounds check will work */
     switch (G.lrec.compression_method) {
-        case STORED:
+        case STORED: {
             if (!uO.tflag && QCOND2) {
 #ifdef SYMLINKS
-                if (G.symlnk) /* can also be deflated, but rarer... */
+                if (G.symlnk)
                     Info(slide, 0, ((char*)slide, LoadFarString(ExtractMsg), "link", FnFilter1(G.filename), "", ""));
                 else
-#endif /* SYMLINKS */
-                    Info(slide, 0,
-                         ((char*)slide, LoadFarString(ExtractMsg), "extract", FnFilter1(G.filename),
-                          (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.lrec.ucsize == 0L ? nul : (G.pInfo->textfile ? txt : bin)), uO.cflag ? NEWLINE : ""));
-            }
-#if (defined(DLL) && !defined(NO_SLIDE_REDIR))
-            if (G.redirect_slide) {
-                wsize = G.redirect_size;
-                redirSlide = G.redirect_buffer;
-            }
-            else {
-                wsize = WSIZE;
-                redirSlide = slide;
-            }
 #endif
-            G.outptr = redirSlide;
+                    Info(slide, 0,
+                         ((char*)slide, LoadFarString(ExtractMsg), "extract", FnFilter1(G.filename), (uO.aflag != 1) ? "" : (G.lrec.ucsize == 0L ? nul : (G.pInfo->textfile ? txt : bin)),
+                          uO.cflag ? NEWLINE : ""));
+            }
+
+            /* fast bulk copy for STORED */
+            G.outptr = slide; /* slide is the WSIZE scratch buffer */
             G.outcnt = 0L;
-            while ((b = NEXTBYTE) != EOF) {
-                *G.outptr++ = (uch)b;
-                if (++G.outcnt == wsize) {
-                    error = flush(__G__ redirSlide, G.outcnt, 0);
-                    G.outptr = redirSlide;
-                    G.outcnt = 0L;
+
+            zusz_t remaining = G.lrec.ucsize;
+
+            while (remaining > 0) {
+                if (G.incnt <= 0) {
+                    if (fillinbuf(__G) == 0) {
+                        error = PK_ERR;
+                        break;
+                    }
+                }
+
+                zusz_t take = MIN((zusz_t)G.incnt, remaining);
+                zusz_t space = (zusz_t)(WSIZE - G.outcnt);
+
+                if (space == 0) {
+                    int fr = flush(__G__ slide, G.outcnt, 0);
+                    if (error < fr)
+                        error = fr;
                     if (error != PK_COOL || G.disk_full)
                         break;
+                    G.outptr = slide;
+                    G.outcnt = 0L;
+                    space = (zusz_t)WSIZE;
+                }
+
+                if (take > space)
+                    take = space;
+
+                memcpy(G.outptr, G.inptr, (size_t)take);
+                G.outptr += take;
+                G.outcnt += take;
+                G.inptr += take;
+                G.incnt -= (int)take;
+                remaining -= take;
+
+                if (G.outcnt == WSIZE) {
+                    int fr = flush(__G__ slide, G.outcnt, 0);
+                    if (error < fr)
+                        error = fr;
+                    if (error != PK_COOL || G.disk_full)
+                        break;
+                    G.outptr = slide;
+                    G.outcnt = 0L;
                 }
             }
-            if (G.outcnt) { /* flush final (partial) buffer */
-                r = flush(__G__ redirSlide, G.outcnt, 0);
-                if (error < r)
-                    error = r;
+
+            if (G.outcnt && error == PK_COOL && !G.disk_full) {
+                int fr = flush(__G__ slide, G.outcnt, 0);
+                if (error < fr)
+                    error = fr;
             }
             break;
-
-#ifndef SFX
-#ifndef LZW_CLEAN
-        case SHRUNK:
-            if (!uO.tflag && QCOND2) {
-                Info(slide, 0,
-                     ((char*)slide, LoadFarString(ExtractMsg), LoadFarStringSmall(Unshrink), FnFilter1(G.filename),
-                      (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.pInfo->textfile ? txt : bin), uO.cflag ? NEWLINE : ""));
-            }
-            if ((r = unshrink(__G)) != PK_COOL) {
-                if (r < PK_DISK) {
-                    if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarStringSmall(ErrUnzipFile), r == PK_MEM3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Unshrink),
-                              FnFilter1(G.filename)));
-                    else
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarStringSmall(ErrUnzipNoFile), r == PK_MEM3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Unshrink)));
-                }
-                error = r;
-            }
-            break;
-#endif /* !LZW_CLEAN */
-
-#ifndef COPYRIGHT_CLEAN
-        case REDUCED1:
-        case REDUCED2:
-        case REDUCED3:
-        case REDUCED4:
-            if (!uO.tflag && QCOND2) {
-                Info(slide, 0,
-                     ((char*)slide, LoadFarString(ExtractMsg), "unreduc", FnFilter1(G.filename), (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.pInfo->textfile ? txt : bin),
-                      uO.cflag ? NEWLINE : ""));
-            }
-            if ((r = unreduce(__G)) != PK_COOL) {
-                /* unreduce() returns only PK_COOL, PK_DISK, or IZ_CTRLC */
-                error = r;
-            }
-            break;
-#endif /* !COPYRIGHT_CLEAN */
-
-        case IMPLODED:
-            if (!uO.tflag && QCOND2) {
-                Info(slide, 0,
-                     ((char*)slide, LoadFarString(ExtractMsg), "explod", FnFilter1(G.filename), (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.pInfo->textfile ? txt : bin),
-                      uO.cflag ? NEWLINE : ""));
-            }
-            if ((r = explode(__G)) != 0) {
-                if (r == 5) { /* treat 5 specially */
-                    int warning = ((zusz_t)G.used_csize <= G.lrec.csize);
-
-                    if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarString(LengthMsg), "", warning ? "warning" : "error", FmZofft(G.used_csize, NULL, NULL), FmZofft(G.lrec.ucsize, NULL, "u"), warning ? "  " : "",
-                              FmZofft(G.lrec.csize, NULL, "u"), " [", FnFilter1(G.filename), "]"));
-                    else
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarString(LengthMsg), "\n", warning ? "warning" : "error", FmZofft(G.used_csize, NULL, NULL), FmZofft(G.lrec.ucsize, NULL, "u"), warning ? "  " : "",
-                              FmZofft(G.lrec.csize, NULL, "u"), "", "", "."));
-                    error = warning ? PK_WARN : PK_ERR;
-                }
-                else if (r < PK_DISK) {
-                    if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarStringSmall(ErrUnzipFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Explode),
-                              FnFilter1(G.filename)));
-                    else
-                        Info(slide, 0x401, ((char*)slide, LoadFarStringSmall(ErrUnzipNoFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Explode)));
-                    error = ((r == 3) ? PK_MEM3 : PK_ERR);
-                }
-                else {
-                    error = r;
-                }
-            }
-            break;
-#endif /* !SFX */
+        }
 
         case DEFLATED:
 #ifdef USE_DEFLATE64
         case ENHDEFLATED:
 #endif
-            if (!uO.tflag && QCOND2) {
-                Info(slide, 0,
-                     ((char*)slide, LoadFarString(ExtractMsg), "inflat", FnFilter1(G.filename), (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.pInfo->textfile ? txt : bin),
-                      uO.cflag ? NEWLINE : ""));
-            }
-#ifndef USE_ZLIB /* zlib's function is called inflate(), too */
+            if (!uO.tflag && QCOND2)
+                Info(slide, 0, ((char*)slide, LoadFarString(ExtractMsg), "inflat", FnFilter1(G.filename), (uO.aflag != 1) ? "" : (G.pInfo->textfile ? txt : bin), uO.cflag ? NEWLINE : ""));
+#ifndef USE_ZLIB
 #define UZinflate inflate
 #endif
-            if ((r = UZinflate(__G__(G.lrec.compression_method == ENHDEFLATED))) != 0) {
-                if (r < PK_DISK) {
-                    if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarStringSmall(ErrUnzipFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Inflate),
-                              FnFilter1(G.filename)));
-                    else
-                        Info(slide, 0x401, ((char*)slide, LoadFarStringSmall(ErrUnzipNoFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Inflate)));
-                    error = ((r == 3) ? PK_MEM3 : PK_ERR);
-                }
-                else {
-                    error = r;
-                }
+            r = UZinflate(__G__(G.lrec.compression_method == ENHDEFLATED));
+            if (r != 0) {
+                if (r < PK_DISK)
+                    Info(slide, 0x401,
+                         ((char*)slide, LoadFarStringSmall(ErrUnzipFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(Inflate), FnFilter1(G.filename)));
+                error = (r == 3) ? PK_MEM3 : PK_ERR;
             }
             break;
 
 #ifdef USE_BZIP2
         case BZIPPED:
-            if (!uO.tflag && QCOND2) {
-                Info(slide, 0,
-                     ((char*)slide, LoadFarString(ExtractMsg), "bunzipp", FnFilter1(G.filename), (uO.aflag != 1 /* && G.pInfo->textfile==G.pInfo->textmode */) ? "" : (G.pInfo->textfile ? txt : bin),
-                      uO.cflag ? NEWLINE : ""));
-            }
-            if ((r = UZbunzip2(__G)) != 0) {
-                if (r < PK_DISK) {
-                    if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
-                        Info(slide, 0x401,
-                             ((char*)slide, LoadFarStringSmall(ErrUnzipFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(BUnzip),
-                              FnFilter1(G.filename)));
-                    else
-                        Info(slide, 0x401, ((char*)slide, LoadFarStringSmall(ErrUnzipNoFile), r == 3 ? LoadFarString(NotEnoughMem) : LoadFarString(InvalidComprData), LoadFarStringSmall2(BUnzip)));
-                    error = ((r == 3) ? PK_MEM3 : PK_ERR);
-                }
-                else {
-                    error = r;
-                }
-            }
+            if (!uO.tflag && QCOND2)
+                Info(slide, 0, ((char*)slide, LoadFarString(ExtractMsg), "bunzipp", FnFilter1(G.filename), (uO.aflag != 1) ? "" : (G.pInfo->textfile ? txt : bin), uO.cflag ? NEWLINE : ""));
+            r = UZbunzip2(__G);
+            if (r != 0)
+                error = (r == 3) ? PK_MEM3 : PK_ERR;
             break;
-#endif /* USE_BZIP2 */
+#endif
 
-        default: /* should never get to this point */
+        default:
             Info(slide, 0x401, ((char*)slide, LoadFarString(FileUnknownCompMethod), FnFilter1(G.filename)));
-            /* close and delete file before return? */
             undefer_input(__G);
             return PK_WARN;
-
-    } /* end switch (compression method) */
-
-        /*---------------------------------------------------------------------------
-            Close the file and set its date and time (not necessarily in that order),
-            and make sure the CRC checked out OK.  Logical-AND the CRC for 64-bit
-            machines (redundant on 32-bit machines).
-          ---------------------------------------------------------------------------*/
-
-#ifdef VMS         /* VMS:  required even for stdout! (final flush) */
-    if (!uO.tflag) /* don't close NULL file */
-        close_outfile(__G);
-#else
-#ifdef DLL
-    if (!uO.tflag && (!uO.cflag || G.redirect_data)) {
-        if (G.redirect_data)
-            FINISH_REDIRECT();
-        else
-            close_outfile(__G);
     }
-#else
-    if (!uO.tflag && !uO.cflag) /* don't close NULL file or stdout */
+
+    /* close output on UNIX paths */
+    if (!uO.tflag && !uO.cflag)
         close_outfile(__G);
-#endif
-#endif /* VMS */
 
-    /* GRR: CONVERT close_outfile() TO NON-VOID:  CHECK FOR ERRORS! */
-
-    if (G.disk_full) { /* set by flush() */
+    /* handle disk full conditions */
+    if (G.disk_full) {
         if (G.disk_full > 1) {
-#if (defined(DELETE_IF_FULL) && defined(HAVE_UNLINK))
-            /* delete the incomplete file if we can */
-            if (unlink(G.filename) != 0)
-                Trace((stderr, "extract.c:  could not delete %s\n", FnFilter1(G.filename)));
+#if defined(HAVE_UNLINK)
+            unlink(G.filename);
 #else
-            /* warn user about the incomplete file */
             Info(slide, 0x421, ((char*)slide, LoadFarString(FileTruncated), FnFilter1(G.filename)));
 #endif
             error = PK_DISK;
@@ -1724,159 +1582,90 @@ static int extract_or_test_member(__G) /* return PK-type error code */
         }
     }
 
-    if (error > PK_WARN) { /* don't print redundant CRC error if error already */
+    if (error > PK_WARN) {
         undefer_input(__G);
         return error;
     }
+
+    /* CRC verification and test-mode messaging */
     if (G.crc32val != G.lrec.crc32) {
-        /* if quiet enough, we haven't output the filename yet:  do it */
         if ((uO.tflag && uO.qflag) || (!uO.tflag && !QCOND2))
             Info(slide, 0x401, ((char*)slide, "%-22s ", FnFilter1(G.filename)));
         Info(slide, 0x401, ((char*)slide, LoadFarString(BadCRC), G.crc32val, G.lrec.crc32));
-#if CRYPT
-        if (G.pInfo->encrypted)
-            Info(slide, 0x401, ((char*)slide, LoadFarString(MaybeBadPasswd)));
-#endif
         error = PK_ERR;
     }
     else if (uO.tflag) {
 #ifndef SFX
         if (G.extra_field) {
-            if ((r = TestExtraField(__G__ G.extra_field, G.lrec.extra_field_length)) > error)
+            r = TestExtraField(__G__ G.extra_field, G.lrec.extra_field_length);
+            if (r > error)
                 error = r;
         }
         else
-#endif /* !SFX */
+#endif
             if (!uO.qflag)
-                Info(slide, 0, ((char*)slide, " OK\n"));
+            Info(slide, 0, ((char*)slide, " OK\n"));
     }
     else {
-        if (QCOND2 && !error) /* GRR:  is stdout reset to text mode yet? */
+        if (QCOND2 && !error)
             Info(slide, 0, ((char*)slide, "\n"));
     }
 
     undefer_input(__G);
 
+    /* skip optional data descriptor */
     if ((G.lrec.general_purpose_bit_flag & 8) != 0) {
-        // Skip over the data descriptor. We need to correctly position the
-        // read pointer after the data descriptor for the proper detection of
-        // overlapped zip file components.
-        //
-        // We need to resolve an ambiguity over four possible data descriptor
-        // formats. We check for all four, and pick the longest match. The data
-        // descriptor can have a signature or not, and it can use four or
-        // eight-byte lengths. The zip format requires resolving the ambiguity
-        // of a signature or not, but it uses the zip64 flag to determine
-        // whether the lengths are four or eight bytes. However there is a bug
-        // in the Java zip library that applies the wrong value of that flag.
-        // This works around that bug by always trying both length formats.
-        //
-        // So why the longest match? And does this resolve the ambiguity? No,
-        // it doesn't definitively resolve the ambiguity. However choosing the
-        // longest match at least resolves it for a normal zip file, where the
-        // bytes following the data descriptor must be another zip signature
-        // that is not a data descriptor signature. There are a few specific
-        // cases for which more than one of the formats will match the given
-        // CRC and lengths. The most plausible is between four and eight-byte
-        // lengths, either with or without a signature. That only occurs for an
-        // entry with an uncompressed size of zero. We consider the data
-        // descriptor to be a vector of four-byte values. Then the possible
-        // data descriptors are [(s) 0 c 0] and [(s) 0 c 0 0 0], where (s) is
-        // the optional signature, and c is the compressed length. c would be
-        // two for the Deflate compressed data format. These look the same, so
-        // if the file contains [(s) 0 c 0 0 0], then we cannot discriminate
-        // them. However if the data descriptor was intended to be [(s) 0 c 0],
-        // then it has been followed by eight zero bytes in the zip file for
-        // some reason. For a normal zip file this cannot be the case. The data
-        // descriptor would always be immediately followed by another zip file
-        // signature, which is four bytes that are not zeros. The other cases
-        // where more than one format matches are vanishingly unlikely, but the
-        // longest match strategy resolves those as well in a normal zip file.
-        // Those pairs are [s s s] vs. [s s s s], [s s s] vs. [s s s 0 s 0],
-        // and [s s s s s] vs. [s s s s s s]. For all, s is the signature for a
-        // data descriptor. For the first two we have an entry whose CRC,
-        // compressed length, and uncompressed length are all equal (!), and
-        // are all equal to the signature (!!). If this occurs, clearly someone
-        // is messing with us. However the strategy works nonetheless. We see
-        // that if the shorter descriptor, [s s s] were what was intended, then
-        // it has been followed by either four zero bytes or a data descriptor
-        // signature. Neither can occur for a normal zip file, where it must be
-        // followed by a signature that is not a data descriptor signature. So
-        // the longest match is the correct choice. The final case is outright
-        // insane, since the compressed and uncompressed lengths are the data
-        // descriptor signature repeated twice to make a 64-bit length, which
-        // is about 6e17. The largest drive available as I write this is 100TB,
-        // which is one six thousandth of that length. If I apply Moore's law
-        // to drive capacity, we might get to 6e17 about 25 years from now. If
-        // this code is still in use then (I've seen other code I've written in
-        // use for over 30 years), then we're still in luck. A data descriptor
-        // cannot be followed by a data descriptor signature in a normal zip
-        // file. The longest match strategy continues to work.
-        //
-        // So what is a not normal zip file, where these assumptions might fall
-        // apart? zip files have been used in a non-standard way as a poor
-        // substitute for a file system, with entries deleted and perhaps
-        // others replacing them partially, with fragmented zip files being the
-        // result. Then all bets are off as to what might or might not follow a
-        // data descriptor. Though if this sort of data descriptor ambiguity
-        // falls in one of those gaps, then there should be no adverse
-        // consequences for picking the unintended one.
+#define SIG 0x08074b50
+        uch peek[24];
         int len = 0;
-#define SIG 0x08074b50  // optional data descriptor signature
-#ifdef LARGE_FILE_SUPPORT
-        uch buf[24];
-        int got = readbuf((char*)buf, sizeof(buf));
-        if (got >= 24 && makelong(buf) == SIG && makelong(buf + 4) == G.lrec.crc32 && makeint64(buf + 8) == G.lrec.csize && makeint64(buf + 16) == G.lrec.ucsize)
-            // Have a data descriptor with a signature and 64-bit lengths.
-            len = 24;
-        else if (got >= 20 && makelong(buf) == G.lrec.crc32 && makeint64(buf + 4) == G.lrec.csize && makeint64(buf + 12) == G.lrec.ucsize)
-            // Have a data descriptor with no signature and 64-bit lengths.
-            len = 20;
-        else if ((G.lrec.csize >> 32) == 0 && (G.lrec.ucsize >> 32) == 0)
-        // Both lengths are short enough to fit in 32 bits.
-#else
-        uch buf[16];
-        int got = readbuf((char*)buf, sizeof(buf));
-#endif
-        {
-            if (got >= 16 && makelong(buf) == SIG && makelong(buf + 4) == G.lrec.crc32 && makelong(buf + 8) == G.lrec.csize && makelong(buf + 12) == G.lrec.ucsize)
-                // Have a data descriptor with a signature and 32-bit lengths.
-                len = 16;
-            else if (got >= 12 && makelong(buf) == G.lrec.crc32 && makelong(buf + 4) == G.lrec.csize && makelong(buf + 8) == G.lrec.ucsize)
-                // Have a data descriptor with no signature and 32-bit lengths.
-                len = 12;
-        }
-        if (len == 0)
-            // There is no data descriptor that matches the entry CRC and
-            // length values.
-            error = PK_ERR;
+        const int need = (int)sizeof(peek);
+        int got = 0;
 
-        // Back up got-len bytes, to position the read pointer after the data
-        // descriptor. Or to where the data descriptor was supposed to be, in
-        // the event none was found.
-        int back = got - len;
-        if (G.incnt + back > INBUFSIZ) {
-            // Need to load the preceding buffer. We've been here before.
-            G.cur_zipfile_bufstart -= INBUFSIZ;
-#ifdef USE_STRM_INPUT
-            zfseeko(G.zipfd, G.cur_zipfile_bufstart, SEEK_SET);
-#else  /* !USE_STRM_INPUT */
-            zlseek(G.zipfd, G.cur_zipfile_bufstart, SEEK_SET);
-#endif /* ?USE_STRM_INPUT */
-            read(G.zipfd, (char*)G.inbuf, INBUFSIZ);
-            G.incnt -= INBUFSIZ - back;
-            G.inptr += INBUFSIZ - back;
+        if (G.incnt >= need) {
+            memcpy(peek, G.inptr, (size_t)need);
+            got = need;
         }
         else {
-            // Back up within current buffer.
-            G.incnt += back;
-            G.inptr -= back;
+            if (G.incnt > 0) {
+                memcpy(peek, G.inptr, (size_t)G.incnt);
+                got = G.incnt;
+            }
+            if (fillinbuf(__G) != 0) {
+                int add = MIN(need - got, G.incnt);
+                memcpy(peek + got, G.inptr, (size_t)add);
+                got += add;
+            }
+        }
+
+        if (got >= 24 && makelong(peek) == SIG && makelong(peek + 4) == G.lrec.crc32 && makeint64(peek + 8) == G.lrec.csize && makeint64(peek + 16) == G.lrec.ucsize)
+            len = 24;
+        else if (got >= 20 && makelong(peek) == G.lrec.crc32 && makeint64(peek + 4) == G.lrec.csize && makeint64(peek + 12) == G.lrec.ucsize)
+            len = 20;
+        else if (got >= 16 && makelong(peek) == SIG && makelong(peek + 4) == G.lrec.crc32 && makelong(peek + 8) == (ulg)G.lrec.csize && makelong(peek + 12) == (ulg)G.lrec.ucsize)
+            len = 16;
+        else if (got >= 12 && makelong(peek) == G.lrec.crc32 && makelong(peek + 4) == (ulg)G.lrec.csize && makelong(peek + 8) == (ulg)G.lrec.ucsize)
+            len = 12;
+
+        if (len == 0) {
+            error = PK_ERR;
+        }
+        else {
+            int adv = len;
+            while (adv > 0) {
+                if (G.incnt == 0) {
+                    if (fillinbuf(__G) == 0)
+                        break;
+                }
+                int step = MIN(adv, G.incnt);
+                G.inptr += step;
+                G.incnt -= step;
+                adv -= step;
+            }
         }
     }
 
     return error;
-
-} /* end function extract_or_test_member() */
+} /* end function extract_or_test_member */
 
 #ifndef SFX
 
