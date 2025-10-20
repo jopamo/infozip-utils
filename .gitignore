@@ -1,6 +1,5 @@
 *.o
 /Makefile
 /funzip
-/unzip
 /unzipsfx
 .DS_Store
