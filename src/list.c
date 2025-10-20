@@ -218,9 +218,9 @@ int list_files(__G) /* return PK-type error code */
             else {
                 /* unknown method number in decimal up to 999 or hex otherwise */
                 if (G.crec.compression_method <= 999)
-                    snprintf(methbuf, sizeof(methbuf), "Unk%03u", G.crec.compression_method);   /* 3 + 3 = 6 */
+                    snprintf(methbuf, sizeof(methbuf), "Unk%03u", G.crec.compression_method); /* 3 + 3 = 6 */
                 else
-                    snprintf(methbuf, sizeof(methbuf), "unk%04X", G.crec.compression_method);   /* 3 + 4 = 7 */
+                    snprintf(methbuf, sizeof(methbuf), "unk%04X", G.crec.compression_method); /* 3 + 4 = 7 */
             }
 
             if (G.crec.compression_method == DEFLATED || G.crec.compression_method == ENHDEFLATED) {

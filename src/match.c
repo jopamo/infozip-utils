@@ -30,28 +30,28 @@
 
 /* --- Tokens (Unix style) ------------------------------------------------ */
 
-#define WILDCHAR   '?'
-#define BEG_RANGE  '['
-#define END_RANGE  ']'
+#define WILDCHAR '?'
+#define BEG_RANGE '['
+#define END_RANGE ']'
 
 /* Protos (keep OF/__WDL* compatibility with the tree) */
-static int  recmatch OF((ZCONST uch * pattern, ZCONST uch* string, int ignore_case));
+static int recmatch OF((ZCONST uch * pattern, ZCONST uch* string, int ignore_case));
 static char* isshexp OF((ZCONST char* p));
-static int  namecmp OF((ZCONST char* s1, ZCONST char* s2));
+static int namecmp OF((ZCONST char* s1, ZCONST char* s2));
 
 /* Public shell: booleanize recmatch() */
 int match(string, pattern, ignore_case)
-    ZCONST char *string, *pattern;
-    int ignore_case;
+ZCONST char *string, *pattern;
+int ignore_case;
 {
     return recmatch((ZCONST uch*)pattern, (ZCONST uch*)string, ignore_case) == 1;
 }
 
 /* Core recursive matcher (Unix semantics) */
 static int recmatch(p, s, ic)
-    ZCONST uch* p;   /* pattern */
-    ZCONST uch* s;   /* string  */
-    int ic;          /* ignore case? */
+ZCONST uch* p; /* pattern */
+ZCONST uch* s; /* string  */
+int ic;        /* ignore case? */
 {
     unsigned int c;
 
@@ -82,21 +82,22 @@ static int recmatch(p, s, ic)
             {
                 /* walk forward to srest by characters (avoid mid-MBCS split) */
                 ZCONST uch* q = s;
-                while (q < srest) INCSTR(q);
-                if (q != srest) return 0;
-                return ((ic ? namecmp((ZCONST char*)p, (ZCONST char*)q)
-                            : strcmp((ZCONST char*)p, (ZCONST char*)q)) == 0);
+                while (q < srest)
+                    INCSTR(q);
+                if (q != srest)
+                    return 0;
+                return ((ic ? namecmp((ZCONST char*)p, (ZCONST char*)q) : strcmp((ZCONST char*)p, (ZCONST char*)q)) == 0);
             }
 #else
-            return ((ic ? namecmp((ZCONST char*)p, (ZCONST char*)srest)
-                        : strcmp((ZCONST char*)p, (ZCONST char*)srest)) == 0);
+            return ((ic ? namecmp((ZCONST char*)p, (ZCONST char*)srest) : strcmp((ZCONST char*)p, (ZCONST char*)srest)) == 0);
 #endif
         }
 
         /* general case: try to consume any number of bytes */
         for (; *s; INCSTR(s)) {
             int r = recmatch(p, s, ic);
-            if (r != 0) return r;
+            if (r != 0)
+                return r;
         }
         return 2; /* give up -> overall "no match" */
     }
@@ -109,15 +110,23 @@ static int recmatch(p, s, ic)
         unsigned int lo = 0;
         int matched = 0;
 
-        if (*s == 0) return 0;
+        if (*s == 0)
+            return 0;
 
         invert = (*p == '!' || *p == '^') ? (INCSTR(p), 1) : 0;
 
         /* find closing ']' */
         for (q = p; *q; INCSTR(q)) {
-            if (esc) { esc = 0; continue; }
-            if (*q == '\\') { esc = 1; continue; }
-            if (*q == (unsigned)END_RANGE) break;
+            if (esc) {
+                esc = 0;
+                continue;
+            }
+            if (*q == '\\') {
+                esc = 1;
+                continue;
+            }
+            if (*q == (unsigned)END_RANGE)
+                break;
         }
         if (*q != (unsigned)END_RANGE)
             return 0; /* bad class -> no match */
@@ -125,24 +134,33 @@ static int recmatch(p, s, ic)
         /* iterate class content */
         esc = (*p == '-') ? 1 : 0; /* leading '-' literal */
         for (; p < q; INCSTR(p)) {
-            if (!esc && *p == '\\') { esc = 1; continue; }
+            if (!esc && *p == '\\') {
+                esc = 1;
+                continue;
+            }
 
             if (!esc && *p == '-') {
                 /* range: lo already set to previous, hi is next */
                 ZCONST uch* hi_p = p + 1;
                 if (hi_p >= q) { /* trailing '-' literal */
-                    if (want == (unsigned)Case('-')) matched = 1;
+                    if (want == (unsigned)Case('-'))
+                        matched = 1;
                     break;
                 }
                 /* compute inclusive range [lo..*hi_p] */
                 {
                     unsigned int hi = (unsigned int)Case(*hi_p);
                     unsigned int a = lo, b = hi;
-                    if (a > b) { unsigned int t = a; a = b; b = t; }
-                    if (want >= a && want <= b) matched = 1;
+                    if (a > b) {
+                        unsigned int t = a;
+                        a = b;
+                        b = t;
+                    }
+                    if (want >= a && want <= b)
+                        matched = 1;
                 }
                 /* skip the hi char (loop INCSTR will add one more) */
-                INCSTR(p);  /* consume hi */
+                INCSTR(p); /* consume hi */
                 lo = 0;
                 esc = 0;
                 continue;
@@ -151,20 +169,20 @@ static int recmatch(p, s, ic)
             /* literal member: set as possible lo for a following range,
                and also check singleton match */
             lo = (unsigned int)Case(*p);
-            if (want == lo) matched = 1;
+            if (want == lo)
+                matched = 1;
             esc = 0;
         }
 
         /* apply inversion and continue after ']' */
-        return (invert ? !matched : matched)
-                 ? recmatch(q + 1, s + CLEN(s), ic)
-                 : 0;
+        return (invert ? !matched : matched) ? recmatch(q + 1, s + CLEN(s), ic) : 0;
     }
 
     /* escape: match literal next char */
     if (c == '\\') {
         c = *p++;
-        if (c == 0) return 0; /* dangling '\' -> no match */
+        if (c == 0)
+            return 0; /* dangling '\' -> no match */
     }
 
     /* literal compare */
@@ -173,10 +191,13 @@ static int recmatch(p, s, ic)
 
 /* return pointer to first special shell char in p, else NULL */
 static char* isshexp(p)
-    ZCONST char* p;
+ZCONST char* p;
 {
     for (; *p; INCSTR(p)) {
-        if (*p == '\\' && *(p + 1)) { p++; continue; }
+        if (*p == '\\' && *(p + 1)) {
+            p++;
+            continue;
+        }
         if (*p == WILDCHAR || *p == '*' || *p == BEG_RANGE)
             return (char*)p;
     }
@@ -185,22 +206,26 @@ static char* isshexp(p)
 
 /* case-insensitive strcmp using safe ToLower on unsigned char */
 static int namecmp(s1, s2)
-    ZCONST char *s1, *s2;
+ZCONST char *s1, *s2;
 {
     for (;;) {
         int d = (int)ToLower((uch)*s1) - (int)ToLower((uch)*s2);
         if (d || *s1 == 0 || *s2 == 0)
             return d;
-        s1++; s2++;
+        s1++;
+        s2++;
     }
 }
 
 /* simple “does it contain any wildcards?” helper for Unix */
 int iswild(p)
-    ZCONST char* p;
+ZCONST char* p;
 {
     for (; *p; INCSTR(p)) {
-        if (*p == '\\' && *(p + 1)) { ++p; continue; }
+        if (*p == '\\' && *(p + 1)) {
+            ++p;
+            continue;
+        }
         if (*p == '?' || *p == '*' || *p == '[')
             return TRUE;
     }
