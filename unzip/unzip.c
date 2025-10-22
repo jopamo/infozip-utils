@@ -1848,6 +1848,7 @@ static void show_version_info(__G) __GDEF {
         char* envptr;
         int numopts = 0;
         char optbuf[256];
+        (void)optbuf;
 
         Info(slide, 0, ((char*)slide, LoadFarString(UnzipUsageLine1v), UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, LoadFarStringSmall(VersionDate)));
         Info(slide, 0, ((char*)slide, LoadFarString(UnzipUsageLine2v)));
