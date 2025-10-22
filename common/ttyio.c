@@ -162,7 +162,7 @@ static int read_one_byte(int fd, char* ch) {
 /* For VM/CMS and MVS, non-echo terminal input is not (yet?) supported. */
 #ifndef CMS_MVS
 
-#ifdef ZIP /* moved to globals.h for UnZip */
+#ifdef ZIP                /* moved to globals.h for UnZip */
 static int echofd = (-1); /* file descriptor whose echo is off */
 #endif
 
@@ -308,7 +308,7 @@ int zgetch(__G__ f) __GDEF int f; /* file descriptor from which to read */
     return (int)(uch)c;
 }
 
-#else       /* !ATH_BEO_UNX */
+#else /* !ATH_BEO_UNX */
 
 int zgetch(__G__ f) __GDEF int f; /* fd must be open already */
 {
@@ -354,7 +354,6 @@ error : This Info - ZIP tool requires zcrypt 2.7 or later.
 
 #ifdef HAVE_WORKING_GETCH
 
-
                     char* getp(__G__ m, p, n)
 __GDEF
 ZCONST char* m; /* prompt for password */
@@ -390,7 +389,6 @@ int n;          /* bytes available in p[] */
 
     return p;
 }
-
 
 #else /* !HAVE_WORKING_GETCH */
 
