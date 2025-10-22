@@ -1614,7 +1614,9 @@ int ask_for_split_read_path(current_disk)
       }
     }
     fflush(mesg);
-    fgets(buf, SPLIT_MAXPATH, stdin);
+    if (fgets(buf, SPLIT_MAXPATH, stdin) == NULL) {
+      return ZE_ABORT;
+    }
     /* remove any newline */
     for (i = 0; buf[i]; i++) {
       if (buf[i] == '\n') {
@@ -1637,7 +1639,9 @@ int ask_for_split_read_path(current_disk)
       fprintf(mesg, "\nEnter path where this split is (ENTER = same dir, . = current dir)");
       fprintf(mesg, "\n: ");
       fflush(mesg);
-      fgets(buf, SPLIT_MAXPATH, stdin);
+      if (fgets(buf, SPLIT_MAXPATH, stdin) == NULL) {
+        return ZE_ABORT;
+      }
       is_readable = 0;
       /* remove any newline */
       for (i = 0; buf[i]; i++) {
@@ -1818,7 +1822,9 @@ int ask_for_split_write_path(current_disk)
   for (;;) {
     fprintf(mesg, "\nPath (or hit ENTER to continue): ");
     fflush(mesg);
-    fgets(buf, FNMAX, stdin);
+    if (fgets(buf, FNMAX, stdin) == NULL) {
+      return ZE_ABORT;
+    }
     /* remove any newline */
     for (i = 0; buf[i]; i++) {
       if (buf[i] == '\n') {
@@ -2573,7 +2579,7 @@ char *wide_char_to_escape_string(wide_char)
   char *r;
 
   /* fill byte array with zeros */
-  for (len = 0; len < sizeof(zwchar); len++) {
+  for (len = 0; len < (int)sizeof(zwchar); len++) {
     b[len] = 0;
   }
   /* get bytes in right to left order */
@@ -2677,11 +2683,10 @@ char *local_to_escape_string(local_string)
 char *wide_to_local_string(wide_string)
   zwchar *wide_string;
 {
-  int i;
+  size_t i;
   wchar_t wc;
   int b;
-  int state_dependent;
-  int wsize = 0;
+  size_t wsize = 0;
   int max_bytes = MB_CUR_MAX;
   char buf[9];
   char *buffer = NULL;
@@ -2692,23 +2697,18 @@ char *wide_to_local_string(wide_string)
   if (MAX_ESCAPE_BYTES > max_bytes)
     max_bytes = MAX_ESCAPE_BYTES;
 
-  if ((buffer = (char *)malloc(wsize * max_bytes + 1)) == NULL) {
+  if ((buffer = (char *)malloc(wsize * (size_t)max_bytes + 1)) == NULL) {
     ZIPERR(ZE_MEM, "wide_to_local_string");
   }
 
   /* convert it */
   buffer[0] = '\0';
-  /* set initial state if state-dependent encoding */
-  wc = (wchar_t)'a';
-  b = wctomb(NULL, wc);
-  if (b == 0)
-    state_dependent = 0;
-  else
-    state_dependent = 1;
+  /* reset conversion state if the encoding is stateful */
+  (void)wctomb(NULL, 0);
   for (i = 0; i < wsize; i++) {
     if (sizeof(wchar_t) < 4 && wide_string[i] > 0xFFFF) {
       /* wchar_t probably 2 bytes */
-      /* could do surrogates if state_dependent and wctomb can do */
+      /* could do surrogates if the multibyte encoding supports them */
       wc = zwchar_to_wchar_t_default_char;
     } else {
       wc = (wchar_t)wide_string[i];
@@ -2717,7 +2717,7 @@ char *wide_to_local_string(wide_string)
     if (unicode_escape_all) {
       if (b == 1 && (uch)buf[0] <= 0x7f) {
         /* ASCII */
-        strncat(buffer, buf, b);
+        strncat(buffer, buf, (size_t)b);
       } else {
         /* use escape for wide character */
         char *e = wide_char_to_escape_string(wide_string[i]);
@@ -2726,7 +2726,7 @@ char *wide_to_local_string(wide_string)
       }
     } else if (b > 0) {
       /* multi-byte char */
-      strncat(buffer, buf, b);
+      strncat(buffer, buf, (size_t)b);
     } else {
       /* no MB for this wide */
       if (use_wide_to_mb_default) {
@@ -2755,15 +2755,15 @@ char *wide_to_local_string(wide_string)
 char *wide_to_escape_string(wide_string)
   zwchar *wide_string;
 {
-  int i;
-  int wsize = 0;
+  size_t i;
+  size_t wsize = 0;
   char buf[9];
   char *buffer = NULL;
   char *escape_string = NULL;
 
   for (wsize = 0; wide_string[wsize]; wsize++) ;
 
-  if ((buffer = (char *)malloc(wsize * MAX_ESCAPE_BYTES + 1)) == NULL) {
+  if ((buffer = (char *)malloc(wsize * (size_t)MAX_ESCAPE_BYTES + 1)) == NULL) {
     ZIPERR(ZE_MEM, "wide_to_escape_string");
   }
 
@@ -2876,7 +2876,7 @@ char *utf8_to_escape_string(utf8_string)
 zwchar *local_to_wide_string(local_string)
   char *local_string;
 {
-  int wsize;
+  size_t wsize;
   wchar_t *wc_string;
   zwchar *wide_string;
 
