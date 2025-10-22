@@ -27,16 +27,7 @@
 /* for toupper() */
 #include <ctype.h>
 
-#ifdef VMS
-#  include "vms/vms.h"
-#  include "vms/vmsmunch.h"
-#  include "vms/vmsdefs.h"
-#endif
 
-#ifdef WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-#endif
 
 /*
  * XXX start of zipfile.h
@@ -236,9 +227,6 @@ local int scanzipf_regnew OF((void));
 
 /* Local data */
 
-#ifdef HANDLE_AMIGA_SFX
-   ulg amiga_sfx_offset;        /* place where size field needs updating */
-#endif
 
 local int zqcmp(a, b)
 ZCONST zvoid *a, *b;          /* pointers to pointers to zip entries */
@@ -353,7 +341,6 @@ struct zlist far *zsearch(n)
 
 #endif /* !UTIL */
 
-#ifndef VMS     /* See [.VMS]VMS.C for VMS-specific ziptyp(). */
 #  ifndef PATHCUT
 #    define PATHCUT '/'
 #  endif
@@ -379,23 +366,11 @@ char *ziptyp(s)
 #  ifdef __human68k__
   _toslash(t);
 #  endif
-#  ifdef MSDOS
-  for (q = t; *q; INCSTR(q))
-    if (*q == '\\')
-      *q = '/';
-#  endif /* MSDOS */
 #  if defined(__RSXNT__) || defined(WIN32_CRT_OEM)
    /* RSXNT/EMX C rtl uses OEM charset */
   AnsiToOem(t, t);
 #  endif
   if (adjust) return t;
-#  ifndef RISCOS
-#    ifndef QDOS
-#      ifdef AMIGA
-  if ((q = MBSRCHR(t, '/')) == NULL)
-    q = MBSRCHR(t, ':');
-  if (MBSRCHR((q ? q + 1 : t), '.') == NULL)
-#      else /* !AMIGA */
 #        ifdef THEOS
   /* the argument expansion add a dot to the end of file names when
    * there is no extension and at least one of a argument has wild cards.
@@ -404,13 +379,8 @@ char *ziptyp(s)
   if ((q = MBSRCHR((q = MBSRCHR(t, PATHCUT)) == NULL ? t : q + 1, '.')) == NULL
     || q[1] == '\0') {
 #        else /* !THEOS */
-#          ifdef TANDEM
-  if (MBSRCHR((q = MBSRCHR(t, '.')) == NULL ? t : q + 1, ' ') == NULL)
-#          else /* !TANDEM */
   if (MBSRCHR((q = MBSRCHR(t, PATHCUT)) == NULL ? t : q + 1, '.') == NULL)
-#          endif /* ?TANDEM */
 #        endif /* ?THEOS */
-#      endif /* ?AMIGA */
 #      ifdef CMS_MVS
     if (strncmp(t,"dd:",3) != 0 && strncmp(t,"DD:",3) != 0)
 #      endif /* CMS_MVS */
@@ -431,23 +401,10 @@ char *ziptyp(s)
     }
   }
 #      else /* !THEOS */
-#        ifdef TANDEM     /*  Tandem can't cope with extensions */
-    strcat(t, " ZIP");
-#        else /* !TANDEM */
     strcat(t, ".zip");
-#        endif /* ?TANDEM */
 #      endif /* ?THEOS */
-#    else /* QDOS */
-  q = LastDir(t);
-  if(MBSRCHR(q, '_') == NULL && MBSRCHR(q, '.') == NULL)
-  {
-      strcat(t, "_zip");
-  }
-#    endif /* QDOS */
-#  endif /* !RISCOS */
   return t;
 }
-#endif  /* ndef VMS */
 
 /* ---------------------------------------------------- */
 
@@ -1420,9 +1377,6 @@ local int add_Unicode_Path_local_extra_field(pZEntry)
   char  *pOldUExtra;
   char  *pOldTemp;
   char  *pTemp;
-#ifdef WIN32_OEM
-  char  *inameLocal;
-#endif
   ush   newEFSize;
   ush   usTemp;
   ush   ULen = strlen(pZEntry->uname);
@@ -1507,28 +1461,11 @@ local int add_Unicode_Path_local_extra_field(pZEntry)
                    (uch *)(pZEntry->iname), strlen(pZEntry->iname));
 */
 
-#ifdef WIN32_OEM
-  if ((inameLocal = malloc(strlen(pZEntry->iname) + 1)) == NULL) {
-    ZIPERR(ZE_MEM, "write Unicode");
-  }
-  /* if oem translation done convert back for checksum */
-  if ((pZEntry->vem & 0xff00) == 0) {
-    /* get original */
-    INTERN_TO_OEM(pZEntry->iname, inameLocal);
-  } else {
-    strcpy(inameLocal, pZEntry->iname);
-  }
-#else
 # define inameLocal (pZEntry->iname)
-#endif
 
   chksum = crc32(chksum, (uch *)(inameLocal), strlen(inameLocal));
 
-#ifdef WIN32_OEM
-  free(inameLocal);
-#else
 # undef inameLocal
-#endif
 
   /* set/update UTF-8 Path extra field members */
   /* tag header */
@@ -1552,9 +1489,6 @@ local int add_Unicode_Path_cen_extra_field(pZEntry)
   char  *pOldUExtra;
   char  *pOldTemp;
   char  *pTemp;
-#ifdef WIN32_OEM
-  char  *inameLocal;
-#endif
   ush   newEFSize;
   ush   usTemp;
   ush   ULen = strlen(pZEntry->uname);
@@ -1634,28 +1568,11 @@ local int add_Unicode_Path_cen_extra_field(pZEntry)
   /*
    * Compute the CRC-32 checksum of iname
    */
-#ifdef WIN32_OEM
-  if ((inameLocal = malloc(strlen(pZEntry->iname) + 1)) == NULL) {
-    ZIPERR(ZE_MEM, "write Unicode");
-  }
-  /* if oem translation done convert back for checksum */
-  if ((pZEntry->vem & 0xff00) == 0) {
-    /* get original */
-    INTERN_TO_OEM(pZEntry->iname, inameLocal);
-  } else {
-    strcpy(inameLocal, pZEntry->iname);
-  }
-#else
 # define inameLocal (pZEntry->iname)
-#endif
 
   chksum = crc32(chksum, (uch *)(inameLocal), strlen(inameLocal));
 
-#ifdef WIN32_OEM
-  free(inameLocal);
-#else
 # undef inameLocal
-#endif
 
   /*
    * Compute the Adler-16 checksum of iname
@@ -1903,24 +1820,12 @@ local int scanzipf_fix(f)
 # endif
     x = &zfiles;                        /* first link */
     p = 0;                              /* starting file offset */
-# ifdef HANDLE_AMIGA_SFX
-    amiga_sfx_offset = 0L;
-# endif
 
     /* Find start of zip structures */
     for (;;) {
       /* look for signature */
       while ((m = getc(f)) != EOF && m != 0x50)    /* 0x50 == 'P' */
       {
-# ifdef HANDLE_AMIGA_SFX
-        if (p == 0 && m == 0)
-          amiga_sfx_offset = 1L;
-        else if (amiga_sfx_offset) {
-          if ((p == 1 && m != 0) || (p == 2 && m != 3)
-                                 || (p == 3 && (uch) m != 0xF3))
-            amiga_sfx_offset = 0L;
-        }
-# endif /* HANDLE_AMIGA_SFX */
         p++;
       }
       /* found a P */
@@ -1939,14 +1844,6 @@ local int scanzipf_fix(f)
       p++;
     }
     zipbeg = p;
-# ifdef HANDLE_AMIGA_SFX
-    if (amiga_sfx_offset && zipbeg >= 12 && (zipbeg & 3) == 0
-        && fseek(f, -12L, SEEK_CUR) == 0 && fread(b, 12, 1, f) == 1
-        && LG(b + 4) == 0xF1030000 /* 1009 in Motorola byte order */)
-      amiga_sfx_offset = zipbeg - 4;
-    else
-      amiga_sfx_offset = 0L;
-# endif /* HANDLE_AMIGA_SFX */
 
     /* Read local headers */
     while (LG(b) == LOCSIG)
@@ -2270,14 +2167,6 @@ int readlocal(localz, z)
   if (unicode_mismatch != 3)
     read_Unicode_Path_local_entry(locz);
 #endif
-#ifdef WIN32
-  {
-    /* translate archive name from OEM if came from OEM-charset environment */
-    unsigned hostver = (z->vem & 0xff);
-    Ext_ASCII_TO_Native(locz->iname, (z->vem >> 8), hostver,
-                        ((z->atx & 0xffff0000L) != 0), TRUE);
-  }
-#endif
   if ((locz->name = malloc(locz->nam+1)) ==  NULL)
     return ZE_MEM;
   strcpy(locz->name, locz->iname);
@@ -2358,10 +2247,6 @@ local int scanzipf_reg(f)
     if (buf == NULL)
       return ZE_MEM;
 
-#ifdef HANDLE_AMIGA_SFX
-    amiga_sfx_offset = (fread(buf, 1, 4, f) == 4 && LG(buf) == 0xF3030000);
-    /* == 1 if this file is an Amiga executable (presumably UnZipSFX) */
-#endif
     /* detect spanning signature */
     zfseeko(f, 0, SEEK_SET);
     read_split_archive = (fread(buf, 1, 4, f) == 4 && LG(buf) == 0x08074b50L);
@@ -2898,20 +2783,6 @@ printf("start of central directory cenbeg %ld\n", cenbeg);
       fprintf(mesg, "%s: %s a preamble of %s bytes\n",
               zipfile, adjust ? "adjusting offsets for" : "found",
               zip_fzofft(zipbeg, NULL, "u"));
-#ifdef HANDLE_AMIGA_SFX
-    if (zipbeg < 12 || (zipbeg & 3) != 0 /* must be longword aligned */)
-      amiga_sfx_offset = 0;
-    else if (amiga_sfx_offset) {
-      char buf2[16];
-      if (!fseek(f, zipbeg - 12, SEEK_SET) && fread(buf2, 12, 1, f) == 1) {
-        if (LG(buf2 + 4) == 0xF1030000 /* 1009 in Motorola byte order */)
-          /* could also check if LG(buf2) == 0xF2030000... no for now */
-          amiga_sfx_offset = zipbeg - 4;
-        else
-          amiga_sfx_offset = 0L;
-      }
-    }
-#endif /* HANDLE_AMIGA_SFX */
     return ZE_OK;
 } /* end of function scanzipf_reg() */
 #endif /* never */
@@ -3231,10 +3102,6 @@ local int scanzipf_fixnew()
   /* see if zipfile name ends in .zip */
   plen = strlen(in_path);
 
-#ifdef VMS
-  /* On VMS, adjust plen (and in_path_ext) to avoid the file version. */
-  plen -= strlen(vms_file_version(in_path));
-#endif /* def VMS */
   in_path_ext = zipfile + plen - 4;
 
   if (plen >= 4 &&
@@ -3810,27 +3677,11 @@ local int scanzipf_fixnew()
           }
 #endif
 
-#ifdef WIN32
-          /* Input path may be OEM */
-          {
-            unsigned hostver = (z->vem & 0xff);
-            Ext_ASCII_TO_Native(z->iname, (z->vem >> 8), hostver,
-                                ((z->atx & 0xffff0000L) != 0), FALSE);
-          }
-#endif
 
 #ifdef EBCDIC
           if (z->com)
              memtoebc(z->comment, z->comment, z->com);
 #endif /* EBCDIC */
-#ifdef WIN32
-          /* Comment may be OEM */
-          {
-            unsigned hostver = (z->vem & 0xff);
-            Ext_ASCII_TO_Native(z->comment, (z->vem >> 8), hostver,
-                                ((z->atx & 0xffff0000L) != 0), FALSE);
-          }
-#endif
 
 #ifdef ZIP64_SUPPORT
           /* zip64 support 08/31/2003 R.Nausedat                          */
@@ -4212,10 +4063,6 @@ local int scanzipf_regnew()
       return ZE_FORM;
     }
 
-#ifdef VMS
-    /* On VMS, adjust plen (and in_path_ext) to avoid the file version. */
-    plen -= strlen(vms_file_version(in_path));
-#endif /* def VMS */
     in_path_ext = zipfile + plen - 4;
 
     if (plen < 4 ||
@@ -4875,27 +4722,11 @@ local int scanzipf_regnew()
       }
 #endif
 
-#ifdef WIN32
-      /* Input path may be OEM */
-      {
-        unsigned hostver = (z->vem & 0xff);
-        Ext_ASCII_TO_Native(z->iname, (z->vem >> 8), hostver,
-                            ((z->atx & 0xffff0000L) != 0), FALSE);
-      }
-#endif
 
 #ifdef EBCDIC
       if (z->com)
          memtoebc(z->comment, z->comment, z->com);
 #endif /* EBCDIC */
-#ifdef WIN32
-      /* Comment may be OEM */
-      {
-        unsigned hostver = (z->vem & 0xff);
-        Ext_ASCII_TO_Native(z->comment, (z->vem >> 8), hostver,
-                            ((z->atx & 0xffff0000L) != 0), FALSE);
-      }
-#endif
 
 #ifdef ZIP64_SUPPORT
       /* zip64 support 08/31/2003 R.Nausedat                          */
@@ -4935,11 +4766,6 @@ local int scanzipf_regnew()
       strcpy(z->name, z->zname);
       z->oname = local_to_display_string(z->iname);
 
-# ifdef WIN32
-      z->namew = NULL;
-      z->inamew = NULL;
-      z->znamew = NULL;
-# endif
 
       if (unicode_mismatch != 3) {
         if (z->uname) {
@@ -4992,40 +4818,9 @@ local int scanzipf_regnew()
             }
             strcpy(z->ouname, name);
           }
-#  ifdef WIN32
-
-          if (!no_win32_wide) {
-            z->inamew = utf8_to_wchar_string(z->uname);
-            z->znamew = in2exw(z->inamew); /* convert to external name */
-            if (z->znamew == NULL)
-              return ZE_MEM;
-          }
-
-          local_to_oem_string(z->ouname, z->ouname);
-          /* For matching.  There seems to be something lost
-             in the translation from displaying a name in a
-             console window using zip -su on Win32 and using
-             that name in a command line to match what's in
-             the archive.  This is klugy though.
-          */
-          if ((z->wuname = malloc(strlen(z->ouname) + 1)) == NULL) {
-            zipwarn("could not allocate memory: scanzipf_reg", "");
-            return ZE_MEM;
-          }
-          strcpy(z->wuname, z->ouname);
-          oem_to_local_string(z->wuname, z->wuname);
-#  endif /* WIN32 */
 # endif /* ?EBCDIC */
         } else {
           /* no uname */
-# ifdef WIN32
-          if (!no_win32_wide) {
-            z->inamew = local_to_wchar_string(z->iname);
-            z->znamew = in2exw(z->inamew); /* convert to external name */
-            if (z->znamew == NULL)
-              return ZE_MEM;
-          }
-# endif
         }
       }
 #else /* !(UNICODE_SUPPORT && !UTIL) */
@@ -5131,28 +4926,10 @@ int readzipfile()
   zipfile_exists = 0;
 
   /* If zip file exists, read headers and check structure */
-#ifdef VMS
-  if (zipfile == NULL || !(*zipfile) || !strcmp(zipfile, "-"))
-    return ZE_OK;
-  {
-    int rtype;
-
-    if ((VMSmunch(zipfile, GET_RTYPE, (char *)&rtype) == RMS$_NORMAL) &&
-        (rtype == FAT$C_VARIABLE)) {
-      fprintf(mesg,
-     "\n     Error:  zipfile is in variable-length record format.  Please\n\
-     run \"bilf b %s\" to convert the zipfile to fixed-length\n\
-     record format.\n\n", zipfile);
-      return ZE_FORM;
-    }
-  }
-  readable = ((f = zfopen(zipfile, FOPR)) != NULL);
-#else /* !VMS */
   readable = (zipfile != NULL && *zipfile && strcmp(zipfile, "-"));
   if (readable) {
     readable = ((f = zfopen(zipfile, FOPR)) != NULL);
   }
-#endif /* ?VMS */
 
   /* skip check if streaming */
   if (!readable) {
@@ -5458,23 +5235,7 @@ int putlocal(z, rewrite)
     append_string_to_mem(z->uname, nam, &block, &offset, &blocksize);
   } else
 #endif
-#ifdef WIN32_OEM
-  /* store name in OEM character set in archive */
-  if ((z->vem & 0xff00) == 0)
-  {
-    char *oem;
-
-    if ((oem = malloc(strlen(z->iname) + 1)) == NULL)
-      ZIPERR(ZE_MEM, "putlocal oem");
-    INTERN_TO_OEM(z->iname, oem);
-    append_string_to_mem(oem, z->nam, &block, &offset, &blocksize); /* file name */
-    free(oem);
-  } else {
-    append_string_to_mem(z->iname, z->nam, &block, &offset, &blocksize); /* file name */
-  }
-#else
   append_string_to_mem(z->iname, z->nam, &block, &offset, &blocksize); /* file name */
-#endif
   if (z->ext) {
     append_string_to_mem(z->extra, z->ext, &block, &offset, &blocksize); /* extra field */
   }
@@ -5759,45 +5520,13 @@ int putcentral(z)
     append_string_to_mem(z->uname, nam, &block, &offset, &blocksize);
   } else
 #endif
-#ifdef WIN32_OEM
-  /* store name in OEM character set in archive */
-  if ((z->vem & 0xff00) == 0)
-  {
-    char *oem;
-
-    if ((oem = malloc(strlen(z->iname) + 1)) == NULL)
-      ZIPERR(ZE_MEM, "putcentral oem");
-    INTERN_TO_OEM(z->iname, oem);
-    append_string_to_mem(oem, z->nam, &block, &offset, &blocksize);
-    free(oem);
-  } else {
-    append_string_to_mem(z->iname, z->nam, &block, &offset, &blocksize);
-  }
-#else
   append_string_to_mem(z->iname, z->nam, &block, &offset, &blocksize);
-#endif
 
   if (z->cext) {
     append_string_to_mem(z->cextra, z->cext, &block, &offset, &blocksize);
   }
   if (z->com) {
-#ifdef WIN32_OEM
-    /* store comment in OEM character set in archive */
-    if ((z->vem & 0xff00) == 0)
-    {
-      char *oem;
-
-      if ((oem = malloc(strlen(z->comment) + 1)) == NULL)
-        ZIPERR(ZE_MEM, "putcentral oem comment");
-      INTERN_TO_OEM(z->comment, oem);
-      append_string_to_mem(oem, z->com, &block, &offset, &blocksize);
-      free(oem);
-    } else {
-      append_string_to_mem(z->comment, z->com, &block, &offset, &blocksize);
-    }
-#else
     append_string_to_mem(z->comment, z->com, &block, &offset, &blocksize);
-#endif
   }
 
   /* write the header */
@@ -5828,9 +5557,7 @@ int putend( OFT( uzoff_t) n,
   char *z;                  /* zip file comment if m != 0 */
 #endif /* def NO_PROTO */
 {
-#ifndef HANDLE_AMIGA_SFX
   (void)c;
-#endif
 #ifdef ZIP64_SUPPORT        /* zip64 support 09/05/2003 R.Nausedat */
   ush vem;          /* version made by */
   int iNeedZip64 = 0;
@@ -5986,20 +5713,6 @@ int putend( OFT( uzoff_t) n,
   }
   free(block);
 
-#ifdef HANDLE_AMIGA_SFX
-  if (amiga_sfx_offset && zipbeg /* -J zeroes this */) {
-    s = zftello(y);
-    while (s & 3) s++, putc(0, f);   /* final marker must be longword aligned */
-    PUTLG(0xF2030000 /* 1010 in Motorola byte order */, f);
-    c = (s - amiga_sfx_offset - 4) / 4;  /* size of archive part in longwords */
-    if (zfseeko(y, amiga_sfx_offset, SEEK_SET) != 0)
-      return ZE_TEMP;
-    c = ((c >> 24) & 0xFF) | ((c >> 8) & 0xFF00)
-         | ((c & 0xFF00) << 8) | ((c & 0xFF) << 24);     /* invert byte order */
-    PUTLG(c, y);
-    zfseeko(y, 0, SEEK_END);                                  /* just in case */
-  }
-#endif
 
   return ZE_OK;
 } /* end function putend() */
@@ -6224,29 +5937,9 @@ int zipcopy(z)
     }
 #endif
 
-#ifdef WIN32_OEM
-      /* If fix == 2 and reading local headers first, vem is not in the local
-         header so we don't know when to do OEM translation, as the ver field
-         is set to MSDOS (0) by all unless something specific is needed.
-         However, if local header has a Unicode path extra field, we can get
-         the real file name from there. */
-    if ((z->vem & 0xff00) == 0)
-      /* assume archive name is OEM if from DOS */
-      oem_to_local_string(localz->iname, localz->iname);
-#endif
   }
 
   if (fix == 2) {
-# ifdef WIN32
-#  ifdef UNICODE_SUPPORT
-    localz->namew = NULL;
-    localz->inamew = NULL;
-    localz->znamew = NULL;
-    z->namew = NULL;
-    z->inamew = NULL;
-    z->znamew = NULL;
-#  endif
-# endif
     /* set z from localz */
     z->flg = localz->lflg;
     z->len = localz->len;
@@ -6360,11 +6053,6 @@ int zipcopy(z)
     }
     strcpy(z->oname, localz->iname);
 #ifndef UTIL
-# ifdef WIN32
-    /* Win9x console always uses OEM character coding, and
-       WinNT console is set to OEM charset by default, too */
-    _INTERN_OEM(z->oname);
-# endif
 #endif
     sprintf(errbuf, " copying: %s ", z->oname);
     zipmessage_nl(errbuf, 0);
@@ -6701,29 +6389,10 @@ int delim;              /* path component separator char */
 {
   char *r;              /* pointer to last path delimiter */
 
-#ifdef VMS                      /* change [w.x.y]z to [w.x]y.DIR */
-  if ((r = MBSRCHR(p, ']')) != NULL)
-  {
-    *r = 0;
-    if ((r = MBSRCHR(p, '.')) != NULL)
-    {
-      *r = ']';
-      strcat(r, ".DIR;1");     /* this assumes a little padding--see PAD */
-    } else {
-      *p = 0;
-    }
-  } else {
-    if ((r = MBSRCHR(p, delim)) != NULL)
-      *r = 0;
-    else
-      *p = 0;
-  }
-#else /* !VMS */
   if ((r = MBSRCHR(p, delim)) != NULL)
     *r = 0;
   else
     *p = 0;
-#endif /* ?VMS */
 }
 
 int trash()

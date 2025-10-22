@@ -284,9 +284,7 @@ typedef struct Globals {
     uch* outbuf;
     uch* realbuf;
 
-#ifndef VMS       /* if SMALL_MEM, outbuf2 is initialized in */
     uch* outbuf2; /*  process_zipfiles() (never changes); */
-#endif            /*  else malloc'd ONLY if unshrink and -a */
 #endif            /* !FUNZIP */
     uch* outptr;
     ulg outcnt; /* number of chars stored in outbuf */
@@ -315,11 +313,7 @@ typedef struct Globals {
 #endif               /* !FUNZIP */
     z_uint4 keys[3]; /* crypt static: keys defining pseudo-random sequence */
 
-#if (!defined(DOS_FLX_H68_NLM_OS2_W32) && !defined(AMIGA) && !defined(RISCOS))
-#if (!defined(MACOS) && !defined(ATARI) && !defined(VMS))
     int echofd; /* ttyio static: file descriptor whose echo is off */
-#endif          /* !(MACOS || ATARI || VMS) */
-#endif          /* !(DOS_FLX_H68_NLM_OS2_W32 || AMIGA || RISCOS) */
 
     unsigned hufts; /* track memory usage */
 
@@ -362,18 +356,10 @@ typedef struct Globals {
     PauseFn* mpause;
     PasswdFn* decr_passwd;
     StatCBFn* statreportcb;
-#ifdef WINDLL
-    LPUSERFUNCTIONS lpUserFunctions;
-#endif
 
     int incnt_leftover; /* so improved NEXTBYTE does not waste input */
     uch* inptr_leftover;
 
-#ifdef VMS_TEXT_CONV
-    unsigned VMS_line_length; /* so native VMS variable-length text files */
-    int VMS_line_state;       /*  are readable on other platforms */
-    int VMS_line_pad;
-#endif
 
 #if (defined(SFX) && defined(CHEAP_SFX_AUTORUN))
     char autorun_command[FILNAMSIZ];

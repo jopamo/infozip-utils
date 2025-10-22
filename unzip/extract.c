@@ -34,13 +34,6 @@
 #define __EXTRACT_C /* identifies this source module */
 #define UNZIP_INTERNAL
 #include "unzip.h"
-#ifdef WINDLL
-#ifdef POCKET_UNZIP
-#include "wince/intrface.h"
-#else
-#include "windll/windll.h"
-#endif
-#endif
 #include "common/crc32.h"
 #include "crypt.h"
 
@@ -95,9 +88,6 @@ static int extract_or_test_member OF((__GPRO));
 static int TestExtraField OF((__GPRO__ uch * ef, unsigned ef_len));
 static int test_compr_eb OF((__GPRO__ uch * eb, unsigned eb_size, unsigned compr_offset, int (*test_uc_ebdata)(__GPRO__ uch* eb, unsigned eb_size, uch* eb_ucptr, ulg eb_ucsize)));
 #endif
-#if (defined(VMS) || defined(VMS_TEXT_CONV))
-static void decompress_bits OF((uch * outptr, unsigned needlen, ZCONST uch* bitptr));
-#endif
 #ifdef SYMLINKS
 static void set_deferred_symlink OF((__GPRO__ slinkentry * slnk_entry));
 #endif
@@ -151,11 +141,6 @@ static ZCONST char Far WrnStorUCSizCSizDiff[] =
 static ZCONST char Far ExtFieldMsg[] = "%s:  bad extra field length (%s)\n";
 static ZCONST char Far OffsetMsg[] = "file #%lu:  bad zipfile offset (%s):  %ld\n";
 static ZCONST char Far ExtractMsg[] = "%8sing: %-22s  %s%s";
-#ifndef SFX
-static ZCONST char Far LengthMsg[] =
-    "%s  %s:  %s bytes required to uncompress to %s bytes;\n    %s\
-      supposed to require %s bytes%s%s%s\n";
-#endif
 
 static ZCONST char Far BadFileCommLength[] = "%s:  bad file comment length\n";
 static ZCONST char Far LocalHdrSig[] = "local header sig";
@@ -185,30 +170,21 @@ static ZCONST char Far SymLnkDeferred[] = "finishing deferred symbolic links:\n"
 static ZCONST char Far SymLnkFinish[] = "  %-22s -> %s\n";
 #endif
 
-#ifndef WINDLL
 static ZCONST char Far ReplaceQuery[] =
-#ifdef VMS
-    "new version of %s? [y]es, [n]o, [A]ll, [N]one, [r]ename: ";
-#else
     "replace %s? [y]es, [n]o, [A]ll, [N]one, [r]ename: ";
-#endif
 static ZCONST char Far AssumeNone[] = " NULL\n(EOF or read error, treating as \"[N]one\" ...)\n";
 static ZCONST char Far NewNameQuery[] = "new name: ";
 static ZCONST char Far InvalidResponse[] = "error:  invalid response [%s]\n";
-#endif /* !WINDLL */
 
 static ZCONST char Far ErrorInArchive[] = "At least one %serror was detected in %s.\n";
 static ZCONST char Far ZeroFilesTested[] = "Caution:  zero files tested in %s.\n";
 
-#ifndef VMS
 static ZCONST char Far VMSFormatQuery[] = "\n%s:  stored in VMS format.  Extract anyway? (y/n) ";
-#endif
 
 #if CRYPT
 static ZCONST char Far SkipCannotGetPasswd[] = "   skipping: %-22s  unable to get password\n";
 static ZCONST char Far SkipIncorrectPasswd[] = "   skipping: %-22s  incorrect password\n";
 static ZCONST char Far FilesSkipBadPasswd[] = "%lu file%s skipped because of incorrect password.\n";
-static ZCONST char Far MaybeBadPasswd[] = "    (may instead be incorrect password)\n";
 #else
 static ZCONST char Far SkipEncrypted[] = "   skipping: %-22s  encrypted (not supported)\n";
 #endif
@@ -222,18 +198,8 @@ static ZCONST char Far ErrUnzipNoFile[] = "\n  error:  %s%s\n";
 static ZCONST char Far NotEnoughMem[] = "not enough memory to ";
 static ZCONST char Far InvalidComprData[] = "invalid compressed data to ";
 static ZCONST char Far Inflate[] = "inflate";
-#ifdef USE_BZIP2
-static ZCONST char Far BUnzip[] = "bunzip";
-#endif
 
-#ifndef SFX
-static ZCONST char Far Explode[] = "explode";
-#ifndef LZW_CLEAN
-static ZCONST char Far Unshrink[] = "unshrink";
-#endif
-#endif
-
-#if (!defined(DELETE_IF_FULL) || !defined(HAVE_UNLINK))
+#ifndef HAVE_UNLINK
 static ZCONST char Far FileTruncated[] = "warning:  %s is probably truncated\n";
 #endif
 
@@ -252,9 +218,6 @@ static ZCONST char Far TooSmallEBlength[] =
     "bad extra-field entry:\n \
      EF block length (%u bytes) invalid (< %d)\n";
 static ZCONST char Far InvalidComprDataEAs[] = " invalid compressed data for EAs\n";
-#if (defined(WIN32) && defined(NTSD_EAS))
-static ZCONST char Far InvalidSecurityEAs[] = " EAs fail security check\n";
-#endif
 static ZCONST char Far UnsuppNTSDVersEAs[] = " unsupported NTSD EAs version %d\n";
 static ZCONST char Far BadCRC_EAs[] = " bad CRC for extended attributes\n";
 static ZCONST char Far UnknComprMethodEAs[] = " unknown compression method for EAs (%u)\n";
@@ -477,9 +440,6 @@ int extract_or_test_files(__G) /* return PK-type error code */
 
     while (!reached_end) {
         j = 0;
-#ifdef AMIGA
-        memzero(G.filenotes, DIR_BLKSIZ * sizeof(char*));
-#endif
 
         /* -------- Read a block of central directory entries -------- */
         while (j < DIR_BLKSIZ) {
@@ -544,12 +504,7 @@ int extract_or_test_files(__G) /* return PK-type error code */
             }
 
             /* Comment (skip unless Amiga filenotes requested) */
-#ifdef AMIGA
-            G.filenote_slot = j;
-            error = do_string(__G__ G.crec.file_comment_length, uO.N_flag ? FILENOTE : SKIP);
-#else
             error = do_string(__G__ G.crec.file_comment_length, SKIP);
-#endif
             if (error != PK_COOL) {
                 if (error > error_in_archive)
                     error_in_archive = error;
@@ -917,14 +872,12 @@ static int store_info(__G) /* return 0 if skipping, 1 if OK */
                 }
                 return 0;
             }
-#ifndef VMS
             /* Non-VMS: ask before extracting when VMS attributes present (unless -o or -t) */
             if (!uO.tflag && !IS_OVERWRT_ALL) {
                 Info(slide, 0x481, ((char*)slide, LoadFarString(VMSFormatQuery), FnFilter1(G.filename)));
                 if (fgets(G.answerbuf, sizeof(G.answerbuf), stdin) == NULL || (G.answerbuf[0] != 'y' && G.answerbuf[0] != 'Y'))
                     return 0;
             }
-#endif
         }
         else {
             /* Generic PK version-needed */
@@ -1788,11 +1741,6 @@ unsigned ef_len;
                         case IZ_EF_TRUNC:
                             Info(slide, 1, ((char*)slide, LoadFarString(TruncNTSD), ebLen - (EB_NTSD_L_LEN + EB_CMPRHEADLEN), "\n"));
                             break;
-#if (defined(WIN32) && defined(NTSD_EAS))
-                        case PK_WARN:
-                            Info(slide, 1, ((char*)slide, LoadFarString(InvalidSecurityEAs)));
-                            break;
-#endif
                         case PK_ERR:
                             Info(slide, 1, ((char*)slide, LoadFarString(InvalidComprDataEAs)));
                             break;
@@ -2024,110 +1972,6 @@ ulg size;
 
 } /* end function memflush() */
 
-#if (defined(VMS) || defined(VMS_TEXT_CONV))
-
-/************************************/
-/*  Function extract_izvms_block()  */
-/************************************/
-
-/*
- * Extracts block from p. If resulting length is less than needed, fill
- * extra space with corresponding bytes from 'init'.
- * Currently understands 3 formats of block compression:
- * - Simple storing
- * - Compression of zero bytes to zero bits
- * - Deflation (see memextract())
- * The IZVMS block data is returned in malloc'd space.
- */
-uch* extract_izvms_block(__G__ ebdata, size, retlen, init, needlen)
-__GDEF
-ZCONST uch* ebdata;
-unsigned size;
-unsigned* retlen;
-ZCONST uch* init;
-unsigned needlen;
-{
-    uch* ucdata; /* Pointer to block allocated */
-    int cmptype;
-    unsigned usiz, csiz;
-
-    cmptype = (makeword(ebdata + EB_IZVMS_FLGS) & EB_IZVMS_BCMASK);
-    csiz = size - EB_IZVMS_HLEN;
-    usiz = (cmptype == EB_IZVMS_BCSTOR ? csiz : makeword(ebdata + EB_IZVMS_UCSIZ));
-
-    if (retlen)
-        *retlen = usiz;
-
-    if ((ucdata = (uch*)malloc(MAX(needlen, usiz))) == NULL)
-        return NULL;
-
-    if (init && (usiz < needlen))
-        memcpy((char*)ucdata, (ZCONST char*)init, needlen);
-
-    switch (cmptype) {
-        case EB_IZVMS_BCSTOR: /* The simplest case */
-            memcpy(ucdata, ebdata + EB_IZVMS_HLEN, usiz);
-            break;
-        case EB_IZVMS_BC00:
-            decompress_bits(ucdata, usiz, ebdata + EB_IZVMS_HLEN);
-            break;
-        case EB_IZVMS_BCDEFL:
-            memextract(__G__ ucdata, (ulg)usiz, ebdata + EB_IZVMS_HLEN, (ulg)csiz);
-            break;
-        default:
-            free(ucdata);
-            ucdata = NULL;
-    }
-    return ucdata;
-
-} /* end of extract_izvms_block */
-
-/********************************/
-/*  Function decompress_bits()  */
-/********************************/
-/*
- *  Simple uncompression routine. The compression uses bit stream.
- *  Compression scheme:
- *
- *  if (byte!=0)
- *      putbit(1),putbyte(byte)
- *  else
- *      putbit(0)
- */
-static void decompress_bits(outptr, needlen, bitptr) uch* outptr; /* Pointer into output block */
-unsigned needlen;                                                 /* Size of uncompressed block */
-ZCONST uch* bitptr;                                               /* Pointer into compressed data */
-{
-    ulg bitbuf = 0;
-    int bitcnt = 0;
-
-#define _FILL                            \
-    {                                    \
-        bitbuf |= (*bitptr++) << bitcnt; \
-        bitcnt += 8;                     \
-    }
-
-    while (needlen--) {
-        if (bitcnt <= 0)
-            _FILL;
-
-        if (bitbuf & 1) {
-            bitbuf >>= 1;
-            if ((bitcnt -= 1) < 8)
-                _FILL;
-            *outptr++ = (uch)bitbuf;
-            bitcnt -= 8;
-            bitbuf >>= 8;
-        }
-        else {
-            *outptr++ = '\0';
-            bitcnt -= 1;
-            bitbuf >>= 1;
-        }
-    }
-} /* end function decompress_bits() */
-
-#endif /* VMS || VMS_TEXT_CONV */
 
 #ifdef SYMLINKS
 /***********************************/
@@ -2203,20 +2047,6 @@ extent size;
         if (size > 0 && s >= slim && se == NULL) {
             se = s;
         }
-#ifdef QDOS
-        if (qlflag & 2) {
-            if (*r == '/' || *r == '.') {
-                if (se != NULL && (s > (space + (size - 3)))) {
-                    have_overflow = TRUE;
-                    break;
-                }
-                ++r;
-                *s++ = '_';
-                continue;
-            }
-        }
-        else
-#endif
 #ifdef HAVE_WORKING_ISPRINT
 #ifndef UZ_FNFILTER_REPLACECHAR
         /* A convenient choice for the replacement of unprintable char codes is
@@ -2282,15 +2112,6 @@ extent size;
         *s = '\0';
     }
 
-#ifdef WINDLL
-    INTERN_TO_ISO((char*)space, (char*)space); /* translate to ANSI */
-#else
-#if (defined(WIN32) && !defined(_WIN32_WCE))
-    /* Win9x console always uses OEM character coding, and
-       WinNT console is set to OEM charset by default, too */
-    INTERN_TO_OEM((char*)space, (char*)space);
-#endif /* (WIN32 && !_WIN32_WCE) */
-#endif /* ?WINDLL */
 
     return (char*)space;
 
@@ -2328,7 +2149,6 @@ int UZbunzip2(__G) __GDEF
 {
     int retval = 0; /* return code: 0 = "no error" */
     int err = BZ_OK;
-    int repeated_buf_err;
     bz_stream bstrm;
 
     if (G.incnt <= 0 && G.csize <= 0L) {
@@ -2363,8 +2183,9 @@ int UZbunzip2(__G) __GDEF
 
         if (err == BZ_MEM_ERROR)
             return 3;
-        else if (err != BZ_OK)
+        else if (err != BZ_OK) {
             Trace((stderr, "oops!  (BZ2_bzDecompressInit() err = %d)\n", err));
+        }
     }
 
 #ifdef FUNZIP
@@ -2384,8 +2205,9 @@ int UZbunzip2(__G) __GDEF
                 retval = 3;
                 goto uzbunzip_cleanup_exit;
             }
-            else if (err != BZ_OK && err != BZ_STREAM_END)
+            else if (err != BZ_OK && err != BZ_STREAM_END) {
                 Trace((stderr, "oops!  (bzip(first loop) err = %d)\n", err));
+            }
 
 #ifdef FUNZIP
             if (err == BZ_STREAM_END) /* "END-of-entry-condition" ? */
@@ -2416,7 +2238,6 @@ int UZbunzip2(__G) __GDEF
 
     /* no more input, so loop until we have all output */
     Trace((stderr, "beginning final loop:  err = %d\n", err));
-    repeated_buf_err = FALSE;
     while (err != BZ_STREAM_END) {
         err = BZ2_bzDecompress(&bstrm);
         if (err == BZ_DATA_ERROR) {
@@ -2451,8 +2272,9 @@ int UZbunzip2(__G) __GDEF
 
 uzbunzip_cleanup_exit:
     err = BZ2_bzDecompressEnd(&bstrm);
-    if (err != BZ_OK)
+    if (err != BZ_OK) {
         Trace((stderr, "oops!  (BZ2_bzDecompressEnd() err = %d)\n", err));
+    }
 
     return retval;
 } /* end function UZbunzip2() */

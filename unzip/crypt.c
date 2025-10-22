@@ -176,7 +176,6 @@ local z_uint4 near* crytab_init(__G) __GDEF {
 #ifdef ZIP
 
 /* ------------------ Unix randomness helper (non-fatal) ------------------ */
-#ifdef UNIX
 #include <unistd.h>
 #include <fcntl.h>
 static int unix_fill_random(uch* dst, int n) {
@@ -195,7 +194,6 @@ static int unix_fill_random(uch* dst, int n) {
     close(fd);
     return 0;
 }
-#endif /* UNIX */
 
 /***********************************************************************
  * Write encryption header to file zfile using the password passwd
@@ -216,9 +214,7 @@ FILE* zfile;                                            /* where to write header
     static unsigned calls = 0; /* ensure different rand() header if used */
 
     /* 1) Make RAND_HEAD_LEN-2 random bytes (plaintext). Prefer strong RNG. */
-#ifdef UNIX
     if (unix_fill_random(header, RAND_HEAD_LEN - 2) != 0)
-#endif
     {
         /* Fallback: srand/rand() */
         if (++calls == 1) {

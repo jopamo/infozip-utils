@@ -79,16 +79,9 @@
 #  define __GPRO__
 #endif
 
-#if defined(MSDOS) || defined(OS2) || defined(WIN32)
-#  ifndef DOS_OS2_W32
-#    define DOS_OS2_W32
-#  endif
-#endif
 
 #if defined(DOS_OS2_W32) || defined(__human68k__)
-#  ifndef DOS_H68_OS2_W32
 #    define DOS_H68_OS2_W32
-#  endif
 #endif
 
 #if defined(VM_CMS) || defined(MVS)

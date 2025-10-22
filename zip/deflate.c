@@ -10,19 +10,11 @@
 
 #ifndef USE_ZLIB
 
-#if defined(__GNUC__) || defined(__clang__)
 #  define LIKELY(x)     __builtin_expect(!!(x), 1)
 #  define UNLIKELY(x)   __builtin_expect(!!(x), 0)
 #  define HOT           __attribute__((hot))
 #  define COLD          __attribute__((cold))
 #  define PREFETCH_R(p) __builtin_prefetch((p), 0, 1)
-#else
-#  define LIKELY(x)     (x)
-#  define UNLIKELY(x)   (x)
-#  define HOT
-#  define COLD
-#  define PREFETCH_R(p) do { } while (0)
-#endif
 
 #ifndef UNALIGNED_OK
 #  define UNALIGNED_OK

@@ -17,9 +17,6 @@
 #include "ebcdic.h"
 #include <ctype.h>
 
-#ifdef MSDOS16
-#  include <dos.h>
-#endif
 
 #ifdef NO_MKTIME
 #  ifndef IZ_MKTIME_ONLY
@@ -35,17 +32,7 @@ uch upper[256], lower[256];
 #ifndef UTIL /* UTIL picks out namecmp code (all utils) */
 
 /* RISC OS uses # as its single-character wildcard */
-#ifdef RISCOS
-#  define WILDCHR_SINGLE '#'
-#  define WILDCHR_MULTI  '*'
-#  define DIRSEP_CHR '.'
-#endif
 
-#ifdef VMS
-#  define WILDCHR_SINGLE '%'
-#  define WILDCHR_MULTI  '*'
-#  define DIRSEP_CHR '.'
-#endif
 
 #ifndef WILDCHR_SINGLE
 #  define WILDCHR_SINGLE '?'
@@ -59,14 +46,8 @@ uch upper[256], lower[256];
 
 /* Local functions */
 local int recmatch OF((ZCONST char *, ZCONST char *, int));
-#if defined(UNICODE_SUPPORT) && defined(WIN32)
-  local long recmatchw OF((ZCONST wchar_t *, ZCONST wchar_t *, int));
-#endif
 local int count_args OF((char *s));
 
-#ifdef MSDOS16
-  local unsigned ident OF((unsigned chr));
-#endif
 
 #ifndef HAVE_FSEEKABLE
 
@@ -97,177 +78,16 @@ char *p;                /* candidate sh expression */
   for (; *p; INCSTR(p))
     if (*p == '\\' && *(p+1))
       p++;
-#ifdef VMS
-    else if (*p == WILDCHR_SINGLE || *p == WILDCHR_MULTI)
-#else /* !VMS */
     else if (*p == WILDCHR_SINGLE || *p == WILDCHR_MULTI || *p == '[')
-#endif /* ?VMS */
       return p;
   return NULL;
 }
 
 #ifdef UNICODE_SUPPORT
-# ifdef WIN32
-
-wchar_t *isshexpw(pw)
-  wchar_t *pw;          /* candidate sh expression */
-/* If pw is a sh expression, a pointer to the first special character is
-   returned.  Otherwise, NULL is returned. */
-{
-  for (; *pw; pw++)
-    if (*pw == (wchar_t)'\\' && *(pw+1))
-      pw++;
-    else if (*pw == (wchar_t)WILDCHR_SINGLE || *pw == (wchar_t)WILDCHR_MULTI ||
-             *pw == (wchar_t)'[')
-      return pw;
-  return NULL;
-}
-
-# endif
 #endif
 
 
 #ifdef UNICODE_SUPPORT
-# ifdef WIN32
-
-local long recmatchw(pw, sw, cs)
-ZCONST wchar_t *pw;     /* sh pattern to match */
-ZCONST wchar_t *sw;     /* string to match it to */
-int cs;                 /* flag: force case-sensitive matching */
-/* Recursively compare the sh pattern p with the string s and return 1 if
-   they match, and 0 or 2 if they don't or if there is a syntax error in the
-   pattern.  This routine recurses on itself no deeper than the number of
-   characters in the pattern. */
-{
-  long c;               /* pattern char or start of range in [-] loop */
-  /* Get first character, the pattern for new recmatch calls follows */
-
-  c = (long)*(pw++);
-
-  /* If that was the end of the pattern, match if string empty too */
-  if (c == 0)
-    return *sw == 0;
-
-  /* '?' matches any character (but not an empty string) */
-  if ((wchar_t)c == (wchar_t)WILDCHR_SINGLE) {
-    if (wild_stop_at_dir)
-      return (*sw && *sw != (wchar_t)DIRSEP_CHR) ? recmatchw(pw, sw + 1, cs) : 0;
-    else
-      return *sw ? recmatchw(pw, sw + 1, cs) : 0;
-  }
-
-  /* WILDCHR_MULTI ('*') matches any number of characters, including zero */
-  if (!no_wild && (wchar_t)c == (wchar_t)WILDCHR_MULTI)
-  {
-    if (wild_stop_at_dir) {
-      /* Check for an immediately following WILDCHR_MULTI */
-      if (*pw != (wchar_t)WILDCHR_MULTI) {
-        /* Single WILDCHR_MULTI ('*'): this doesn't match slashes */
-        for (; *sw && *sw != (wchar_t)DIRSEP_CHR; sw++)
-          if ((c = recmatchw(pw, sw, cs)) != 0)
-            return c;
-        /* end of pattern: matched if at end of string, else continue */
-        if (*pw == 0)
-          return (*sw == 0);
-        /* continue to match if at DIRSEP_CHR in pattern, else give up */
-        return (*pw == (wchar_t)DIRSEP_CHR || (*pw == (wchar_t)'\\' &&
-                pw[1] == (wchar_t)DIRSEP_CHR))
-               ? recmatchw(pw, sw, cs) : 2;
-      }
-      /* Two consecutive WILDCHR_MULTI ("**"): this matches DIRSEP_CHR ('/') */
-      pw++;        /* move p past the second WILDCHR_MULTI */
-      /* continue with the normal non-WILD_STOP_AT_DIR code */
-    } /* wild_stop_at_dir */
-
-    /* Not wild_stop_at_dir */
-    if (*pw == 0)
-      return 1;
-    if (!isshexpw((wchar_t *)pw))
-    {
-      /* optimization for rest of pattern being a literal string */
-
-      /* optimization to handle patterns like *.txt */
-      /* if the first char in the pattern is '*' and there */
-      /* are no other shell expression chars, i.e. a literal string */
-      /* then just compare the literal string at the end */
-
-      ZCONST wchar_t *swrest;
-
-      swrest = sw + (wcslen(sw) - wcslen(pw));
-      if (swrest - sw < 0)
-        /* remaining literal string from pattern is longer than rest of
-           test string, there can't be a match
-         */
-        return 0;
-      else
-        /* compare the remaining literal pattern string with the last bytes
-           of the test string to check for a match */
-        return ((cs ? wcscmp(pw, swrest) : _wcsicmp(pw, swrest)) == 0);
-    }
-    else
-    {
-      /* pattern contains more wildcards, continue with recursion... */
-      for (; *sw; sw++)
-        if ((c = recmatchw(pw, sw, cs)) != 0)
-          return c;
-      return 2;           /* 2 means give up--shmatch will return false */
-    }
-  }
-
-  /* Parse and process the list of characters and ranges in brackets */
-  if (!no_wild && allow_regex && (wchar_t)c == '[')
-  {
-    int e;              /* flag true if next char to be taken literally */
-    ZCONST wchar_t *qw; /* pointer to end of [-] group */
-    int r;              /* flag true to match anything but the range */
-
-    if (*sw == 0)                        /* need a character to match */
-      return 0;
-    pw += (r = (*pw == (wchar_t)'!' || *pw == (wchar_t)'^')); /* see if reverse */
-    for (qw = pw, e = 0; *qw; qw++)         /* find closing bracket */
-      if (e)
-        e = 0;
-      else
-        if (*qw == (wchar_t)'\\')
-          e = 1;
-        else if (*qw == (wchar_t)']')
-          break;
-    if (*qw != (wchar_t)']')                      /* nothing matches if bad syntax */
-      return 0;
-    for (c = 0, e = *pw == (wchar_t)'-'; pw < qw; pw++)      /* go through the list */
-    {
-      if (e == 0 && *pw == (wchar_t)'\\')         /* set escape flag if \ */
-        e = 1;
-      else if (e == 0 && *pw == (wchar_t)'-')     /* set start of range if - */
-        c = *(pw-1);
-      else
-      {
-        wchar_t cc = (cs ? *sw : towupper(*sw));
-        wchar_t uc = (wchar_t) c;
-
-        if (*(pw+1) != (wchar_t)'-')
-          for (uc = uc ? uc : *pw; cc <= *pw; uc++)
-            /* compare range */
-            if ((cs ? uc : towupper(uc)) == cc)
-              return r ? 0 : recmatchw(qw + 1, sw + 1, cs);
-        c = e = 0;                      /* clear range, escape flags */
-      }
-    }
-    return r ? recmatchw(qw + 1, sw + 1, cs) : 0;
-                                        /* bracket match failed */
-  }
-
-  /* If escape ('\'), just compare next character */
-  if (!no_wild && (wchar_t)c == (wchar_t)'\\')
-    if ((c = *pw++) == '\0')            /* if \ at end, then syntax error */
-      return 0;
-
-  /* Just a character--compare it */
-  return (cs ? (wchar_t)c == *sw : towupper((wchar_t)c) == towupper(*sw)) ?
-          recmatchw(pw, sw + 1, cs) : 0;
-}
-
-# endif
 #endif
 
 
@@ -315,21 +135,11 @@ int cs;                 /* flag: force case-sensitive matching */
   }
 
   /* WILDCHR_MULTI ('*') matches any number of characters, including zero */
-#ifdef AMIGA
-  if (!no_wild && c == '#' && *p == '?')            /* "#?" is Amiga-ese for "*" */
-    c = WILDCHR_MULTI, p++;
-#endif /* AMIGA */
   if (!no_wild && c == WILDCHR_MULTI)
   {
     if (wild_stop_at_dir) {
       /* Check for an immediately following WILDCHR_MULTI */
-# ifdef AMIGA
-      if ((c = p[0]) == '#' && p[1] == '?') /* "#?" is Amiga-ese for "*" */
-        c = WILDCHR_MULTI, p++;
-      if (c != WILDCHR_MULTI) {
-# else /* !AMIGA */
       if (*p != WILDCHR_MULTI) {
-# endif /* ?AMIGA */
         /* Single WILDCHR_MULTI ('*'): this doesn't match slashes */
         for (; *s && *s != DIRSEP_CHR; INCSTR(s))
           if ((c = recmatch(p, s, cs)) != 0)
@@ -403,7 +213,6 @@ int cs;                 /* flag: force case-sensitive matching */
     }
   }
 
-#ifndef VMS             /* No bracket matching in VMS */
   /* Parse and process the list of characters and ranges in brackets */
   if (!no_wild && allow_regex && c == '[')
   {
@@ -445,40 +254,12 @@ int cs;                 /* flag: force case-sensitive matching */
     return r ? recmatch(q + CLEN(q), s + CLEN(s), cs) : 0;
                                         /* bracket match failed */
   }
-#endif /* !VMS */
 
   /* If escape ('\'), just compare next character */
   if (!no_wild && c == '\\')
     if ((c = *p++) == '\0')             /* if \ at end, then syntax error */
       return 0;
 
-#ifdef VMS
-  /* 2005-11-06 SMS.
-     Handle "..." wildcard in p with "." or "]" in s.
-  */
-  if ((c == '.') && (*p == '.') && (*(p+ CLEN( p)) == '.') &&
-   ((*s == '.') || (*s == ']')))
-  {
-    /* Match "...]" with "]".  Continue after "]" in both. */
-    if ((*(p+ 2* CLEN( p)) == ']') && (*s == ']'))
-      return recmatch( (p+ 3* CLEN( p)), (s+ CLEN( s)), cs);
-
-    /* Else, look for a reduced match in s, until "]" in or end of s. */
-    for (; *s && (*s != ']'); INCSTR(s))
-      if (*s == '.')
-        /* If reduced match, then continue after "..." in p, "." in s. */
-        if ((c = recmatch( (p+ CLEN( p)), s, cs)) != 0)
-          return (int)c;
-
-    /* Match "...]" with "]".  Continue after "]" in both. */
-    if ((*(p+ 2* CLEN( p)) == ']') && (*s == ']'))
-      return recmatch( (p+ 3* CLEN( p)), (s+ CLEN( s)), cs);
-
-    /* No reduced match.  Quit. */
-    return 2;
-  }
-
-#endif /* def VMS */
 
   /* Just a character--compare it */
   return (cs ? c == *s : case_map((uch)c) == case_map((uch)*s)) ?
@@ -497,69 +278,6 @@ int cs;                 /* force case-sensitive match if TRUE */
 }
 
 
-#if defined(DOS) || defined(WIN32)
-
-#ifdef UNICODE_SUPPORT
-
-int dosmatchw(pw, sw, cs)
-ZCONST wchar_t *pw;     /* dos pattern to match    */
-ZCONST wchar_t *sw;     /* string to match it to   */
-int cs;                 /* force case-sensitive match if TRUE */
-/* Treat filenames without periods as having an implicit trailing period */
-{
-  wchar_t *sw1;         /* revised string to match */
-  int r;                /* result */
-
-  if (wcschr(pw, (wchar_t)'.') && !wcschr(sw, (wchar_t)'.') &&
-      ((sw1 = (wchar_t *)malloc((wcslen(sw) + 2) * sizeof(wchar_t))) != NULL))
-  {
-    wcscpy(sw1, sw);
-    wcscat(sw1, L".");
-  }
-  else
-  {
-    /* will usually be OK */
-    sw1 = (wchar_t *)sw;
-  }
-
-  r = recmatchw(pw, sw1, cs) == 1;
-  if (sw != sw1)
-    free((zvoid *)sw1);
-  return r == 1;
-}
-
-#endif
-
-/* XXX  also suitable for OS2?  Atari?  Human68K?  TOPS-20?? */
-
-int dosmatch(p, s, cs)
-ZCONST char *p;         /* dos pattern to match    */
-ZCONST char *s;         /* string to match it to   */
-int cs;                 /* force case-sensitive match if TRUE */
-/* Treat filenames without periods as having an implicit trailing period */
-{
-  char *s1;             /* revised string to match */
-  int r;                /* result */
-
-  if (strchr(p, '.') && !strchr(s, '.') &&
-      ((s1 = malloc(strlen(s) + 2)) != NULL))
-  {
-    strcpy(s1, s);
-    strcat(s1, ".");
-  }
-  else
-  {
-    /* will usually be OK */
-    s1 = (char *)s;
-  }
-
-  r = recmatch(p, s1, cs) == 1;
-  if (s != s1)
-    free((zvoid *)s1);
-  return r == 1;
-}
-
-#endif /* DOS || WIN32 */
 
 zvoid far **search(b, a, n, cmp)
 ZCONST zvoid *b;        /* pointer to value to search for */
@@ -595,51 +313,6 @@ int (*cmp) OF((ZCONST zvoid *, ZCONST zvoid far *)); /* comparison function */
 
 #endif /* !UTIL */
 
-#ifdef MSDOS16
-
-local unsigned ident(unsigned chr)
-{
-   return chr; /* in al */
-}
-
-void init_upper()
-{
-  static struct country {
-    uch ignore[18];
-    int (far *casemap)(int);
-    uch filler[16];
-  } country_info;
-
-  struct country far *info = &country_info;
-  union REGS regs;
-  struct SREGS sregs;
-  unsigned int c;
-
-  regs.x.ax = 0x3800; /* get country info */
-  regs.x.dx = FP_OFF(info);
-  sregs.ds  = FP_SEG(info);
-  intdosx(&regs, &regs, &sregs);
-  for (c = 0; c < 128; c++) {
-    upper[c] = (uch) toupper(c);
-    lower[c] = (uch) c;
-  }
-  for (; c < sizeof(upper); c++) {
-    upper[c] = (uch) (*country_info.casemap)(ident(c));
-    /* ident() required because casemap takes its parameter in al */
-    lower[c] = (uch) c;
-  }
-  for (c = 0; c < sizeof(upper); c++ ) {
-    unsigned int u = upper[c];
-    if (u != c && lower[u] == (uch) u) {
-      lower[u] = (uch)c;
-    }
-  }
-  for (c = 'A'; c <= 'Z'; c++) {
-    lower[c] = (uch) (c - 'A' + 'a');
-  }
-}
-#else /* !MSDOS16 */
-#  ifndef OS2
 
 void init_upper()
 {
@@ -657,9 +330,7 @@ void init_upper()
   for (c = 'A'; c <= 'Z';        c++) lower[c] = (uch)(c - 'A' + 'a');
 #endif
 }
-#  endif /* !OS2 */
 
-#endif /* ?MSDOS16 */
 
 int namecmp(string1, string2)
   ZCONST char *string1, *string2;
@@ -847,7 +518,6 @@ void envargs(Pargc, Pargv, envstr, envstr2)
 
     /* copy the environment args first, may be changed */
     do {
-#if defined(AMIGA) || defined(UNIX)
         if (*bufptr == '"') {
             char *argstart = ++bufptr;
             *(argv++) = argstart;
@@ -869,26 +539,6 @@ void envargs(Pargc, Pargv, envstr, envstr2)
             while ((ch = *bufptr) != '\0' && !isspace((uch)ch)) INCSTR(bufptr);
             if (ch != '\0') *(bufptr++) = '\0';
         }
-#else
-#  ifdef WIN32
-        /* We do not support backslash-quoting of quotes in quoted */
-        /* strings under Win32, because backslashes are directory  */
-        /* separators and double quotes are illegal in filenames.  */
-        if (*bufptr == '"') {
-            *(argv++) = ++bufptr;
-            while ((ch = *bufptr) != '\0' && ch != '\"') INCSTR(bufptr);
-            if (ch != '\0') *(bufptr++) = '\0';
-        } else {
-            *(argv++) = bufptr;
-            while ((ch = *bufptr) != '\0' && !isspace((uch)ch)) INCSTR(bufptr);
-            if (ch != '\0') *(bufptr++) = '\0';
-        }
-#  else
-        *(argv++) = bufptr;
-        while ((ch = *bufptr) != '\0' && !isspace((uch)ch)) INCSTR(bufptr);
-        if (ch != '\0') *(bufptr++) = '\0';
-#  endif
-#endif /* ?(AMIGA || UNIX) */
         while ((ch = *bufptr) != '\0' && isspace((uch)ch)) INCSTR(bufptr);
     } while (ch);
 
@@ -913,7 +563,6 @@ char *s;
     do {
         /* count and skip args */
         ++count;
-#if defined(AMIGA) || defined(UNIX)
         if (*s == '\"') {
             for (ch = *PREINCSTR(s); ch != '\0' && ch != '\"';
                  ch = *PREINCSTR(s))
@@ -922,18 +571,6 @@ char *s;
             if (*s) INCSTR(s);  /* trailing quote */
         } else
             while ((ch = *s) != '\0' && !isspace((uch)ch)) INCSTR(s);
-#else
-#  ifdef WIN32
-        if (*s == '\"') {
-            ++s;                /* leading quote */
-            while ((ch = *s) != '\0' && ch != '\"') INCSTR(s);
-            if (*s) INCSTR(s);  /* trailing quote */
-        } else
-            while ((ch = *s) != '\0' && !isspace((uch)ch)) INCSTR(s);
-#  else
-        while ((ch = *s) != '\0' && !isspace((uch)ch)) INCSTR(s);
-#  endif
-#endif /* ?(AMIGA || UNIX) */
         while ((ch = *s) != '\0' && isspace((uch)ch)) INCSTR(s);
     } while (ch);
 
@@ -967,44 +604,7 @@ void expand_args(argcp, argvp)
       int *argcp;
       char ***argvp;
 {
-#ifdef DOS
-
-/* Do NEVER include (re)definiton of `environ' variable with any version
-   of MSC or BORLAND/Turbo C. These compilers supply an incompatible
-   definition in <stdlib.h>.  */
-#if defined(__GO32__) || defined(__EMX__)
-      extern char **environ;          /* environment */
-#endif /* __GO32__ || __EMX__ */
-      char        **envp;             /* pointer into environment */
-      char        **newargv;          /* new argument list */
-      char        **argp;             /* pointer into new arg list */
-      int           newargc;          /* new argument count */
-
-      /* sanity check */
-      if (environ == NULL
-          || argcp == NULL
-          || argvp == NULL || *argvp == NULL)
-              return;
-      /* find out how many environment arguments there are */
-      for (envp = environ, newargc = 0;
-           *envp != NULL && (*envp)[0] == '~';
-           envp++, newargc++) ;
-      if (newargc == 0)
-              return;                 /* no environment arguments */
-      /* set up new argument list */
-      newargv = (char **) malloc(sizeof(char **) * (newargc+1));
-      if (newargv == NULL)
-              return;                 /* malloc failed */
-      for (argp = newargv, envp = environ;
-           *envp != NULL && (*envp)[0] == '~';
-           *argp++ = &(*envp++)[1]) ;
-      *argp = NULL;                   /* null-terminate the list */
-      /* substitute new argument list in place of old one */
-      *argcp = newargc;
-      *argvp = newargv;
-#else /* !DOS */
       if (argcp || argvp) return;
-#endif /* ?DOS */
 }
 
 

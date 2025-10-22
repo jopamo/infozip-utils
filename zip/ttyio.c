@@ -56,38 +56,14 @@
 #  define HAVE_TERMIOS_H
 #endif
 
-#ifdef _POSIX_VERSION
 #  ifndef USE_POSIX_TERMIOS
 #    define USE_POSIX_TERMIOS  /* use POSIX style termio (termios) */
 #  endif
 #  ifndef HAVE_TERMIOS_H
 #    define HAVE_TERMIOS_H     /* POSIX termios.h */
 #  endif
-#endif /* _POSIX_VERSION */
 
 #ifdef UNZIP            /* Zip handles this with the unix/configure script */
-#  ifndef _POSIX_VERSION
-#    if (defined(SYSV) || defined(CRAY)) &&  !defined(__MINT__)
-#      ifndef USE_SYSV_TERMIO
-#        define USE_SYSV_TERMIO
-#      endif
-#      ifdef COHERENT
-#        ifndef HAVE_TERMIO_H
-#          define HAVE_TERMIO_H
-#        endif
-#        ifdef HAVE_SYS_TERMIO_H
-#          undef HAVE_SYS_TERMIO_H
-#        endif
-#      else /* !COHERENT */
-#        ifdef HAVE_TERMIO_H
-#          undef HAVE_TERMIO_H
-#        endif
-#        ifndef HAVE_SYS_TERMIO_H
-#           define HAVE_SYS_TERMIO_H
-#        endif
-#      endif /* ?COHERENT */
-#    endif /* (SYSV || CRAY) && !__MINT__ */
-#  endif /* !_POSIX_VERSION */
 #  if !(defined(BSD4_4) || defined(SYSV) || defined(__convexc__))
 #    ifndef NO_FCNTL_H
 #      define NO_FCNTL_H
@@ -115,13 +91,6 @@
 
 #ifndef HAVE_WORKING_GETCH
    /* include system support for switching of console echo */
-#  ifdef VMS
-#    include <descrip.h>
-#    include <iodef.h>
-#    include <ttdef.h>
-#    include <starlet.h>
-#    include <ssdef.h>
-#  else /* !VMS */
 #    ifdef HAVE_TERMIOS_H
 #      include <termios.h>
 #      define sgttyb termios
@@ -172,122 +141,11 @@
 #    else
        char *ttyname OF((int));
 #    endif
-#  endif /* ?VMS */
 #endif /* !HAVE_WORKING_GETCH */
 
 
 
 #ifndef HAVE_WORKING_GETCH
-#ifdef VMS
-
-static struct dsc$descriptor_s DevDesc =
-        {11, DSC$K_DTYPE_T, DSC$K_CLASS_S, "SYS$COMMAND"};
-     /* {dsc$w_length, dsc$b_dtype, dsc$b_class, dsc$a_pointer}; */
-
-/*
- * Turn keyboard echoing on or off (VMS).  Loosely based on VMSmunch.c
- * and hence on Joe Meadows' file.c code.
- */
-int echo(opt)
-    int opt;
-{
-    /*
-     * For VMS v5.x:
-     *   IO$_SENSEMODE/SETMODE info:  Programming, Vol. 7A, System Programming,
-     *     I/O User's: Part I, sec. 8.4.1.1, 8.4.3, 8.4.5, 8.6
-     *   sys$assign(), sys$qio() info:  Programming, Vol. 4B, System Services,
-     *     System Services Reference Manual, pp. sys-23, sys-379
-     *   fixed-length descriptor info:  Programming, Vol. 3, System Services,
-     *     Intro to System Routines, sec. 2.9.2
-     * Greg Roelofs, 15 Aug 91
-     */
-
-    short           DevChan, iosb[4];
-    long            status;
-    unsigned long   ttmode[2];  /* space for 8 bytes */
-
-
-    /* assign a channel to standard input */
-    status = sys$assign(&DevDesc, &DevChan, 0, 0);
-    if (!(status & 1))
-        return status;
-
-    /* use sys$qio and the IO$_SENSEMODE function to determine the current
-     * tty status (for password reading, could use IO$_READVBLK function
-     * instead, but echo on/off will be more general)
-     */
-    status = sys$qiow(0, DevChan, IO$_SENSEMODE, &iosb, 0, 0,
-                     ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1))
-        return status;
-    status = iosb[0];
-    if (!(status & 1))
-        return status;
-
-    /* modify mode buffer to be either NOECHO or ECHO
-     * (depending on function argument opt)
-     */
-    if (opt == 0)   /* off */
-        ttmode[1] |= TT$M_NOECHO;                       /* set NOECHO bit */
-    else
-        ttmode[1] &= ~((unsigned long) TT$M_NOECHO);    /* clear NOECHO bit */
-
-    /* use the IO$_SETMODE function to change the tty status */
-    status = sys$qiow(0, DevChan, IO$_SETMODE, &iosb, 0, 0,
-                     ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1))
-        return status;
-    status = iosb[0];
-    if (!(status & 1))
-        return status;
-
-    /* deassign the sys$input channel by way of clean-up */
-    status = sys$dassgn(DevChan);
-    if (!(status & 1))
-        return status;
-
-    return SS$_NORMAL;   /* we be happy */
-
-} /* end function echo() */
-
-
-/*
- * Read a single character from keyboard in non-echoing mode (VMS).
- * (returns EOF in case of errors)
- */
-int tt_getch()
-{
-    short           DevChan, iosb[4];
-    long            status;
-    char            kbbuf[16];  /* input buffer with - some - excess length */
-
-    /* assign a channel to standard input */
-    status = sys$assign(&DevDesc, &DevChan, 0, 0);
-    if (!(status & 1))
-        return EOF;
-
-    /* read a single character from SYS$COMMAND (no-echo) and
-     * wait for completion
-     */
-    status = sys$qiow(0,DevChan,
-                      IO$_READVBLK|IO$M_NOECHO|IO$M_NOFILTR,
-                      &iosb, 0, 0,
-                      &kbbuf, 1, 0, 0, 0, 0);
-    if ((status&1) == 1)
-        status = iosb[0];
-
-    /* deassign the sys$input channel by way of clean-up
-     * (for this step, we do not need to check the completion status)
-     */
-    sys$dassgn(DevChan);
-
-    /* return the first char read, or EOF in case the read request failed */
-    return (int)(((status&1) == 1) ? (uch)kbbuf[0] : EOF);
-
-} /* end function tt_getch() */
-
-
-#else /* !VMS:  basically Unix */
 
 
 /* For VM/CMS and MVS, non-echo terminal input is not (yet?) supported. */
@@ -329,7 +187,6 @@ void Echon(__G)
 }
 
 #endif /* !CMS_MVS */
-#endif /* ?VMS */
 
 
 #if (defined(UNZIP) && !defined(FUNZIP))
@@ -475,7 +332,6 @@ int zgetch(__G__ f)
 
 
 #else /* !ATH_BEO_UNX */
-#ifndef VMS     /* VMS supplies its own variant of getch() */
 
 
 int zgetch(__G__ f)
@@ -500,7 +356,6 @@ int zgetch(__G__ f)
     return (int)c;
 }
 
-#endif /* !VMS */
 #endif /* ?ATH_BEO_UNX */
 
 #endif /* UNZIP && !FUNZIP */
@@ -538,8 +393,6 @@ int zgetch(__G__ f)
  * is defined as an alias for a similar system specific RTL function.
  */
 
-#ifndef WINDLL   /* WINDLL does not support a console interface */
-#ifndef QDOS     /* QDOS supplies a variant of this function */
 
 /* This is the getp() function for all systems (with TTY type user interface)
  * that supply a working `non-echo' getch() function for "raw" console input.
@@ -579,8 +432,6 @@ char *getp(__G__ m, p, n)
 
 } /* end function getp() */
 
-#endif /* !QDOS */
-#endif /* !WINDLL */
 
 
 #else /* !HAVE_WORKING_GETCH */

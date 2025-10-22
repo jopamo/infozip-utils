@@ -38,9 +38,6 @@
 #  endif
 #endif
 
-#ifdef OS2
-#  include "os2/os2zip.h"
-#endif
 
 #if defined(MMAP)
 #  include <sys/mman.h>
@@ -56,21 +53,9 @@
    They're not used for VMS since it doesn't work (raw is weird on VMS).
  */
 
-#ifdef AMIGA
-#  include "amiga/zipup.h"
-#endif /* AMIGA */
 
-#ifdef AOSVS
-#  include "aosvs/zipup.h"
-#endif /* AOSVS */
 
-#ifdef ATARI
-#  include "atari/zipup.h"
-#endif
 
-#ifdef __BEOS__
-#  include "beos/zipup.h"
-#endif
 
 #ifdef __ATHEOS__
 #  include "atheos/zipup.h"
@@ -80,65 +65,35 @@
 #  include "human68k/zipup.h"
 #endif /* __human68k__ */
 
-#ifdef MACOS
-#  include "macos/zipup.h"
-#endif
 
-#ifdef DOS
-#  include "msdos/zipup.h"
-#endif /* DOS */
 
 #ifdef NLM
 #  include "novell/zipup.h"
 #  include <nwfattr.h>
 #endif
 
-#ifdef OS2
-#  include "os2/zipup.h"
-#endif /* OS2 */
 
-#ifdef RISCOS
-#  include "acorn/zipup.h"
-#endif
 
 #ifdef TOPS20
 #  include "tops20/zipup.h"
 #endif
 
-#ifdef UNIX
 #  include "zipup.h"
-#endif
 
 #ifdef CMS_MVS
 #  include "zipup.h"
 #endif /* CMS_MVS */
 
-#ifdef TANDEM
-#  include "zipup.h"
-#endif /* TANDEM */
 
-#ifdef VMS
-#  include "vms/zipup.h"
-#endif /* VMS */
 
-#ifdef QDOS
-#  include "qdos/zipup.h"
-#endif /* QDOS */
 
-#ifdef WIN32
-#  include "win32/zipup.h"
-#endif
 
 #ifdef THEOS
 #  include "theos/zipup.h"
 #endif
 
 /* Local functions */
-#ifndef RISCOS
    local int suffixes OF((char *, char *));
-#else
-   local int filetypes OF((char *, char *));
-#endif
 local unsigned file_read OF((char *buf, unsigned size));
 #ifdef USE_ZLIB
   local int zl_deflate_init OF((int pack_level));
@@ -298,7 +253,6 @@ int percent(n, m)
 }
 
 
-#ifndef RISCOS
 
 local int suffixes(a, s)
   char *a;                      /* name to check suffix of */
@@ -309,20 +263,9 @@ local int suffixes(a, s)
   char *p;                      /* pointer into special */
   char *q;                      /* pointer into name a */
 
-#ifdef QDOS
-  short dlen = devlen(a);
-  a = a + dlen;
-#endif
 
   m = 1;
-#ifdef VMS
-  if( (q = strrchr(a,';')) != NULL )    /* Cut out VMS file version */
-    --q;
-  else
-    q = a + strlen(a) - 1;
-#else /* !VMS */
   q = a + strlen(a) - 1;
-#endif /* ?VMS */
   for (p = s + strlen(s) - 1; p >= s; p--)
     if (*p == ':' || *p == ';')
     {
@@ -331,14 +274,7 @@ local int suffixes(a, s)
       else
       {
         m = 1;
-#ifdef VMS
-        if( (q = strrchr(a,';')) != NULL )      /* Cut out VMS file version */
-          --q;
-        else
-          q = a + strlen(a) - 1;
-#else /* !VMS */
         q = a + strlen(a) - 1;
-#endif /* ?VMS */
       }
     }
     else
@@ -349,35 +285,6 @@ local int suffixes(a, s)
   return m;
 }
 
-#else /* RISCOS */
-
-local int filetypes(a, s)
-char *a;                        /* extra field of file to check filetype of */
-char *s;                        /* list of filetypes separated by : or ; */
-/* Return true if a is any of the filetypes in the list s. */
-{
- char *p;                       /* pointer into special */
- char typestr[4];               /* filetype hex string taken from a */
-
- if ((((unsigned*)a)[2] & 0xFFF00000) != 0xFFF00000) {
- /* The file is not filestamped, always try to compress it */
-   return 0;
- }
-
- sprintf(typestr,"%.3X",(((unsigned*)a)[2] & 0x000FFF00) >> 8);
-
- for (p=s;p<=s+strlen(s)-3;p+=3) { /* p+=3 to skip 3 hex type */
-   while (*p==':' || *p==';')
-     p++;
-
-   if (typestr[0] == toupper(p[0]) &&
-       typestr[1] == toupper(p[1]) &&
-       typestr[2] == toupper(p[2]))
-     return 1;
- }
- return 0;
-}
-#endif /* ?RISCOS */
 
 
 
@@ -416,13 +323,6 @@ struct zlist far *z;    /* zip entry to compress */
   char *tempcextra = NULL;
 
 
-#ifdef WINDLL
-# ifdef ZIP64_SUPPORT
-  extern _int64 filesize64;
-  extern unsigned long low;
-  extern unsigned long high;
-#  endif
-#endif
 
   z->nam = strlen(z->iname);
   isdir = z->iname[z->nam-1] == (char)0x2f; /* ascii[(unsigned)('/')] */
@@ -430,14 +330,7 @@ struct zlist far *z;    /* zip entry to compress */
   file_binary = -1;      /* not set, set after first read */
   file_binary_final = 0; /* not set, set after first read */
 
-#if defined(UNICODE_SUPPORT) && defined(WIN32)
-  if (!no_win32_wide)
-    tim = filetimew(z->namew, &a, &q, &f_utim);
-  else
-    tim = filetime(z->name, &a, &q, &f_utim);
-#else
   tim = filetime(z->name, &a, &q, &f_utim);
-#endif
   if (tim == 0 || q == (zoff_t) -3)
     return ZE_OPEN;
 
@@ -513,11 +406,7 @@ struct zlist far *z;    /* zip entry to compress */
 #endif /* !USE_ZLIB || MMAP || BIG_MEM */
 
   /* Select method based on the suffix and the global method */
-#ifndef RISCOS
   m = special != NULL && suffixes(z->name, special) ? STORE : method;
-#else /* RISCOS  must set m after setting extra field */
-  m = method;
-#endif /* ?RISCOS */
 
   /* For now force deflate if using descriptors.  Instead zip and unzip
      could check bytes read against compressed size in each data descriptor
@@ -549,7 +438,6 @@ struct zlist far *z;    /* zip entry to compress */
   }
   else
   {
-#if !(defined(VMS) && defined(VMS_PK_EXTRA))
     if (extra_fields) {
       /* create extra field and change z->att and z->atx if desired */
       set_extra_field(z, &f_utim);
@@ -557,9 +445,6 @@ struct zlist far *z;    /* zip entry to compress */
       if(qlflag)
           a |= (S_IXUSR) << 16;   /* Cross compilers don't set this */
 # endif
-# ifdef RISCOS
-      m = special != NULL && filetypes(z->extra, special) ? STORE : method;
-# endif /* RISCOS */
 
       /* For now allow store for testing */
 #ifdef NO_STREAMING_STORE
@@ -571,7 +456,6 @@ struct zlist far *z;    /* zip entry to compress */
 #endif
 
     }
-#endif /* !(VMS && VMS_PK_EXTRA) */
     l = issymlnk(a);
     if (l) {
       ifile = fbad;
@@ -597,29 +481,12 @@ struct zlist far *z;    /* zip entry to compress */
       }
       else
 #endif /* CMS_MVS */
-#if defined(UNICODE_SUPPORT) && defined(WIN32)
-      if (!no_win32_wide) {
-        if ((ifile = zwopen(z->namew, fhow)) == fbad)
-          return ZE_OPEN;
-      } else {
-        if ((ifile = zopen(z->name, fhow)) == fbad)
-          return ZE_OPEN;
-      }
-#else
       if ((ifile = zopen(z->name, fhow)) == fbad)
         return ZE_OPEN;
-#endif
     }
 
     z->tim = tim;
 
-#if defined(VMS) && defined(VMS_PK_EXTRA)
-    /* vms_get_attributes must be called after vms_open() */
-    if (extra_fields) {
-      /* create extra field and change z->att and z->atx if desired */
-      vms_get_attributes(ifile, z, &f_utim);
-    }
-#endif /* VMS && VMS_PK_EXTRA */
 
 #if defined(MMAP) || defined(BIG_MEM)
     /* Map ordinary files but not devices. This code should go in fileio.c */
@@ -726,24 +593,7 @@ struct zlist far *z;    /* zip entry to compress */
    */
 
   /* (Assume ext, cext, com, and zname already filled in.) */
-#if defined(OS2) || defined(WIN32)
-# ifdef WIN32_OEM
-  /* When creating OEM-coded names on Win32, the entries must always be marked
-     as "created on MSDOS" (OS_CODE = 0), because UnZip needs to handle archive
-     entry names just like those created by Zip's MSDOS port.
-   */
-  z->vem = (ush)(dosify ? 20 : 0 + Z_MAJORVER * 10 + Z_MINORVER);
-# else
-  z->vem = (ush)(z->dosflag ? (dosify ? 20 : /* Made under MSDOS by PKZIP 2.0 */
-                               (0 + Z_MAJORVER * 10 + Z_MINORVER))
-                 : OS_CODE + Z_MAJORVER * 10 + Z_MINORVER);
-  /* For a plain old (8+3) FAT file system, we cheat and pretend that the file
-   * was not made on OS2/WIN32 but under DOS. unzip is confused otherwise.
-   */
-# endif
-#else /* !(OS2 || WIN32) */
   z->vem = (ush)(dosify ? 20 : OS_CODE + Z_MAJORVER * 10 + Z_MINORVER);
-#endif /* ?(OS2 || WIN32) */
 
   z->ver = (ush)(m == STORE ? 10 : 20); /* Need PKUNZIP 2.0 except for store */
 #ifdef BZIP2_SUPPORT
@@ -776,11 +626,7 @@ struct zlist far *z;    /* zip entry to compress */
       set_type = 1;
   }
   /* Attributes from filetime(), flag bits from set_extra_field(): */
-#if defined(DOS) || defined(OS2) || defined(WIN32)
-  z->atx = z->dosflag ? a & 0xff : a | (z->atx & 0x0000ff00);
-#else
   z->atx = dosify ? a & 0xff : a | (z->atx & 0x0000ff00);
-#endif /* DOS || OS2 || WIN32 */
 
   if ((r = putlocal(z, PUTLOCAL_WRITE)) != ZE_OK) {
     if (ifile != fbad)
@@ -892,24 +738,16 @@ struct zlist far *z;    /* zip entry to compress */
           if (dot_size > 0) {
             /* initial space */
             if (noisy && dot_count == -1) {
-#ifndef WINDLL
               putc(' ', mesg);
               fflush(mesg);
-#else
-              fprintf(stdout,"%c",' ');
-#endif
               dot_count++;
             }
             dot_count++;
             if (dot_size <= (dot_count + 1) * SBSZ) dot_count = 0;
           }
           if ((verbose || noisy) && dot_size && !dot_count) {
-#ifndef WINDLL
             putc('.', mesg);
             fflush(mesg);
-#else
-            fprintf(stdout,"%c",'.');
-#endif
             mesg_line_started = 1;
           }
         }
@@ -935,20 +773,16 @@ struct zlist far *z;    /* zip entry to compress */
 
   tempzn += s;
 
-#if (!defined(MSDOS) || defined(OS2))
 #if !defined(VMS) && !defined(CMS_MVS) && !defined(__mpexl)
   /* Check input size (but not in VMS -- variable record lengths mess it up)
    * and not on MSDOS -- diet in TSR mode reports an incorrect file size)
    */
-#ifndef TANDEM /* Tandem EOF does not match byte count unless Unstructured */
   if (!translate_eol && q != -1L && isize != q)
   {
     Trace((mesg, " i=%lu, q=%lu ", isize, q));
     zipwarn(" file size changed while zipping ", z->name);
   }
-#endif /* !TANDEM */
 #endif /* !VMS && !CMS_MVS && !__mpexl */
-#endif /* (!MSDOS || OS2) */
 
   if (isdir)
   {
@@ -1109,35 +943,6 @@ struct zlist far *z;    /* zip entry to compress */
     fflush(logfile);
   }
 
-#ifdef WINDLL
-# ifdef ZIP64_SUPPORT
-   /* The DLL api has been updated and uses a different
-      interface.  7/24/04 EG */
-   if (lpZipUserFunctions->ServiceApplication64 != NULL)
-    {
-    if ((*lpZipUserFunctions->ServiceApplication64)(z->zname, isize))
-                ZIPERR(ZE_ABORT, "User terminated operation");
-    }
-  else
-   {
-   filesize64 = isize;
-   low = (unsigned long)(filesize64 & 0x00000000FFFFFFFF);
-   high = (unsigned long)((filesize64 >> 32) & 0x00000000FFFFFFFF);
-   if (lpZipUserFunctions->ServiceApplication64_No_Int64 != NULL) {
-    if ((*lpZipUserFunctions->ServiceApplication64_No_Int64)(z->zname, low, high))
-                ZIPERR(ZE_ABORT, "User terminated operation");
-    }
-   }
-# else
-  if (lpZipUserFunctions->ServiceApplication != NULL)
-  {
-    if ((*lpZipUserFunctions->ServiceApplication)(z->zname, isize))
-    {
-      ZIPERR(ZE_ABORT, "User terminated operation");
-    }
-  }
-# endif
-#endif
 
   return ZE_OK;
 }
@@ -1501,24 +1306,16 @@ local zoff_t filecompress(z_entry, cmpr_method)
                       if (dot_size > 0) {
                         /* initial space */
                         if (noisy && dot_count == -1) {
-#ifndef WINDLL
                           putc(' ', mesg);
                           fflush(mesg);
-#else
-                          fprintf(stdout,"%c",' ');
-#endif
                           dot_count++;
                         }
                         dot_count++;
                         if (dot_size <= (dot_count + 1) * WSIZE) dot_count = 0;
                       }
                       if (noisy && dot_size && !dot_count) {
-#ifndef WINDLL
                         putc('.', mesg);
                         fflush(mesg);
-#else
-                        fprintf(stdout,"%c",'.');
-#endif
                         mesg_line_started = 1;
                       }
                     }
@@ -1816,24 +1613,16 @@ int *cmpr_method;
                       if (dot_size > 0) {
                         /* initial space */
                         if (noisy && dot_count == -1) {
-#ifndef WINDLL
                           putc(' ', mesg);
                           fflush(mesg);
-#else
-                          fprintf(stdout,"%c",' ');
-#endif
                           dot_count++;
                         }
                         dot_count++;
                         if (dot_size <= (dot_count + 1) * WSIZE) dot_count = 0;
                       }
                       if (noisy && dot_size && !dot_count) {
-#ifndef WINDLL
                         putc('.', mesg);
                         fflush(mesg);
-#else
-                        fprintf(stdout,"%c",'.');
-#endif
                         mesg_line_started = 1;
                       }
                     }

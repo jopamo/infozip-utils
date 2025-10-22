@@ -352,11 +352,7 @@ local int *file_method;     /* pointer to DEFLATE or STORE */
 
 local int flush_flg;
 
-#if (!defined(ASMV) || !defined(RISCOS))
 local unsigned bi_buf;
-#else
-unsigned bi_buf;
-#endif
 /* Output buffer. bits are inserted starting at the bottom (least significant
  * bits). The width of bi_buf must be at least 16 bits.
  */
@@ -366,36 +362,20 @@ unsigned bi_buf;
  * more than 16 bits on some systems.)
  */
 
-#if (!defined(ASMV) || !defined(RISCOS))
 local int bi_valid;
-#else
-int bi_valid;
-#endif
 /* Number of valid bits in bi_buf.  All bits above the last valid bit
  * are always zero.
  */
 
-#if (!defined(ASMV) || !defined(RISCOS))
 local char *out_buf;
-#else
-char *out_buf;
-#endif
 /* Current output buffer. */
 
-#if (!defined(ASMV) || !defined(RISCOS))
 local unsigned out_offset;
-#else
-unsigned out_offset;
-#endif
 /* Current offset in output buffer.
  * On 16 bit machines, the buffer is limited to 64K.
  */
 
-#if !defined(ASMV) || !defined(RISCOS)
 local unsigned out_size;
-#else
-unsigned out_size;
-#endif
 /* Size of current output buffer */
 
 /* Output a 16 bit value to the bit stream, lower (oldest) byte first */
@@ -436,10 +416,8 @@ local int  build_bl_tree  OF((void));
 local void send_all_trees OF((int lcodes, int dcodes, int blcodes));
 local void compress_block OF((ct_data near *ltree, ct_data near *dtree));
 local void set_file_type  OF((void));
-#if (!defined(ASMV) || !defined(RISCOS))
 local void send_bits      OF((int value, int length));
 local unsigned bi_reverse OF((unsigned code, int len));
-#endif
 local void bi_windup      OF((void));
 local void copy_block     OF((char *buf, unsigned len, int header));
 
@@ -1315,7 +1293,6 @@ void bi_init (tgt_buf, tgt_size, flsh_allowed)
 #endif
 }
 
-#if (!defined(ASMV) || !defined(RISCOS))
 /* ===========================================================================
  * Send a value on a given number of bits.
  * IN assertion: length <= 16 and value fits in length bits.
@@ -1359,7 +1336,6 @@ local unsigned bi_reverse(code, len)
     } while (--len > 0);
     return res >> 1;
 }
-#endif /* !ASMV || !RISCOS */
 
 /* ===========================================================================
  * Write out any remaining bits in an incomplete byte.

@@ -54,38 +54,14 @@
 #define HAVE_TERMIOS_H
 #endif
 
-#ifdef _POSIX_VERSION
 #ifndef USE_POSIX_TERMIOS
 #define USE_POSIX_TERMIOS /* use POSIX style termio (termios) */
 #endif
 #ifndef HAVE_TERMIOS_H
 #define HAVE_TERMIOS_H /* POSIX termios.h */
 #endif
-#endif /* _POSIX_VERSION */
 
 #ifdef UNZIP /* Zip handles this with the unix/configure script */
-#ifndef _POSIX_VERSION
-#if (defined(SYSV) || defined(CRAY)) && !defined(__MINT__)
-#ifndef USE_SYSV_TERMIO
-#define USE_SYSV_TERMIO
-#endif
-#ifdef COHERENT
-#ifndef HAVE_TERMIO_H
-#define HAVE_TERMIO_H
-#endif
-#ifdef HAVE_SYS_TERMIO_H
-#undef HAVE_SYS_TERMIO_H
-#endif
-#else /* !COHERENT */
-#ifdef HAVE_TERMIO_H
-#undef HAVE_TERMIO_H
-#endif
-#ifndef HAVE_SYS_TERMIO_H
-#define HAVE_SYS_TERMIO_H
-#endif
-#endif /* ?COHERENT */
-#endif /* (SYSV || CRAY) && !__MINT__ */
-#endif /* !_POSIX_VERSION */
 #if !(defined(BSD4_4) || defined(SYSV) || defined(__convexc__))
 #ifndef NO_FCNTL_H
 #define NO_FCNTL_H
@@ -117,18 +93,6 @@
 
 #ifndef HAVE_WORKING_GETCH
 /* include system support for switching of console echo */
-#ifdef VMS
-#include <descrip.h>
-#include <iodef.h>
-#include <ttdef.h>
-/* Workaround for broken header files of older DECC distributions
- * that are incompatible with the /NAMES=AS_IS qualifier. */
-#define sys$assign SYS$ASSIGN
-#define sys$dassgn SYS$DASSGN
-#define sys$qiow SYS$QIOW
-#include <starlet.h>
-#include <ssdef.h>
-#else /* !VMS */
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
 #define sgttyb termios
@@ -172,7 +136,6 @@
 #else
 char* ttyname OF((int));
 #endif
-#endif /* ?VMS */
 #endif /* !HAVE_WORKING_GETCH */
 
 /* -----------------------------------------------------------------------
@@ -195,80 +158,6 @@ static int read_one_byte(int fd, char* ch) {
 }
 
 #ifndef HAVE_WORKING_GETCH
-#ifdef VMS
-
-static struct dsc$descriptor_s DevDesc = {11, DSC$K_DTYPE_T, DSC$K_CLASS_S, "SYS$COMMAND"};
-/* {dsc$w_length, dsc$b_dtype, dsc$b_class, dsc$a_pointer}; */
-
-/*
- * Turn keyboard echoing on or off (VMS).  Loosely based on VMSmunch.c
- * and hence on Joe Meadows' file.c code.
- */
-int echo(opt)
-int opt;
-{
-    short DevChan, iosb[4];
-    long status;
-    unsigned long ttmode[2]; /* space for 8 bytes */
-
-    /* assign a channel to standard input */
-    status = sys$assign(&DevDesc, &DevChan, 0, 0);
-    if (!(status & 1))
-        return status;
-
-    /* sense mode */
-    status = sys$qiow(0, DevChan, IO$_SENSEMODE, &iosb, 0, 0, ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1))
-        return status;
-    status = iosb[0];
-    if (!(status & 1))
-        return status;
-
-    /* modify NOECHO */
-    if (opt == 0)                 /* off */
-        ttmode[1] |= TT$M_NOECHO; /* set NOECHO bit */
-    else
-        ttmode[1] &= ~((unsigned long)TT$M_NOECHO); /* clear NOECHO bit */
-
-    /* set mode */
-    status = sys$qiow(0, DevChan, IO$_SETMODE, &iosb, 0, 0, ttmode, 8, 0, 0, 0, 0);
-    if (!(status & 1))
-        return status;
-    status = iosb[0];
-    if (!(status & 1))
-        return status;
-
-    /* cleanup */
-    status = sys$dassgn(DevChan);
-    if (!(status & 1))
-        return status;
-
-    return SS$_NORMAL;
-}
-
-/*
- * Read a single character from keyboard in non-echoing mode (VMS).
- * (returns EOF in case of errors)
- */
-int tt_getch() {
-    short DevChan, iosb[4];
-    long status;
-    char kbbuf[16]; /* input buffer with some excess length */
-
-    status = sys$assign(&DevDesc, &DevChan, 0, 0);
-    if (!(status & 1))
-        return EOF;
-
-    status = sys$qiow(0, DevChan, IO$_READVBLK | IO$M_NOECHO | IO$M_NOFILTR, &iosb, 0, 0, &kbbuf, 1, 0, 0, 0, 0);
-    if ((status & 1) == 1)
-        status = iosb[0];
-
-    sys$dassgn(DevChan);
-
-    return (int)(((status & 1) == 1) ? (uch)kbbuf[0] : EOF);
-}
-
-#else /* !VMS:  basically Unix */
 
 /* For VM/CMS and MVS, non-echo terminal input is not (yet?) supported. */
 #ifndef CMS_MVS
@@ -299,7 +188,6 @@ void Echon(__G) __GDEF {
 }
 
 #endif /* !CMS_MVS */
-#endif /* ?VMS */
 
 #if (defined(UNZIP) && !defined(FUNZIP))
 
@@ -421,7 +309,6 @@ int zgetch(__G__ f) __GDEF int f; /* file descriptor from which to read */
 }
 
 #else       /* !ATH_BEO_UNX */
-#ifndef VMS /* VMS supplies its own variant of getch() */
 
 int zgetch(__G__ f) __GDEF int f; /* fd must be open already */
 {
@@ -445,7 +332,6 @@ int zgetch(__G__ f) __GDEF int f; /* fd must be open already */
     return (int)c;
 }
 
-#endif /* !VMS */
 #endif /* ?ATH_BEO_UNX */
 
 #endif /* UNZIP && !FUNZIP */
@@ -468,8 +354,6 @@ error : This Info - ZIP tool requires zcrypt 2.7 or later.
 
 #ifdef HAVE_WORKING_GETCH
 
-#ifndef WINDLL /* WINDLL does not support a console interface */
-#ifndef QDOS   /* QDOS supplies a variant of this function */
 
                     char* getp(__G__ m, p, n)
 __GDEF
@@ -507,8 +391,6 @@ int n;          /* bytes available in p[] */
     return p;
 }
 
-#endif /* !QDOS */
-#endif /* !WINDLL */
 
 #else /* !HAVE_WORKING_GETCH */
 

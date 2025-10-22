@@ -12,20 +12,6 @@
 /* Some compiler distributions for Win32/i386 systems try to emulate
  * a Unix (POSIX-compatible) environment.
  */
-#if (defined(WIN32) && defined(UNIX))
-   /* Zip does not support merging both ports in a single executable. */
-#  if (defined(FORCE_WIN32_OVER_UNIX) && defined(FORCE_UNIX_OVER_WIN32))
-     /* conflicting choice requests -> we prefer the Win32 environment */
-#    undef FORCE_UNIX_OVER_WIN32
-#  endif
-#  ifdef FORCE_WIN32_OVER_UNIX
-     /* native Win32 support was explicitely requested... */
-#    undef UNIX
-#  else
-     /* use the POSIX (Unix) emulation features by default... */
-#    undef WIN32
-#  endif
-#endif
 
 
 /* UNICODE */
@@ -36,29 +22,14 @@
 #endif
 
 
-#ifdef AMIGA
-#include "amiga/osdep.h"
-#endif
 
-#ifdef AOSVS
-#include "aosvs/osdep.h"
-#endif
 
-#ifdef ATARI
-#include "atari/osdep.h"
-#endif
 
 #ifdef __ATHEOS__
 #include "atheos/osdep.h"
 #endif
 
-#ifdef __BEOS__
-#include "beos/osdep.h"
-#endif
 
-#ifdef DOS
-#include "msdos/osdep.h"
-#endif
 
 #ifdef __human68k__
 #include "human68k/osdep.h"
@@ -72,42 +43,21 @@
 #include "novell/osdep.h"
 #endif
 
-#ifdef OS2
-#include "os2/osdep.h"
-#endif
 
-#ifdef __riscos
-#include "acorn/osdep.h"
-#endif
 
-#ifdef QDOS
-#include "qdos/osdep.h"
-#endif
 
-#ifdef __TANDEM
-#include "tandem.h"
-#include "tanzip.h"
-#endif
 
-#ifdef UNIX
 #include "osdep.h"
-#endif
 
 #if defined(__COMPILER_KCC__) || defined(TOPS20)
 #include "tops20/osdep.h"
 #endif
 
-#if defined(VMS) || defined(__VMS)
-#include "vms/osdep.h"
-#endif
 
 #if defined(__VM__) || defined(VM_CMS) || defined(MVS)
 #include "cmsmvs.h"
 #endif
 
-#ifdef WIN32
-#include "win32/osdep.h"
-#endif
 
 #ifdef THEOS
 #include "theos/osdep.h"
@@ -330,9 +280,7 @@ IZ_IMP char *mktemp();
  * (differently) when <locale.h> is read later.
  */
 #ifdef UNICODE_SUPPORT
-# if defined( UNIX) || defined( VMS)
 #   include <locale.h>
-# endif /* defined( UNIX) || defined( VMS) */
 # include <wchar.h>
 # include <wctype.h>
 #endif /* def UNICODE_SUPPORT */
@@ -421,11 +369,7 @@ typedef struct ztimbuf {
 /* Open the old zip file in exclusive mode if possible (to avoid adding
  * zip file to itself).
  */
-#ifdef OS2
-#  define FOPR_EX FOPM
-#else
 #  define FOPR_EX FOPR
-#endif
 
 
 /* MSDOS file or directory attributes */
@@ -464,16 +408,10 @@ typedef struct ztimbuf {
 #endif
 
 #ifndef MEMORY16
-#  ifdef __WATCOMC__
-#    undef huge
-#    undef far
-#    undef near
-#  endif
 #  ifdef THEOS
 #    undef far
 #    undef near
 #  endif
-#  if (!defined(__IBMC__) || !defined(OS2))
 #    ifndef huge
 #      define huge
 #    endif
@@ -483,7 +421,6 @@ typedef struct ztimbuf {
 #    ifndef near
 #      define near
 #    endif
-#  endif
 #  define nearmalloc malloc
 #  define nearfree free
 #  define farmalloc malloc
@@ -527,7 +464,6 @@ typedef struct ztimbuf {
      function names are mapped below. */
 
 /* ---------------------------- */
-# ifdef UNIX
 
   /* Assume 64-bit file environment is defined.  The below should all
      be set to their 64-bit versions automatically.  Neat.  7/20/2004 EG */
@@ -537,169 +473,20 @@ typedef struct ztimbuf {
 #   define zfstat fstat
 #   define zlstat lstat
 
-# if defined(__alpha) && defined(__osf__)  /* support for osf4.0f */
-    /* 64-bit fseek */
-#   define zfseeko fseek
-
-    /* 64-bit ftell */
-#   define zftello ftell
-
-# else
      /* 64-bit fseeko */
 #   define zfseeko fseeko
 
      /* 64-bit ftello */
 #   define zftello ftello
-# endif                                    /* __alpha && __osf__ */
 
     /* 64-bit fopen */
 #   define zfopen fopen
 #   define zfdopen fdopen
 
-# endif /* UNIX */
 
 /* ---------------------------- */
-# ifdef VMS
-
-    /* 64-bit stat functions */
-#   define zstat stat
-#   define zfstat fstat
-#   define zlstat lstat
-
-    /* 64-bit fseeko */
-#   define zfseeko fseeko
-
-    /* 64-bit ftello */
-#   define zftello ftello
-
-    /* 64-bit fopen */
-#   define zfopen fopen
-#   define zfdopen fdopen
-
-# endif /* def VMS */
 
 /* ---------------------------- */
-# ifdef WIN32
-
-#   if defined(__MINGW32__)
-    /* GNU C, linked against "msvcrt.dll" */
-
-      /* 64-bit stat functions */
-#     define zstat _stati64
-# ifdef UNICODE_SUPPORT
-#     define zwfstat _fstati64
-#     define zwstat _wstati64
-#     define zw_stat struct _stati64
-# endif
-#     define zfstat _fstati64
-#     define zlstat lstat
-
-      /* 64-bit fseeko */
-      /* function in win32.c */
-      int zfseeko OF((FILE *, zoff_t, int));
-
-      /* 64-bit ftello */
-      /* function in win32.c */
-      zoff_t zftello OF((FILE *));
-
-      /* 64-bit fopen */
-#     define zfopen fopen
-#     define zfdopen fdopen
-
-#   endif
-
-#   if defined(__CYGWIN__)
-    /* GNU C, CygWin with its own POSIX compatible runtime library */
-
-      /* 64-bit stat functions */
-#     define zstat stat
-#     define zfstat fstat
-#     define zlstat lstat
-
-      /* 64-bit fseeko */
-#     define zfseeko fseeko
-
-      /* 64-bit ftello */
-#     define zftello ftello
-
-      /* 64-bit fopen */
-#     define zfopen fopen
-#     define zfdopen fdopen
-
-#   endif
-
-#   ifdef __WATCOMC__
-    /* WATCOM C */
-
-      /* 64-bit stat functions */
-#     define zstat _stati64
-# ifdef UNICODE_SUPPORT
-#     define zwfstat _fstati64
-#     define zwstat _wstati64
-#     define zw_stat struct _stati64
-# endif
-#     define zfstat _fstati64
-#     define zlstat lstat
-
-      /* 64-bit fseeko */
-      /* function in win32.c */
-      int zfseeko OF((FILE *, zoff_t, int));
-
-      /* 64-bit ftello */
-      /* function in win32.c */
-      zoff_t zftello OF((FILE *));
-
-      /* 64-bit fopen */
-#     define zfopen fopen
-#     define zfdopen fdopen
-
-#   endif
-
-#   ifdef _MSC_VER
-    /* MS C and VC */
-
-      /* 64-bit stat functions */
-#     define zstat _stati64
-# ifdef UNICODE_SUPPORT
-#     define zwfstat _fstati64
-#     define zwstat _wstati64
-#     define zw_stat struct _stati64
-# endif
-#     define zfstat _fstati64
-#     define zlstat lstat
-
-      /* 64-bit fseeko */
-      /* function in win32.c */
-      int zfseeko OF((FILE *, zoff_t, int));
-
-      /* 64-bit ftello */
-      /* function in win32.c */
-      zoff_t zftello OF((FILE *));
-
-      /* 64-bit fopen */
-#     define zfopen fopen
-#     define zfdopen fdopen
-
-#   endif
-
-#   ifdef __IBMC__
-      /* IBM C */
-
-      /* 64-bit stat functions */
-
-      /* 64-bit fseeko */
-      /* function in win32.c */
-      int zfseeko OF((FILE *, zoff_t, int));
-
-      /* 64-bit ftello */
-      /* function in win32.c */
-      zoff_t zftello OF((FILE *));
-
-      /* 64-bit fopen */
-
-#   endif
-
-# endif /* WIN32 */
 
 #else
   /* No Large File Support or default for 64-bit environment */
@@ -796,50 +583,20 @@ typedef struct ztimbuf {
 #endif /* ZCRYPT_INTERNAL */
 
 /* The following OS codes are defined in pkzip appnote.txt */
-#ifdef AMIGA
-#  define OS_CODE  0x100
-#endif
-#ifdef VMS
-#  define OS_CODE  0x200
-#endif
 /* unix    3 */
 #ifdef VM_CMS
 #  define OS_CODE  0x400
-#endif
-#ifdef ATARI
-#  define OS_CODE  0x500
-#endif
-#ifdef OS2
-#  define OS_CODE  0x600
-#endif
-#ifdef MACOS
-#  define OS_CODE  0x700
 #endif
 /* z system 8 */
 /* cp/m     9 */
 #ifdef TOPS20
 #  define OS_CODE  0xa00
 #endif
-#ifdef WIN32
-#  define OS_CODE  0xb00
-#endif
-#ifdef QDOS
-#  define OS_CODE  0xc00
-#endif
-#ifdef RISCOS
-#  define OS_CODE  0xd00
-#endif
 #ifdef VFAT
 #  define OS_CODE  0xe00
 #endif
 #ifdef MVS
 #  define OS_CODE  0xf00
-#endif
-#ifdef __BEOS__
-#  define OS_CODE  0x1000
-#endif
-#ifdef TANDEM
-#  define OS_CODE  0x1100
 #endif
 #ifdef THEOS
 #  define OS_CODE  0x1200
@@ -852,9 +609,6 @@ typedef struct ztimbuf {
 #define NUM_HOSTS 31
 /* Number of operating systems. Should be updated when new ports are made */
 
-#if defined(DOS) && !defined(OS_CODE)
-#  define OS_CODE  0x000
-#endif
 
 #ifndef OS_CODE
 #  define OS_CODE  0x300  /* assume Unix */

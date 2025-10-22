@@ -14,17 +14,10 @@
 #define wszimpl WSIZE
 
 /* Compiler hints (GCC/Clang). */
-#if defined(__GNUC__) || defined(__clang__)
 #define HOT __attribute__((hot))
 #define COLD __attribute__((cold))
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#define HOT
-#define COLD
-#define LIKELY(x) (x)
-#define UNLIKELY(x) (x)
-#endif
 
 /* routines here */
 static int get_tree OF((__GPRO__ unsigned* l, unsigned n));

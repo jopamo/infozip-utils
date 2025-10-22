@@ -31,13 +31,6 @@
 
 #define UNZIP_INTERNAL
 #include "unzip.h"
-#ifdef WINDLL
-#ifdef POCKET_UNZIP
-#include "wince/intrface.h"
-#else
-#include "windll/windll.h"
-#endif
-#endif
 #if defined(DYNALLOC_CRCTAB) || defined(UNICODE_SUPPORT)
 #include "common/crc32.h"
 #endif
@@ -51,7 +44,7 @@ static zoff_t file_size OF((int fh));
 #endif
 #endif /* DO_SAFECHECK_2GB */
 static int rec_find OF((__GPRO__ zoff_t, char*, int));
-static int find_ecrec64 OF((__GPRO__ zoff_t searchlen));
+static int find_ecrec64 OF((__GPRO__));
 static int find_ecrec OF((__GPRO__ zoff_t searchlen));
 static int process_zip_cmmnt OF((__GPRO));
 static int get_cdir_ent OF((__GPRO));
@@ -73,9 +66,6 @@ static ZCONST char Far NotAutoRunning[] = "Not executing auto-run command.";
 #if (defined(IZ_CHECK_TZ) && defined(USE_EF_UT_TIME))
 static ZCONST char Far WarnInvalidTZ[] = "Warning: TZ environment variable not found, cannot use UTC times!!\n";
 #endif
-#if !(defined(UNIX) || defined(AMIGA))
-static ZCONST char Far CannotFindWildcardMatch[] = "%s:  cannot find any matches for wildcard specification \"%s\".\n";
-#endif /* !(UNIX || AMIGA) */
 static ZCONST char Far FilesProcessOK[] = "%d archive%s successfully processed.\n";
 static ZCONST char Far ArchiveWarning[] = "%d archive%s had warnings but no fatal errors.\n";
 static ZCONST char Far ArchiveFatalError[] = "%d archive%s had fatal errors.\n";
@@ -85,27 +75,12 @@ static ZCONST char Far ManyZipfilesWereDir[] = "%d \"zipfiles\" were directories
 static ZCONST char Far NoZipfileFound[] = "No zipfiles found.\n";
 
 /* do_seekable() strings */
-#ifdef UNIX
 static ZCONST char Far CannotFindZipfileDirMsg[] =
     "%s:  cannot find zipfile directory in one of %s or\n\
         %s%s.zip, and cannot find %s, period.\n";
 static ZCONST char Far CannotFindEitherZipfile[] = "%s:  cannot find or open %s, %s.zip or %s.\n";
-#else /* !UNIX */
-static ZCONST char Far CannotFindZipfileDirMsg[] =
-    "%s:  cannot find zipfile directory in %s,\n\
-        %sand cannot find %s, period.\n";
-#ifdef VMS
-static ZCONST char Far CannotFindEitherZipfile[] = "%s:  cannot find %s (%s).\n";
-#else  /* !VMS */
-static ZCONST char Far CannotFindEitherZipfile[] = "%s:  cannot find either %s or %s.\n";
-#endif /* ?VMS */
-#endif /* ?UNIX */
 extern ZCONST char Far Zipnfo[]; /* in unzip.c */
-#ifndef WINDLL
 static ZCONST char Far Unzip[] = "unzip";
-#else
-static ZCONST char Far Unzip[] = "UnZip DLL";
-#endif
 #ifdef DO_SAFECHECK_2GB
 static ZCONST char Far ZipfileTooBig[] = "Trying to read large file (> 2 GiB) without large file support\n";
 #endif /* DO_SAFECHECK_2GB */
@@ -226,11 +201,9 @@ int process_zipfiles(__G) /* return PK-type error code */
         return (PK_MEM);
     }
     G.hold = G.inbuf + INBUFSIZ; /* to check for boundary-spanning sigs */
-#ifndef VMS                      /* VMS uses its own buffer scheme for textmode flush(). */
 #ifdef SMALL_MEM
     G.outbuf2 = G.outbuf + RAWBUFSIZ; /* never changes */
 #endif
-#endif /* !VMS */
 
 #if 0  /* CRC_32_TAB has been NULLified by CONSTRUCTGLOBALS !!!! */
     /* allocate the CRC table later when we know we can read zipfile data */
@@ -254,12 +227,6 @@ int process_zipfiles(__G) /* return PK-type error code */
         of whether the function does anything, should be removed from the ifdefs.
       ---------------------------------------------------------------------------*/
 
-#if (defined(WIN32) && defined(USE_EF_UT_TIME))
-    /* For the Win32 environment, we may have to "prepare" the environment
-       prior to the tzset() call, to work around tzset() implementation bugs.
-     */
-    iz_w32_prepareTZenv();
-#endif
 
 #if (defined(IZ_CHECK_TZ) && defined(USE_EF_UT_TIME))
 #ifndef VALID_TIMEZONE
@@ -280,10 +247,8 @@ int process_zipfiles(__G) /* return PK-type error code */
 /* For systems that do not have tzset() but supply this function using another
    name (_tzset() or something similar), an appropiate "#define tzset ..."
    should be added to the system specifc configuration section.  */
-#if (!defined(T20_VMS) && !defined(MACOS) && !defined(RISCOS) && !defined(QDOS))
 #if (!defined(BSD) && !defined(MTS) && !defined(CMS_MVS) && !defined(TANDEM))
     tzset();
-#endif
 #endif
 
 /* Initialize UnZip's built-in pseudo hard-coded "ISO <--> OEM" translation,
@@ -323,9 +288,6 @@ int process_zipfiles(__G) /* return PK-type error code */
             G.zipfn = G.argv0; /* for "cannot find myself" message only */
         }
 #endif /* EXE_EXTENSION */
-#ifdef WIN32
-        G.zipfn = G.argv0; /* for "cannot find myself" message only */
-#endif
     }
     if (error) {
         if (error == IZ_DIR)
@@ -376,29 +338,11 @@ int process_zipfiles(__G) /* return PK-type error code */
         Trace((stderr, "do_seekable(0) returns %d\n", error));
         if (error != IZ_DIR && error > error_in_archive)
             error_in_archive = error;
-#ifdef WINDLL
-        if (error == IZ_CTRLC) {
-            free_G_buffers(__G);
-            return error;
-        }
-#endif
 
     } /* end while-loop (wildcard zipfiles) */
 
     if ((NumWinFiles + NumWarnFiles + NumLoseFiles) == 0 && (NumMissDirs + NumMissFiles) == 1 && lastzipfn != (char*)NULL) {
-#if (!defined(UNIX) && !defined(AMIGA)) /* filenames with wildcard characters */
-        if (iswild(G.wildzipfn)) {
-            if (iswild(lastzipfn)) {
-                NumMissDirs = NumMissFiles = 0;
-                error_in_archive = PK_COOL;
-                if (uO.qflag < 3)
-                    Info(slide, 0x401, ((char*)slide, LoadFarString(CannotFindWildcardMatch), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn));
-            }
-        }
-        else
-#endif
         {
-#ifndef VMS
             /* 2004-11-24 SMS.
              * VMS has already tried a default file type of ".zip" in
              * do_wild(), so adding ZSUFX here only causes confusion by
@@ -411,18 +355,14 @@ int process_zipfiles(__G) /* return PK-type error code */
              * do_seekable() again with the same zipfile name (and the
              * lastchance flag set), just to trigger the error report...
              */
-#if defined(UNIX) || defined(QDOS)
             char* p =
-#endif
                 strcpy(lastzipfn + strlen(lastzipfn), ZSUFX);
-#endif /* !VMS */
 
             G.zipfn = lastzipfn;
 
             NumMissDirs = NumMissFiles = 0;
             error_in_archive = PK_COOL;
 
-#if defined(UNIX) || defined(QDOS)
             /* only Unix has case-sensitive filesystems */
             /* Well FlexOS (sometimes) also has them,  but support is per media */
             /* and a pig to code for,  so treat as case insensitive for now */
@@ -433,9 +373,6 @@ int process_zipfiles(__G) /* return PK-type error code */
                 strcpy(p, ALT_ZSUFX);
                 error = do_seekable(__G__ 1);
             }
-#else
-            error = do_seekable(__G__ 1);
-#endif
             Trace((stderr, "do_seekable(1) returns %d\n", error));
             switch (error) {
                 case PK_WARN:
@@ -460,12 +397,6 @@ int process_zipfiles(__G) /* return PK-type error code */
 
             if (error > error_in_archive)
                 error_in_archive = error;
-#ifdef WINDLL
-            if (error == IZ_CTRLC) {
-                free_G_buffers(__G);
-                return error;
-            }
-#endif
         }
     }
 #endif /* ?SFX */
@@ -622,22 +553,11 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
         (error = S_ISDIR(G.statbuf.st_mode)) != 0) {
 #ifndef SFX
         if (lastchance && (uO.qflag < 3)) {
-#if defined(UNIX) || defined(QDOS)
             if (G.no_ecrec)
                 Info(slide, 1,
                      ((char*)slide, LoadFarString(CannotFindZipfileDirMsg), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn, uO.zipinfo_mode ? "  " : "", G.wildzipfn, G.zipfn));
             else
                 Info(slide, 1, ((char*)slide, LoadFarString(CannotFindEitherZipfile), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn, G.wildzipfn, G.zipfn));
-#else /* !(UNIX || QDOS) */
-            if (G.no_ecrec)
-                Info(slide, 0x401, ((char*)slide, LoadFarString(CannotFindZipfileDirMsg), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn, uO.zipinfo_mode ? "  " : "", G.zipfn));
-            else
-#ifdef VMS
-                Info(slide, 0x401, ((char*)slide, LoadFarString(CannotFindEitherZipfile), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn, (*G.zipfn ? G.zipfn : vms_msg_text())));
-#else  /* !VMS */
-                Info(slide, 0x401, ((char*)slide, LoadFarString(CannotFindEitherZipfile), LoadFarStringSmall((uO.zipinfo_mode ? Zipnfo : Unzip)), G.wildzipfn, G.zipfn));
-#endif /* ?VMS */
-#endif /* ?(UNIX || QDOS) */
         }
 #endif /* !SFX */
         return error ? IZ_DIR : PK_NOZIP;
@@ -645,16 +565,10 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
     G.ziplen = G.statbuf.st_size;
 
 #ifndef SFX
-#if defined(UNIX) || defined(DOS_OS2_W32) || defined(THEOS)
     if (G.statbuf.st_mode & S_IEXEC) /* no extension on Unix exes:  might */
         maybe_exe = TRUE;            /*  find unzip, not unzip.zip; etc. */
-#endif
 #endif /* !SFX */
 
-#ifdef VMS
-    if (check_format(__G)) /* check for variable-length format */
-        return PK_ERR;
-#endif
 
     if (open_input_file(__G)) /* this should never happen, given */
         return PK_NOZIP;      /*  the stat() test above, but... */
@@ -700,11 +614,7 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
 #else        /* not (!WINDLL && !SFX) ==> !NO_ZIPINFO !! */
     if (uO.zipinfo_mode && uO.hflag)
 #endif       /* if..else..: (!WINDLL && !SFX) */
-#ifdef WIN32 /* Win32 console may require codepage conversion for G.zipfn */
-        Info(slide, 0, ((char*)slide, LoadFarString(LogInitline), FnFilter1(G.zipfn)));
-#else
         Info(slide, 0, ((char*)slide, LoadFarString(LogInitline), G.zipfn));
-#endif
 #endif /* (!WINDLL && !SFX) || !NO_ZIPINFO */
 
     if ((error_in_archive = find_ecrec(__G__
@@ -902,11 +812,7 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
 
 #ifdef TIMESTAMP
     if (uO.T_flag && !uO.zipinfo_mode && (nmember > 0L)) {
-#ifdef WIN32
-        if (stamp_file(__G__ G.zipfn, uxstamp)) { /* TIME-STAMP 'EM */
-#else
         if (stamp_file(G.zipfn, uxstamp)) { /* TIME-STAMP 'EM */
-#endif
             if (uO.qflag < 3)
                 Info(slide, 0x201, ((char*)slide, LoadFarString(ZipTimeStampFailed), G.zipfn));
             if (error_in_archive < PK_WARN)
@@ -1109,8 +1015,7 @@ static int check_ecrec_zip64(__G)
 /* Function find_ecrec64() */
 /***************************/
 
-static int find_ecrec64(__G__ searchlen) /* return PK-class error */
-    __GDEF zoff_t searchlen;
+static int find_ecrec64(__G__)
 {
     ec_byte_rec64 byterec;       /* buf for ecrec64 */
     ec_byte_loc64 byterecL;      /* buf for ecrec64 locator */
@@ -1414,7 +1319,7 @@ static int find_ecrec(__G__ searchlen) /* return PK-class error */
        in the archive, so just check for that to see if this is a
        Zip64 archive.
      */
-    result = find_ecrec64(__G__ searchlen + 76);
+    result = find_ecrec64(__G__);
     /* 76 bytes for zip64ec & zip64 locator */
     if (result != PK_COOL) {
         if (error_in_archive < result)
@@ -1449,11 +1354,6 @@ static int process_zip_cmmnt(__G) /* return PK-type error code */
         Get the zipfile comment (up to 64KB long), if any, and print it out.
       ---------------------------------------------------------------------------*/
 
-#ifdef WINDLL
-    /* for comment button: */
-    if ((!G.fValidate) && (G.lpUserFunctions != NULL))
-        G.lpUserFunctions->cchComment = G.ecrec.zipfile_comment_length;
-#endif /* WINDLL */
 
 #ifndef NO_ZIPINFO
     /* ZipInfo, verbose format */
@@ -1488,7 +1388,6 @@ static int process_zip_cmmnt(__G) /* return PK-type error code */
     else
 #endif /* !NO_ZIPINFO */
         if (G.ecrec.zipfile_comment_length && (uO.zflag > 0
-#ifndef WINDLL
                                                || (uO.zflag == 0
 #ifndef NO_ZIPINFO
                                                    && !uO.zipinfo_mode
@@ -1497,7 +1396,6 @@ static int process_zip_cmmnt(__G) /* return PK-type error code */
                                                    && !uO.T_flag
 #endif
                                                    && !uO.qflag)
-#endif /* !WINDLL */
                                                    )) {
             if (do_string(__G__ G.ecrec.zipfile_comment_length,
 #if (defined(SFX) && defined(CHEAP_SFX_AUTORUN))
@@ -2229,7 +2127,6 @@ zwchar escape_string_to_wide(escape_string)
 }
 #endif /* unused */
 
-#ifndef WIN32 /* WIN32 supplies a special variant of this function */
 /* convert wide character string to multi-byte character string */
 char* wide_to_local_string(wide_string, escape_all)
 ZCONST zwchar* wide_string;
@@ -2305,7 +2202,6 @@ int escape_all;
 
     return local_string;
 }
-#endif /* !WIN32 */
 
 #if 0 /* currently unused */
 /* convert local string to display character set string */
@@ -2810,57 +2706,3 @@ default:
     }
 
 #endif /* USE_EF_UT_TIME */
-
-#if (defined(RISCOS) || defined(ACORN_FTYPE_NFS))
-
-#define SPARKID_2 0x30435241 /* = "ARC0" */
-
-    /*******************************/
-    /* Function getRISCOSexfield() */
-    /*******************************/
-
-    zvoid* getRISCOSexfield(ef_buf, ef_len)
-    ZCONST uch* ef_buf; /* buffer containing extra field */
-    unsigned ef_len;    /* total length of extra field */
-    {
-        unsigned eb_id;
-        unsigned eb_len;
-
-        /*---------------------------------------------------------------------------
-            This function scans the extra field for a Acorn SPARK filetype ef-block.
-            If a valid block is found, the function returns a pointer to the start
-            of the SPARK_EF block in the extra field buffer.  Otherwise, a NULL
-            pointer is returned.
-          ---------------------------------------------------------------------------*/
-
-        if (ef_len == 0 || ef_buf == NULL)
-            return NULL;
-
-        Trace((stderr, "\ngetRISCOSexfield: scanning extra field of length %u\n", ef_len));
-
-        while (ef_len >= EB_HEADSIZE) {
-            eb_id = makeword(EB_ID + ef_buf);
-            eb_len = makeword(EB_LEN + ef_buf);
-
-            if (eb_len > (ef_len - EB_HEADSIZE)) {
-                /* discovered some extra field inconsistency! */
-                Trace((stderr, "getRISCOSexfield: block length %u > rest ef_size %u\n", eb_len, ef_len - EB_HEADSIZE));
-                break;
-            }
-
-            if (eb_id == EF_SPARK && (eb_len == 24 || eb_len == 20)) {
-                if (makelong(EB_HEADSIZE + ef_buf) == SPARKID_2) {
-                    /* Return a pointer to the valid SPARK filetype ef block */
-                    return (zvoid*)ef_buf;
-                }
-            }
-
-            /* Skip this extra field block */
-            ef_buf += (eb_len + EB_HEADSIZE);
-            ef_len -= (eb_len + EB_HEADSIZE);
-        }
-
-        return NULL;
-    }
-
-#endif /* (RISCOS || ACORN_FTYPE_NFS) */

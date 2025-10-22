@@ -67,11 +67,6 @@
 
 
 /* Process files in binary mode */
-#if defined(__DJGPP__) || defined(__CYGWIN__)
-#  define FOPR "rb"
-#  define FOPM "r+b"
-#  define FOPW "wb"
-#endif
 
 
 /* Enable the "UT" extra field (time info) */

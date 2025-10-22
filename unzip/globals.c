@@ -154,15 +154,6 @@ Uz_Globs* globalsCtor() {
     uO.aflag = 1;
     uO.C_flag = 1;
 #endif
-#ifdef TANDEM
-    uO.aflag = 1; /* default to '-a' auto create Text Files as type 101 */
-#endif
-#ifdef VMS
-#if (!defined(NO_TIMESTAMPS))
-    uO.D_flag = 1; /* default to '-D', no restoration of dir timestamps */
-#endif
-    G.cover = NULL; /* not allocated yet */
-#endif
 
     uO.lflag = (-1);
     G.wildzipfn = "";
@@ -173,19 +164,11 @@ Uz_Globs* globalsCtor() {
 
     G.message = UzpMessagePrnt;
     G.input = UzpInput; /* not used by anyone at the moment... */
-#if defined(WINDLL) || defined(MACOS)
-    G.mpause = NULL; /* has scrollbars:  no need for pausing */
-#else
     G.mpause = UzpMorePause;
-#endif
     G.decr_passwd = UzpPassword;
 #endif /* !FUNZIP */
 
-#if (!defined(DOS_FLX_H68_NLM_OS2_W32) && !defined(AMIGA) && !defined(RISCOS))
-#if (!defined(MACOS) && !defined(ATARI) && !defined(VMS))
     G.echofd = -1;
-#endif /* !(MACOS || ATARI || VMS) */
-#endif /* !(DOS_FLX_H68_NLM_OS2_W32 || AMIGA || RISCOS) */
 
 #ifdef SYSTEM_SPECIFIC_CTOR
     SYSTEM_SPECIFIC_CTOR(__G);

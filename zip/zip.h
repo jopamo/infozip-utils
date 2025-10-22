@@ -119,11 +119,7 @@ typedef unsigned long ulg;      /* unsigned 32-bit value */
  */
 
 /* Forget FILENAME_MAX (incorrectly = 14 on some System V) */
-#ifdef DOS
-#  define FNMAX 256
-#else
 #  define FNMAX 1024
-#endif
 
 #ifndef MATCH
 #  define MATCH shmatch         /* Default for pattern matching: UNIX style */
@@ -172,12 +168,6 @@ struct zlist {
   /* if uname has chars not in local char set, zuname can be different than zname */
   char *zuname;                 /* Escaped Unicode zname from uname */
   char *ouname;                 /* Display version of zuname */
-# ifdef WIN32
-  char *wuname;                 /* Converted back ouname for Win32 */
-  wchar_t *namew;               /* Windows wide character version of name */
-  wchar_t *inamew;              /* Windows wide character version of iname */
-  wchar_t *znamew;              /* Windows wide character version of zname */
-# endif
 #endif
   int mark;                     /* Marker for files to operate on */
   int trash;                    /* Marker for files to delete */
@@ -192,11 +182,6 @@ struct flist {
   char *oname;                  /* Display version of internal name */
 #ifdef UNICODE_SUPPORT
   char *uname;                  /* UTF-8 name */
-# ifdef WIN32
-  wchar_t *namew;               /* Windows wide character version of name */
-  wchar_t *inamew;              /* Windows wide character version of iname */
-  wchar_t *znamew;              /* Windows wide character version of zname */
-# endif
 #endif
   int dosflag;                  /* Set to force MSDOS file attributes */
   uzoff_t usize;                /* usize from initial scan */
@@ -321,9 +306,6 @@ extern int recurse;             /* Recurse into directories encountered */
 extern int dispose;             /* Remove files after put in zip file */
 extern int pathput;             /* Store path with name */
 
-#ifdef RISCOS
-extern int scanimage;           /* Scan through image files */
-#endif
 
 #define BEST -1                 /* Use best method (deflation or store) */
 #define STORE 0                 /* Store method */
@@ -350,39 +332,6 @@ extern int filesync;            /* 1=file sync, delete entries not on file syste
 extern int adjust;              /* Adjust the unzipsfx'd zip file */
 extern int level;               /* Compression level */
 extern int translate_eol;       /* Translate end-of-line LF -> CR LF */
-#ifdef VMS
-   extern int vmsver;           /* Append VMS version number to file names */
-   extern int vms_native;       /* Store in VMS format */
-   extern int vms_case_2;       /* ODS2 file name case in VMS. -1: down. */
-   extern int vms_case_5;       /* ODS5 file name case in VMS. +1: preserve. */
-
-/* Accomodation for /NAMES = AS_IS with old header files. */
-# define cma$tis_errno_get_addr CMA$TIS_ERRNO_GET_ADDR
-# define lib$establish LIB$ESTABLISH
-# define lib$get_foreign LIB$GET_FOREIGN
-# define lib$get_input LIB$GET_INPUT
-# define lib$sig_to_ret LIB$SIG_TO_RET
-# define ots$cvt_tu_l OTS$CVT_TU_L
-# define str$concat STR$CONCAT
-# define str$find_first_substring STR$FIND_FIRST_SUBSTRING
-# define str$free1_dx STR$FREE1_DX
-# define sys$asctim SYS$ASCTIM
-# define sys$assign SYS$ASSIGN
-# define sys$bintim SYS$BINTIM
-# define sys$close SYS$CLOSE
-# define sys$connect SYS$CONNECT
-# define sys$dassgn SYS$DASSGN
-# define sys$display SYS$DISPLAY
-# define sys$getjpiw SYS$GETJPIW
-# define sys$open SYS$OPEN
-# define sys$parse SYS$PARSE
-# define sys$qiow SYS$QIOW
-# define sys$read SYS$READ
-# define sys$search SYS$SEARCH
-#endif /* VMS */
-#if defined(OS2) || defined(WIN32)
-   extern int use_longname_ea;   /* use the .LONGNAME EA as the file's name */
-#endif
 #if defined (QDOS) || defined(QLZIP)
 extern short qlflag;
 #endif
@@ -392,9 +341,6 @@ extern int allow_regex;         /* 1 = allow [list] matching (regex) */
 extern int wild_stop_at_dir;    /* wildcards do not include / in matches */
 #ifdef UNICODE_SUPPORT
   extern int using_utf8;        /* 1 if current character set is UTF-8 */
-# ifdef WIN32
-   extern int no_win32_wide;    /* 1 = no wide functions, like GetFileAttributesW() */
-# endif
 #endif
 /* 10/20/04 */
 extern zoff_t dot_size;         /* if not 0 then display dots every size buffers */
@@ -417,10 +363,6 @@ extern int logall;          /* 0 = warnings/errors, 1 = all */
 extern FILE *logfile;           /* pointer to open logfile or NULL */
 extern int logfile_append;      /* append to existing logfile */
 extern char *logfile_path;      /* pointer to path of logfile */
-#ifdef WIN32
-extern int nonlocal_name;       /* Name has non-local characters */
-extern int nonlocal_path;       /* Path has non-local characters */
-#endif
 #ifdef UNICODE_SUPPORT
 /* Unicode 10/12/05 */
 extern int use_wide_to_mb_default;/* use the default MB char instead of escape */
@@ -431,10 +373,6 @@ extern int volume_label;        /* add volume label */
 extern int dirnames;            /* include directory names */
 extern int filter_match_case;   /* 1=match case when filter() */
 extern int diff_mode;           /* 1=require --out and only store changed and add */
-#if defined(WIN32)
-extern int only_archive_set;    /* only include if DOS archive bit set */
-extern int clear_archive_bits;   /* clear DOS archive bit of included files */
-#endif
 extern int linkput;             /* Store symbolic links as such */
 extern int noisy;               /* False for quiet operation */
 extern int extra_fields;        /* 0=create minimum, 1=don't copy old, 2=keep old */
@@ -551,16 +489,9 @@ extern unsigned Rcount;         /* number of -R include patterns */
 #ifdef IZ_CHECK_TZ
 extern int zp_tz_is_valid;      /* signals "timezone info is available" */
 #endif
-#if (defined(MACOS) || defined(WINDLL))
-extern int zipstate;            /* flag "zipfile has been stat()'ed */
-#endif
 
 /* Diagnostic functions */
 #ifdef DEBUG
-# ifdef MSDOS
-#  undef  stderr
-#  define stderr stdout
-# endif
 #  define diag(where) fprintf(stderr, "zip diagnostic: %s\n", where)
 #  define Assert(cond,msg) {if(!(cond)) error(msg);}
 # ifdef THEOS
@@ -680,9 +611,6 @@ char *copy_nondup_extra_fields OF((char *, unsigned, char *, unsigned, unsigned 
    int filter OF((char *, int));
    int newname OF((char *, int, int));
 # ifdef UNICODE_SUPPORT
-#  ifdef WIN32
-   int newnamew OF((wchar_t *, int, int));
-#  endif
 # endif
    /* used by copy mode */
    int proc_archive_name OF((char *, int));
@@ -735,28 +663,15 @@ int fcopy OF((FILE *, FILE *, uzoff_t));
 # endif
    char *in2ex OF((char *));
    char *ex2in OF((char *, int, int *));
-#if defined(UNICODE_SUPPORT) && defined(WIN32)
-   int has_win32_wide OF((void));
-   wchar_t *in2exw OF((wchar_t *));
-   wchar_t *ex2inw OF((wchar_t *, int, int *));
-   int procnamew OF((wchar_t *, int));
-#endif
    int procname OF((char *, int));
    void stamp OF((char *, ulg));
 
    ulg filetime OF((char *, ulg *, zoff_t *, iztimes *));
    /* Windows Unicode */
 # ifdef UNICODE_SUPPORT
-# ifdef WIN32
-   ulg filetimew OF((wchar_t *, ulg *, zoff_t *, iztimes *));
-   char *get_win32_utf8path OF((char *));
-   wchar_t *local_to_wchar_string OF ((char *));
-# endif
 # endif
 
-# if !(defined(VMS) && defined(VMS_PK_EXTRA))
    int set_extra_field OF((struct zlist far *, iztimes *));
-# endif /* ?(VMS && VMS_PK_EXTRA) */
    int deletedir OF((char *));
 # ifdef MY_ZCALLOC
      zvoid far *zcalloc OF((unsigned int, unsigned int));
@@ -770,15 +685,8 @@ void version_local OF((void));
 int   fseekable    OF((FILE *));
 char *isshexp      OF((char *));
 #ifdef UNICODE_SUPPORT
-# ifdef WIN32
-   wchar_t *isshexpw     OF((wchar_t *));
-   int dosmatchw   OF((ZCONST wchar_t *, ZCONST wchar_t *, int));
-# endif
 #endif
 int   shmatch      OF((ZCONST char *, ZCONST char *, int));
-# if defined(DOS) || defined(WIN32)
-   int dosmatch    OF((ZCONST char *, ZCONST char *, int));
-# endif /* DOS || WIN32 */
 #endif /* !UTIL */
 
 /* functions to convert zoff_t to a string */
@@ -837,24 +745,10 @@ void     bi_init      OF((char *, unsigned int, int));
 #endif /* !UTIL */
 
         /* in system specific assembler code, replacing C code in trees.c */
-#if defined(ASMV) && defined(RISCOS)
-  void     send_bits    OF((int, int));
-  unsigned bi_reverse   OF((unsigned int, int));
-#endif /* ASMV && RISCOS */
 
 /*---------------------------------------------------------------------------
     VMS-only functions:
   ---------------------------------------------------------------------------*/
-#ifdef VMS
-   int    vms_stat        OF((char *, stat_t *));              /* vms.c */
-   void   vms_exit        OF((int));                           /* vms.c */
-#ifndef UTIL
-#ifdef VMSCLI
-   ulg    vms_zip_cmdline OF((int *, char ***));                /* cmdline.c */
-   void   VMSCLI_help     OF((void));                           /* cmdline.c */
-#endif /* VMSCLI */
-#endif /* !UTIL */
-#endif /* VMS */
 
 /*
 #ifdef ZIP64_SUPPORT
@@ -865,13 +759,6 @@ void     bi_init      OF((char *, unsigned int, int));
 /*---------------------------------------------------------------------------
     WIN32-only functions:
   ---------------------------------------------------------------------------*/
-#ifdef WIN32
-   int ZipIsWinNT         OF((void));                         /* win32.c */
-   int ClearArchiveBit    OF((char *));                       /* win32.c */
-# ifdef UNICODE_SUPPORT
-   int ClearArchiveBitW   OF((wchar_t *));                    /* win32.c */
-# endif
-#endif /* WIN32 */
 
 #if (defined(WINDLL) || defined(DLL_ZIPAPI))
 /*---------------------------------------------------------------------------
@@ -882,27 +769,7 @@ void     bi_init      OF((char *, unsigned int, int));
 
 
    /* WIN32_OEM */
-#ifdef WIN32
-/*
-# if defined(UNICODE_SUPPORT) || defined(WIN32_OEM)
-*/
-  /* convert oem to ansi string */
-  char *oem_to_local_string OF((char *, char *));
-/*
-# endif
-*/
-#endif
 
-#ifdef WIN32
-/*
-# if defined(UNICODE_SUPPORT) || defined(WIN32_OEM)
-*/
-  /* convert local string to oem string */
-  char *local_to_oem_string OF((char *, char *));
-/*
-# endif
-*/
-#endif
 
 
 
@@ -923,10 +790,6 @@ void     bi_init      OF((char *, unsigned int, int));
 
   /* check if string is all ASCII */
   int is_ascii_string OF((char *));
-#ifdef WIN32
-  int is_ascii_stringw OF((wchar_t *));
-  zwchar *wchar_to_wide_string OF((wchar_t *));
-#endif
 
   /* convert UTF-8 string to multi-byte string */
   char *utf8_to_local_string OF((char *));
@@ -939,12 +802,6 @@ void     bi_init      OF((char *, unsigned int, int));
   char *wide_to_local_string OF((zwchar *));
   char *wide_to_escape_string OF((zwchar *));
   char *local_to_escape_string OF((char *));
-#ifdef WIN32
-  /* convert UTF-8 to wchar */
-  wchar_t *utf8_to_wchar_string OF ((char *));
-
-  char *wchar_to_local_string OF((wchar_t *));
-#endif
 
   /* convert local string to multi-byte display string */
   char *local_to_display_string OF((char *));
@@ -965,9 +822,6 @@ void     bi_init      OF((char *, unsigned int, int));
 
   /* convert wide string to UTF-8 */
   char *wide_to_utf8_string OF((zwchar *));
-#ifdef WIN32
-  char *wchar_to_utf8_string OF((wchar_t *));
-#endif
 
 #endif /* UNICODE_SUPPORT */
 

@@ -52,9 +52,6 @@ extern ZCONST char * far cryptnote[7];
 ZCONST char *copyright[] = {
 "Copyright (c) 1990-2008 Info-ZIP - Type '%s \"-L\"' for software license."
 /* XXX still necessary ???? */
-#ifdef AZTEC_C
-,        /* extremely lame compiler bug workaround */
-#endif
 };
 
 ZCONST char * far versinfolines[] = {

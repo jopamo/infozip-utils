@@ -13,17 +13,10 @@
 #ifndef LZW_CLEAN
 
 #include <string.h> /* memcpy */
-#if defined(__GNUC__) || defined(__clang__)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define HOT __attribute__((hot))
 #define COLD __attribute__((cold))
-#else
-#define LIKELY(x) (x)
-#define UNLIKELY(x) (x)
-#define HOT
-#define COLD
-#endif
 
 static void partial_clear OF((__GPRO__ int lastcodeused));
 
@@ -117,13 +110,11 @@ int HOT unshrink(__G) __GDEF {
 
     lastfreecode = BOGUSCODE;
 
-#ifndef VMS
 #ifndef SMALL_MEM
     /* allocate second large buffer for textmode conversion only when needed */
     if (G.pInfo->textmode && !G.outbuf2 && (G.outbuf2 = (uch*)malloc(TRANSBUFSIZ)) == (uch*)NULL)
         return PK_MEM3;
 #endif
-#endif /* !VMS */
 
     for (code = 0; code < BOGUSCODE; ++code) {
         Value[code] = (uch)code;

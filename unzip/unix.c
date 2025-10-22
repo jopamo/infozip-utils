@@ -66,16 +66,7 @@
 #  define USE_DIRENT
 #endif
 
-#ifdef SCO_XENIX
-/* Old SCO Xenix had sys/ndir.h */
-#  define USE_SYS_NDIR
-#endif
 
-#ifdef COHERENT
-#  if defined(_I386) || (defined(__COHERENT__) && (__COHERENT__ >= 0x420))
-#    define USE_DIRENT
-#  endif
-#endif
 
 /* If nothing selected yet but we have POSIX advertised, use dirent. */
 #if defined(_POSIX_VERSION) && !defined(USE_DIRENT)
@@ -121,17 +112,6 @@ typedef struct uxdirattr {      /* hold unix-style directory info until final */
 #  define UxAtt(d)  ((uxdirattr *)(d))
 #endif /* SET_DIR_ATTRIB */
 
-#ifdef ACORN_FTYPE_NFS
-/* Acorn bits for NFS filetyping */
-typedef struct {
-  uch ID[2];
-  uch size[2];
-  uch ID_2[4];
-  uch loadaddr[4];
-  uch execaddr[4];
-  uch attr[4];
-} RO_extra_block;
-#endif /* ACORN_FTYPE_NFS */
 
 /* static int created_dir;       */     /* used in mapname(), checkdir() */
 /* static int renamed_fullpath;  */     /* ditto */
@@ -141,7 +121,6 @@ static unsigned filtattr OF((__GPRO__ unsigned perms));
 /*****************************/
 /* Strings reused in unix.c  */
 /*****************************/
-#ifndef MTS
 /* messages of code for setting file/directory attributes */
 static ZCONST char CannotSetItemUidGid[] =
   "warning:  cannot set UID %lu and/or GID %lu for %s\n          %s\n";
@@ -151,7 +130,6 @@ static ZCONST char CannotSetItemTimestamps[] =
   "warning:  cannot set modif./access times for %s\n          %s\n";
 static ZCONST char CannotSetTimestamps[] =
   " (warning) cannot set modif./access times\n          %s";
-#endif /* !MTS */
 
 /* ------------------------------------------------------------------ */
 /* Very old systems without directory library support (AT&T 3B1, etc) */
@@ -517,10 +495,6 @@ int mapname(__G__ renamed)
     char pathcomp[FILNAMSIZ];      /* path-component buffer */
     char *pp, *cp=(char *)NULL;    /* character pointers */
     char *lastsemi=(char *)NULL;   /* pointer to last semi-colon in pathcomp */
-#ifdef ACORN_FTYPE_NFS
-    char *lastcomma=(char *)NULL;  /* pointer to last comma in pathcomp */
-    RO_extra_block *ef_spark;      /* pointer Acorn FTYPE ef block */
-#endif
     int killed_ddot = FALSE;       /* is set when skipping "../" pathcomp */
     int error = MPN_OK;
     register unsigned workch;      /* hold the character being tested */
@@ -579,36 +553,13 @@ int mapname(__G__ renamed)
                 lastsemi = (char *)NULL; /* leave direct. semi-colons alone */
                 break;
 
-#ifdef __CYGWIN__   /* Cygwin runs on Win32, apply FAT/NTFS filename rules */
-            case ':':         /* drive spec not stored, so no colon allowed */
-            case '\\':        /* '\\' may come as normal filename char (not */
-            case '<':         /*  dir sep char!) from unix-like file system */
-            case '>':         /* no redirection symbols allowed either */
-            case '|':         /* no pipe signs allowed */
-            case '"':         /* no double quotes allowed */
-            case '?':         /* no wildcards allowed */
-            case '*':
-                *pp++ = '_';  /* these rules apply equally to FAT and NTFS */
-                break;
-#endif
 
             case ';':             /* VMS version (or DEC-20 attrib?) */
                 lastsemi = pp;
                 *pp++ = ';';      /* keep for now; remove VMS ";##" */
                 break;            /*  later, if requested */
 
-#ifdef ACORN_FTYPE_NFS
-            case ',':             /* NFS filetype extension */
-                lastcomma = pp;
-                *pp++ = ',';      /* keep for now; may need to remove */
-                break;            /*  later, if requested */
-#endif
 
-#ifdef MTS
-            case ' ':             /* change spaces to underscore under */
-                *pp++ = '_';      /*  MTS; leave as spaces under Unix */
-                break;
-#endif
 
             default:
                 /* disable control character filter when requested,
@@ -692,25 +643,6 @@ int mapname(__G__ renamed)
     else if (strcmp(pathcomp, "..") == 0)
         strcpy(pathcomp, "__");
 
-#ifdef ACORN_FTYPE_NFS
-    /* translate Acorn filetype information if asked to do so */
-    if (uO.acorn_nfs_ext &&
-        (ef_spark = (RO_extra_block *)
-                    getRISCOSexfield(G.extra_field, G.lrec.extra_field_length))
-        != (RO_extra_block *)NULL)
-    {
-        /* file *must* have a RISC OS extra field */
-        long ft = (long)makelong(ef_spark->loadaddr);
-        /*32-bit*/
-        if (lastcomma) {
-            pp = lastcomma + 1;
-            while (isxdigit((uch)(*pp))) ++pp;
-            if (pp == lastcomma+4 && *pp == '\0') *lastcomma='\0'; /* nuke */
-        }
-        if ((ft & 1<<31)==0) ft=0x000FFD00;
-        sprintf(pathcomp+strlen(pathcomp), ",%03x", (int)(ft>>8) & 0xFFF);
-    }
-#endif /* ACORN_FTYPE_NFS */
 
     if (*pathcomp == '\0') {
         Info(slide, 1, ((char *)slide, "mapname:  conversion of %s failed\n",
@@ -895,11 +827,7 @@ int checkdir(__G__ pathcomp, flag)
     if (FUNCTION == INIT) {
         size_t need;
         Trace((stderr, "initializing buildpath to "));
-#ifdef ACORN_FTYPE_NFS
-        need = strlen(G.filename) + (size_t)G.rootlen + (uO.acorn_nfs_ext ? 5u : 1u);
-#else
         need = strlen(G.filename) + (size_t)G.rootlen + 1u;
-#endif
         /* Simple wrap guard: if addition overflowed, need rolled over. */
         if (need < (size_t)G.rootlen + 1u)
             return MPN_NOMEM;
@@ -1034,7 +962,6 @@ int mkdir(path, mode)
 
 
 
-#if (!defined(MTS) || defined(SET_DIR_ATTRIB))
 static int get_extattribs OF((__GPRO__ iztimes *pzt, ulg z_uidgid[2]));
 
 static int get_extattribs(__G__ pzt, z_uidgid)
@@ -1085,11 +1012,9 @@ static int get_extattribs(__G__ pzt, z_uidgid)
 #endif
     return have_uidgid_flg;
 }
-#endif /* !MTS || SET_DIR_ATTRIB */
 
 
 
-#ifndef MTS
 
 /* include needed for struct utimbuf and utime */
 #include <utime.h>  /* required for utime */
@@ -1269,7 +1194,6 @@ typedef struct slinkentry slinkentry;  /* do not define the struct here */
 
 } /* end function close_outfile() */
 
-#endif /* !MTS */
 
 
 #if (defined(SYMLINKS) && defined(SET_SYMLINK_ATTRIBS))
@@ -1433,9 +1357,6 @@ void version(__G)
     char cc_namebuf[40];
     char cc_versbuf[40];
 #else
-#if (defined(__SUNPRO_C))
-    char cc_versbuf[17];
-#else
 #if (defined(__HP_cc) || defined(__IBMC__))
     char cc_versbuf[25];
 #else
@@ -1443,26 +1364,17 @@ void version(__G)
     char cc_versbuf[17];
     int cc_verstyp;
 #else
-#if (defined(CRAY) && defined(_RELEASE))
-    char cc_versbuf[40];
-#endif /* (CRAY && _RELEASE) */
 #endif /* __DECC_VER */
 #endif /* __HP_cc || __IBMC__ */
-#endif /* __SUNPRO_C */
 #endif /* (__GNUC__ && NX_CURRENT_COMPILER_RELEASE) */
 
-#if ((defined(CRAY) || defined(cray)) && defined(_UNICOS))
-    char os_namebuf[40];
-#else
 #if defined(__NetBSD__)
     char os_namebuf[40];
-#endif
 #endif
 
     /* Pyramid, NeXT have problems with huge macro expansion, too:  no Info() */
     sprintf((char *)slide, LoadFarString(CompiledWith),
 
-#ifdef __GNUC__
 #  ifdef NX_CURRENT_COMPILER_RELEASE
       (sprintf(cc_namebuf, "NeXT DevKit %d.%02d ",
         NX_CURRENT_COMPILER_RELEASE/100, NX_CURRENT_COMPILER_RELEASE%100),
@@ -1472,111 +1384,21 @@ void version(__G)
 #  else
       "gcc ", __VERSION__,
 #  endif
-#else
-#if defined(__SUNPRO_C)
-      "Sun C ", (sprintf(cc_versbuf, "version %x", __SUNPRO_C), cc_versbuf),
-#else
-#if (defined(__HP_cc))
-      "HP C ",
-      (((__HP_cc% 100) == 0) ?
-      (sprintf(cc_versbuf, "version A.%02d.%02d",
-      (__HP_cc/ 10000), ((__HP_cc% 10000)/ 100))) :
-      (sprintf(cc_versbuf, "version A.%02d.%02d.%02d",
-      (__HP_cc/ 10000), ((__HP_cc% 10000)/ 100), (__HP_cc% 100))),
-      cc_versbuf),
-#else
-#if (defined(__DECC_VER))
-      "DEC C ",
-      (sprintf(cc_versbuf, "%c%d.%d-%03d",
-               ((cc_verstyp = (__DECC_VER / 10000) % 10) == 6 ? 'T' :
-                (cc_verstyp == 8 ? 'S' : 'V')),
-               __DECC_VER / 10000000,
-               (__DECC_VER % 10000000) / 100000, __DECC_VER % 1000),
-               cc_versbuf),
-#else
-#if defined(CRAY) && defined(_RELEASE)
-      "cc ", (sprintf(cc_versbuf, "version %d", _RELEASE), cc_versbuf),
-#else
-#ifdef __IBMC__
-      "IBM C ",
-      (sprintf(cc_versbuf, "version %d.%d.%d",
-               (__IBMC__ / 100), ((__IBMC__ / 10) % 10), (__IBMC__ % 10)),
-               cc_versbuf),
-#else
-#ifdef __VERSION__
-#   ifndef IZ_CC_NAME
-#    define IZ_CC_NAME "cc "
-#   endif
-      IZ_CC_NAME, __VERSION__
-#else
-#   ifndef IZ_CC_NAME
-#    define IZ_CC_NAME "cc"
-#   endif
-      IZ_CC_NAME, "",
-#endif /* ?__VERSION__ */
-#endif /* ?__IBMC__ */
-#endif /* ?(CRAY && _RELEASE) */
-#endif /* ?__DECC_VER */
-#endif /* ?__HP_cc */
-#endif /* ?__SUNPRO_C */
-#endif /* ?__GNUC__ */
 
 #ifndef IZ_OS_NAME
 #  define IZ_OS_NAME "Unix"
 #endif
       IZ_OS_NAME,
 
-#if defined(sgi) || defined(__sgi)
-      " (Silicon Graphics IRIX)",
-#else
-#ifdef sun
-#  ifdef sparc
-#    ifdef __SVR4
-      " (Sun SPARC/Solaris)",
-#    else /* may or may not be SunOS */
-      " (Sun SPARC)",
-#    endif
-#  else
-#  if defined(sun386) || defined(i386)
-      " (Sun 386i)",
-#  else
-#  if defined(mc68020) || defined(__mc68020__)
-      " (Sun 3)",
-#  else /* mc68010 or mc68000:  Sun 2 or earlier */
-      " (Sun 2)",
-#  endif
-#  endif
-#  endif
-#else
-#ifdef __hpux
-      " (HP-UX)",
-#else
-#ifdef __osf__
-      " (DEC OSF/1)",
-#else
 #ifdef _AIX
       " (IBM AIX)",
 #else
 #ifdef aiws
       " (IBM RT/AIX)",
 #else
-#if defined(CRAY) || defined(cray)
-#  ifdef _UNICOS
-      (sprintf(os_namebuf, " (Cray UNICOS release %d)", _UNICOS), os_namebuf),
-#  else
-      " (Cray UNICOS)",
-#  endif
-#else
 #if defined(uts) || defined(UTS)
       " (Amdahl UTS)",
 #else
-#ifdef NeXT
-#  ifdef mc68000
-      " (NeXTStep/black)",
-#  else
-      " (NeXTStep for Intel)",
-#  endif
-#else              /* the next dozen or so are somewhat order-dependent */
 #ifdef LINUX
 #  ifdef __ELF__
       " (Linux ELF)",
@@ -1589,9 +1411,6 @@ void version(__G)
 #else
 #ifdef M_UNIX
       " (SCO Unix)",
-#else
-#ifdef M_XENIX
-      " (SCO Xenix)",
 #else
 #ifdef __NetBSD__
 #  ifdef NetBSD0_8
@@ -1620,9 +1439,6 @@ void version(__G)
 #ifdef __386BSD__
       (BSD4_4 == 1)? " (386BSD, post-4.4 release)" : " (386BSD)",
 #else
-#ifdef __CYGWIN__
-      " (Cygwin)",
-#else
 #if defined(i686) || defined(__i686) || defined(__i686__)
       " (Intel 686)",
 #else
@@ -1638,82 +1454,34 @@ void version(__G)
 #ifdef pyr
       " (Pyramid)",
 #else
-#ifdef ultrix
-#  ifdef mips
-      " (DEC/MIPS)",
-#  else
-#  ifdef vax
-      " (DEC/VAX)",
-#  else /* __alpha? */
-      " (DEC/Alpha)",
-#  endif
-#  endif
-#else
 #ifdef gould
       " (Gould)",
-#else
-#ifdef MTS
-      " (MTS)",
 #else
 #ifdef __convexc__
       " (Convex)",
 #else
-#ifdef __QNX__
-      " (QNX 4)",
-#else
-#ifdef __QNXNTO__
-      " (QNX Neutrino)",
-#else
 #ifdef Lynx
       " (LynxOS)",
 #else
-#ifdef __APPLE__
-#  ifdef __i386__
-      " Mac OS X Intel i32",
-#  else
-#  ifdef __ppc__
-      " Mac OS X PowerPC",
-#  else
-#  ifdef __ppc64__
-      " Mac OS X PowerPC64",
-#  else
-      " Mac OS X",
-#  endif /* __ppc64__ */
-#  endif /* __ppc__ */
-#  endif /* __i386__ */
-#else
       "",
-#endif /* Apple */
 #endif /* Lynx */
-#endif /* QNX Neutrino */
-#endif /* QNX 4 */
 #endif /* Convex */
-#endif /* MTS */
 #endif /* Gould */
-#endif /* DEC */
 #endif /* Pyramid */
 #endif /* 386 */
 #endif /* 486 */
 #endif /* 586 */
 #endif /* 686 */
-#endif /* Cygwin */
 #endif /* 386BSD */
 #endif /* BSDI BSD/386 */
 #endif /* NetBSD */
 #endif /* FreeBSD */
-#endif /* SCO Xenix */
 #endif /* SCO Unix */
 #endif /* Minix */
 #endif /* Linux */
-#endif /* NeXT */
 #endif /* Amdahl */
-#endif /* Cray */
 #endif /* RT/AIX */
 #endif /* AIX */
-#endif /* OSF/1 */
-#endif /* HP-UX */
-#endif /* Sun */
-#endif /* SGI */
 
 #if 0
       " on ", __DATE__

@@ -67,13 +67,8 @@
 #include <string.h> /* memcpy, memset */
 
 /* Branch prediction hints for modern GCC/Clang. */
-#if defined(__GNUC__) || defined(__clang__)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#define LIKELY(x) (x)
-#define UNLIKELY(x) (x)
-#endif
 
 /* marker for "unused" huft code, and corresponding check macro */
 #define INVALID_CODE 99
