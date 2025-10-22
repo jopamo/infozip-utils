@@ -933,7 +933,7 @@ local void help_extended()
 
   for (i = 0; i < sizeof(text)/sizeof(char *); i++)
   {
-    printf(text[i]);
+    fputs(text[i], stdout);
     putchar('\n');
   }
 }
@@ -1083,7 +1083,7 @@ local void version_info()
             CR_MAJORVER, CR_MINORVER, CR_BETA_VER, CR_VERSION_DATE);
   for (i = 0; i < sizeof(cryptnote)/sizeof(char *); i++)
   {
-    printf(cryptnote[i]);
+    fputs(cryptnote[i], stdout);
     putchar('\n');
   }
   ++i;  /* crypt support means there IS at least one compilation option */
