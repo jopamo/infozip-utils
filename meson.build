@@ -4,7 +4,7 @@ project(
   version: '6.0-custom',
   default_options: [
     'c_std=c99',
-    'warning_level=3',
+    'warning_level=2',
     'optimization=2'
   ]
 )
@@ -23,6 +23,7 @@ common_defs = [
 unzip_defs = common_defs + [
   '-DUNZIP',
   '-DCRYPT',
+  '-DUNICODE_SUPPORT',
   '-DNO_ZIPINFO',
   '-DNO_ZIPGREP',
   '-DNO_LCHOWN',
@@ -34,7 +35,8 @@ unzip_defs = common_defs + [
 # zip flags
 # do not pass -DZIP if zip/zip.h already defines it
 zip_defs = common_defs + [
-  '-DCRYPT'
+  '-DCRYPT',
+  '-DUNICODE_SUPPORT'
 ]
 
 inc_unzip = include_directories('unzip')

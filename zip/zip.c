@@ -22,6 +22,7 @@
 #include "ttyio.h"
 #include <ctype.h>
 #include <errno.h>
+#include <strings.h>
 #include <string.h>
 
 /* Fast-path writer for log/console streams. The newline_mode parameter uses
@@ -1973,21 +1974,29 @@ char **argv;            /* command line tokens */
     */
 
     loc = setlocale(LC_CTYPE, "en_US.UTF-8");
-
-    /*
-      printf("langinfo %s\n", nl_langinfo(CODESET));
-    */
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, "en_US.utf8");
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, "C.UTF-8");
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, "C.utf8");
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, "UTF-8");
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, "utf8");
+    if (loc == NULL)
+      loc = setlocale(LC_CTYPE, NULL);
 
     if (loc != NULL) {
-      /* using UTF-8 character set so can set UTF-8 GPBF bit 11 */
-      using_utf8 = 1;
-      /*
-        printf("  Locale set to %s\n", loc);
-      */
-    } else {
-      /*
-        printf("  Could not set Unicode UTF-8 locale\n");
-      */
+      const char* upper = loc;
+      while (*upper) {
+        if ((*upper == 'U' || *upper == 'u') &&
+            (strncasecmp(upper, "UTF-8", 5) == 0 || strncasecmp(upper, "UTF8", 4) == 0)) {
+          using_utf8 = 1;
+          break;
+        }
+        upper++;
+      }
     }
   }
 #endif

@@ -2477,8 +2477,8 @@ local int ucs4_string_to_utf8(ucs4, utf8buf, buflen)
     c = buflen - count;
     if (mbl < c)
       c = mbl;
-    if (utf8buf && count < buflen)
-      strncpy(utf8buf + count, mb, c);
+    if (utf8buf && count < buflen && c > 0)
+      memcpy(utf8buf + count, mb, (size_t)c);
     if (mbl == 1 && !mb[0])
       return count;           /* terminating nul */
     count += mbl;
@@ -2693,13 +2693,17 @@ char *wide_to_local_string(wide_string)
   char buf[9];
   char *buffer = NULL;
   char *local_string = NULL;
+  size_t written = 0;
+  size_t capacity;
+  size_t default_len = strlen(wide_to_mb_default_string);
 
   for (wsize = 0; wide_string[wsize]; wsize++) ;
 
   if (MAX_ESCAPE_BYTES > max_bytes)
     max_bytes = MAX_ESCAPE_BYTES;
 
-  if ((buffer = (char *)malloc(wsize * (size_t)max_bytes + 1)) == NULL) {
+  capacity = wsize * (size_t)max_bytes;
+  if ((buffer = (char *)malloc(capacity + 1)) == NULL) {
     ZIPERR(ZE_MEM, "wide_to_local_string");
   }
 
@@ -2727,34 +2731,63 @@ char *wide_to_local_string(wide_string)
     if (unicode_escape_all) {
       if (b == 1 && (uch)buf[0] <= 0x7f) {
         /* ASCII */
-        strncat(buffer, buf, (size_t)b);
+        if (written + 1 > capacity) {
+          free(buffer);
+          return NULL;
+        }
+        buffer[written++] = buf[0];
       } else {
         /* use escape for wide character */
         char *e = wide_char_to_escape_string(wide_string[i]);
-        strcat(buffer, e);
+        size_t elen = strlen(e);
+        if (written + elen > capacity) {
+          free(e);
+          free(buffer);
+          return NULL;
+        }
+        memcpy(buffer + written, e, elen);
+        written += elen;
         free(e);
       }
     } else if (b > 0) {
       /* multi-byte char */
-      strncat(buffer, buf, (size_t)b);
+      if (written + (size_t)b > capacity) {
+        free(buffer);
+        return NULL;
+      }
+      memcpy(buffer + written, buf, (size_t)b);
+      written += (size_t)b;
     } else {
       /* no MB for this wide */
       if (use_wide_to_mb_default) {
         /* default character */
-        strcat(buffer, wide_to_mb_default_string);
+        if (written + default_len > capacity) {
+          free(buffer);
+          return NULL;
+        }
+        memcpy(buffer + written, wide_to_mb_default_string, default_len);
+        written += default_len;
       } else {
         /* use escape for wide character */
         char *e = wide_char_to_escape_string(wide_string[i]);
-        strcat(buffer, e);
+        size_t elen = strlen(e);
+        if (written + elen > capacity) {
+          free(e);
+          free(buffer);
+          return NULL;
+        }
+        memcpy(buffer + written, e, elen);
+        written += elen;
         free(e);
       }
     }
   }
-  if ((local_string = (char *)malloc(strlen(buffer) + 1)) == NULL) {
+  buffer[written] = '\0';
+  if ((local_string = (char *)malloc(written + 1)) == NULL) {
     free(buffer);
     ZIPERR(ZE_MEM, "wide_to_local_string");
   }
-  strcpy(local_string, buffer);
+  memcpy(local_string, buffer, written + 1);
   free(buffer);
 
   return local_string;
