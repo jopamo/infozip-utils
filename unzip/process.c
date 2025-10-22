@@ -1900,7 +1900,7 @@ int buflen;
 
     for (;;) {
         ulg ch = ucs4_char_from_utf8(&utf8);
-        if (ch == ~0L)
+        if (ch == (ulg)~0L)
             return -1;
         else {
             if (ucs4buf && count < buflen)
@@ -2125,39 +2125,38 @@ char* wide_to_local_string(wide_string, escape_all)
 ZCONST zwchar* wide_string;
 int escape_all;
 {
-    int i;
+    size_t i;
     wchar_t wc;
     int b;
-    int state_dependent;
-    int wsize = 0;
+    int reset_status;
+    int stateful_encoding;
+    size_t wsize = 0;
     int max_bytes = MB_CUR_MAX;
     char buf[9];
     char* buffer = NULL;
     char* local_string = NULL;
 
-    for (wsize = 0; wide_string[wsize]; wsize++)
-        ;
+    while (wide_string[wsize] != 0)
+        ++wsize;
 
     if (max_bytes < MAX_ESCAPE_BYTES)
         max_bytes = MAX_ESCAPE_BYTES;
 
-    if ((buffer = (char*)malloc(wsize * max_bytes + 1)) == NULL) {
+    if ((buffer = (char*)malloc(wsize * (size_t)max_bytes + 1)) == NULL) {
         return NULL;
     }
 
     /* convert it */
     buffer[0] = '\0';
-    /* set initial state if state-dependent encoding */
-    wc = (wchar_t)'a';
-    b = wctomb(NULL, wc);
-    if (b == 0)
-        state_dependent = 0;
-    else
-        state_dependent = 1;
+    /* reset conversion state and detect if the encoding is stateful */
+    reset_status = wctomb(NULL, 0);
+    stateful_encoding = (reset_status > 0);
+
     for (i = 0; i < wsize; i++) {
         if (sizeof(wchar_t) < 4 && wide_string[i] > 0xFFFF) {
-            /* wchar_t probably 2 bytes */
-            /* could do surrogates if state_dependent and wctomb can do */
+            if (stateful_encoding) {
+                (void)wctomb(NULL, 0);
+            }
             wc = zwchar_to_wchar_t_default_char;
         }
         else {
@@ -2167,7 +2166,7 @@ int escape_all;
         if (escape_all) {
             if (b == 1 && (uch)buf[0] <= 0x7f) {
                 /* ASCII */
-                strncat(buffer, buf, b);
+                strncat(buffer, buf, (size_t)b);
             }
             else {
                 /* use escape for wide character */
@@ -2178,11 +2177,10 @@ int escape_all;
         }
         else if (b > 0) {
             /* multi-byte char */
-            strncat(buffer, buf, b);
+            strncat(buffer, buf, (size_t)b);
         }
         else {
             /* no MB for this wide */
-            /* use escape for wide character */
             char* escape_string = wide_to_escape_string(wide_string[i]);
             strcat(buffer, escape_string);
             free(escape_string);
