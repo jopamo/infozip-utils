@@ -67,7 +67,6 @@
 #include "crypt.h"
 #include "unzvers.h"
 
-
 /***************************/
 /* Local type declarations */
 /***************************/
@@ -231,7 +230,7 @@ static ZCONST char Far UnzipSFXOpts[] = "Valid options are -tfupcz and -d <exdir
 #else
 static ZCONST char Far UnzipSFXOpts[] = "Valid options are -tfupcz; modifiers are -abjnoqCL%sV%s.\n";
 #endif
-#else              /* !SFX */
+#else /* !SFX */
 static ZCONST char Far CompileOptions[] = "UnZip special compilation options:\n";
 static ZCONST char Far CompileOptFormat[] = "        %s\n";
 static ZCONST char Far EnvOptions[] = "\nUnZip and ZipInfo environment options:\n";
@@ -413,7 +412,6 @@ static ZCONST char Far ZipInfoMode[] = "(ZipInfo mode is disabled in this versio
 #define ZIPINFO_MODE_OPTION "[-Z] "
 static ZCONST char Far ZipInfoMode[] = "-Z => ZipInfo mode (\"unzip -Z\" for usage).";
 #endif /* ?NO_ZIPINFO */
-
 
 #ifdef VM_CMS
 static ZCONST char Far UnzipUsageLine3[] =
@@ -615,11 +613,9 @@ char* argv[];
 #endif
 #endif /* NO_EXCEPT_SIGNALS */
 
-
     /*---------------------------------------------------------------------------
         Macintosh initialization code.
       ---------------------------------------------------------------------------*/
-
 
     /*---------------------------------------------------------------------------
         NetWare initialization code.
@@ -632,7 +628,6 @@ char* argv[];
     /*---------------------------------------------------------------------------
         Acorn RISC OS initialization code.
       ---------------------------------------------------------------------------*/
-
 
     /*---------------------------------------------------------------------------
         Theos initialization code.
@@ -737,8 +732,6 @@ char* argv[];
 
 #else /* !SFX */
 
-
-
 #ifdef VMSCLI
     {
         ulg status = vms_unzip_cmdline(&argc, &argv);
@@ -773,7 +766,7 @@ char* argv[];
             perror(LoadFarString(NoMemEnvArguments));
     }
     else
-#endif             /* !NO_ZIPINFO */
+#endif /* !NO_ZIPINFO */
     {
         uO.zipinfo_mode = FALSE;
         if ((error = envargs(&argc, &argv, LoadFarStringSmall(EnvUnZip), LoadFarStringSmall2(EnvUnZip2))) != PK_OK)
@@ -815,7 +808,6 @@ char* argv[];
         maining options and file specifications.
       ---------------------------------------------------------------------------*/
 
-
 #ifndef SFX
     G.wildzipfn = *argv++;
 #endif
@@ -855,20 +847,20 @@ char* argv[];
 
     if (argc > 0) {
         int in_files = FALSE, in_xfiles = FALSE;
-        char** pp = argv - 1;
 
         G.process_all_files = FALSE;
         G.pfnames = argv;
-        while (*++pp) {
-            Trace((stderr, "pp - argv = %d\n", pp - argv));
+        for (char** pp = argv; *pp != NULL; ++pp) {
+            char* arg = *pp;
+            Trace((stderr, "pp - argv = %d\n", (int)(pp - argv)));
 #ifdef CMS_MVS
-            if (!uO.exdir && STRNICMP(*pp, "-d", 2) == 0) {
+            if (!uO.exdir && arg[0] == '-' && (arg[1] == 'd' || arg[1] == 'D')) {
 #else
-            if (!uO.exdir && strncmp(*pp, "-d", 2) == 0) {
+            if (!uO.exdir && arg[0] == '-' && arg[1] == 'd') {
 #endif
                 int firstarg = (pp == argv);
 
-                uO.exdir = (*pp) + 2;
+                uO.exdir = arg + 2;
                 if (in_files) {        /* ... zipfile ... -d exdir ... */
                     *pp = (char*)NULL; /* terminate G.pfnames */
                     G.filespecs = pp - G.pfnames;
@@ -881,7 +873,8 @@ char* argv[];
                 }
                 /* first check for "-dexdir", then for "-d exdir" */
                 if (*uO.exdir == '\0') {
-                    if (*++pp)
+                    ++pp;
+                    if (*pp)
                         uO.exdir = *pp;
                     else {
                         Info(slide, 0x401, ((char*)slide, LoadFarString(MustGiveExdir)));
@@ -904,7 +897,7 @@ char* argv[];
                 }
             }
             else if (!in_xfiles) {
-                if (strcmp(*pp, "-x") == 0) {
+                if (arg[0] == '-' && arg[1] == 'x' && arg[2] == '\0') {
                     in_xfiles = TRUE;
                     if (pp == G.pfnames) {
                         G.pfnames = (char**)fnames; /* defaults */
@@ -1377,7 +1370,7 @@ char*** pargv;
                     else
                         ++uO.X_flag;
                     break;
-#endif /* RESTORE_UIDGID || RESTORE_ACL */
+#endif                      /* RESTORE_UIDGID || RESTORE_ACL */
                 case ('z'): /* display only the archive comment */
                     if (negative) {
                         uO.zflag = MAX(uO.zflag - negative, 0);
@@ -1401,7 +1394,7 @@ char*** pargv;
                     else
                         ++uO.ddotflag;
                     break;
-#endif /* !RISCOS && !CMS_MVS && !TANDEM */
+#endif                      /* !RISCOS && !CMS_MVS && !TANDEM */
                 case ('^'): /* allow control chars in filenames */
                     if (negative) {
                         uO.cflxflag = MAX(uO.cflxflag - negative, 0);

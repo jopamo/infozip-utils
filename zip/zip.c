@@ -22,6 +22,36 @@
 #include "ttyio.h"
 #include <ctype.h>
 #include <errno.h>
+#include <string.h>
+
+/* Fast-path writer for log/console streams. The newline_mode parameter uses
+ * the following semantics:
+ *   0 -> no newline
+ *   1 -> append newline only when the current line already has content
+ *   2 -> always append a newline
+ */
+static inline void zip_write_stream(FILE* stream, const char* text, size_t len, int newline_mode, int* line_started) {
+  if (!stream) {
+    return;
+  }
+
+  int wrote = 0;
+  if (len != 0) {
+    fwrite(text, 1, len, stream);
+    *line_started = 1;
+    wrote = 1;
+  }
+
+  if (newline_mode != 0 && (*line_started || newline_mode > 1)) {
+    fputc('\n', stream);
+    *line_started = 0;
+    wrote = 1;
+  }
+
+  if (wrote) {
+    fflush(stream);
+  }
+}
 
 
 #if (defined(MSDOS) && !defined(__GO32__)) || defined(__human68k__)
@@ -405,35 +435,13 @@ int nl;             /* 1 = add nl to end */
    If nl true, print and add new line.  If logfile is
    open then also write message to log file. */
 {
+  size_t len = (a && *a) ? strlen(a) : 0;
+
   if (noisy) {
-    if (a && strlen(a)) {
-      fprintf(mesg, "%s", a);
-      mesg_line_started = 1;
-    }
-    if (nl) {
-      if (mesg_line_started) {
-        fprintf(mesg, "\n");
-        mesg_line_started = 0;
-      }
-    } else if (a && strlen(a)) {
-      mesg_line_started = 1;
-    }
-    fflush(mesg);
+    zip_write_stream(mesg, a, len, nl ? 1 : 0, &mesg_line_started);
   }
   if (logfile) {
-    if (a && strlen(a)) {
-      fprintf(logfile, "%s", a);
-      logfile_line_started = 1;
-    }
-    if (nl) {
-      if (logfile_line_started) {
-        fprintf(logfile, "\n");
-        logfile_line_started = 0;
-      }
-    } else if (a && strlen(a)) {
-      logfile_line_started = 1;
-    }
-    fflush(logfile);
+    zip_write_stream(logfile, a, len, nl ? 1 : 0, &logfile_line_started);
   }
 }
 
@@ -442,19 +450,30 @@ ZCONST char *a, *b;     /* message strings juxtaposed in output */
 /* Print a message to mesg and flush.  Also write to log file if
    open.  Write new line first if current line has output already. */
 {
+  size_t len_a = (a && *a) ? strlen(a) : 0;
+  size_t len_b = (b && *b) ? strlen(b) : 0;
+
   if (noisy) {
-    if (mesg_line_started)
-      fprintf(mesg, "\n");
-    fprintf(mesg, "%s%s\n", a, b);
-    mesg_line_started = 0;
-    fflush(mesg);
+    if (mesg_line_started) {
+      zip_write_stream(mesg, NULL, 0, 1, &mesg_line_started);
+    }
+    zip_write_stream(mesg, a, len_a, 0, &mesg_line_started);
+    zip_write_stream(mesg, b, len_b, 0, &mesg_line_started);
+    if (!mesg_line_started && len_a == 0 && len_b == 0) {
+      mesg_line_started = 1; /* ensure newline is emitted */
+    }
+    zip_write_stream(mesg, NULL, 0, 2, &mesg_line_started);
   }
   if (logfile) {
-    if (logfile_line_started)
-      fprintf(logfile, "\n");
-    fprintf(logfile, "%s%s\n", a, b);
-    logfile_line_started = 0;
-    fflush(logfile);
+    if (logfile_line_started) {
+      zip_write_stream(logfile, NULL, 0, 1, &logfile_line_started);
+    }
+    zip_write_stream(logfile, a, len_a, 0, &logfile_line_started);
+    zip_write_stream(logfile, b, len_b, 0, &logfile_line_started);
+    if (!logfile_line_started && len_a == 0 && len_b == 0) {
+      logfile_line_started = 1;
+    }
+    zip_write_stream(logfile, NULL, 0, 2, &logfile_line_started);
   }
 }
 
@@ -462,19 +481,33 @@ void zipwarn(a, b)
 ZCONST char *a, *b;     /* message strings juxtaposed in output */
 /* Print a warning message to mesg (usually stderr) and return. */
 {
+  static const char prefix[] = "\tzip warning: ";
+  size_t len_a = (a && *a) ? strlen(a) : 0;
+  size_t len_b = (b && *b) ? strlen(b) : 0;
+
   if (noisy) {
-    if (mesg_line_started)
-      fprintf(mesg, "\n");
-    fprintf(mesg, "\tzip warning: %s%s\n", a, b);
-    mesg_line_started = 0;
-    fflush(mesg);
+    if (mesg_line_started) {
+      zip_write_stream(mesg, NULL, 0, 1, &mesg_line_started);
+    }
+    zip_write_stream(mesg, prefix, sizeof(prefix) - 1, 0, &mesg_line_started);
+    zip_write_stream(mesg, a, len_a, 0, &mesg_line_started);
+    zip_write_stream(mesg, b, len_b, 0, &mesg_line_started);
+    if (!mesg_line_started && len_a == 0 && len_b == 0) {
+      mesg_line_started = 1;
+    }
+    zip_write_stream(mesg, NULL, 0, 2, &mesg_line_started);
   }
   if (logfile) {
-    if (logfile_line_started)
-      fprintf(logfile, "\n");
-    fprintf(logfile, "\tzip warning: %s%s\n", a, b);
-    logfile_line_started = 0;
-    fflush(logfile);
+    if (logfile_line_started) {
+      zip_write_stream(logfile, NULL, 0, 1, &logfile_line_started);
+    }
+    zip_write_stream(logfile, prefix, sizeof(prefix) - 1, 0, &logfile_line_started);
+    zip_write_stream(logfile, a, len_a, 0, &logfile_line_started);
+    zip_write_stream(logfile, b, len_b, 0, &logfile_line_started);
+    if (!logfile_line_started && len_a == 0 && len_b == 0) {
+      logfile_line_started = 1;
+    }
+    zip_write_stream(logfile, NULL, 0, 2, &logfile_line_started);
   }
 }
 
