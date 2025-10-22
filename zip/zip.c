@@ -1320,6 +1320,9 @@ local int check_unzip_version(unzippath)
       return 0;
     }
 #endif
+#ifndef ZIP64_SUPPORT
+  (void)unzippath;
+#endif
   return 1;
 }
 
@@ -1845,6 +1848,9 @@ int rename_split(temp_name, out_path)
 int set_filetype(out_path)
   char *out_path;
 {
+#if !defined(__BEOS__) && !defined(__ATHEOS__) && !defined(MACOS) && !defined(RISCOS)
+  (void)out_path;
+#endif
 #ifdef __BEOS__
   /* Set the filetype of the zipfile to "application/zip" */
   setfiletype( out_path, "application/zip" );
@@ -3216,6 +3222,7 @@ char **argv;            /* command line tokens */
         case 'i':   /* Include only the following files */
           /* if nothing matches include list then still create an empty archive */
           allow_empty_archive = 1;
+          /* fall through */
         case 'x':   /* Exclude following files */
           add_filter((int) option, value);
           free(value);

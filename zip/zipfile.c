@@ -1693,7 +1693,6 @@ zoff_t ffile_size( file)
 FILE *file;
 {
   int sts;
-  size_t siz;
   zoff_t ofs;
   char waste[ 4];
 
@@ -1727,8 +1726,7 @@ FILE *file;
       else
       {
         /* Read a byte at apparent EOF.  Should set EOF flag. */
-        siz = fread( waste, 1, 1, file);
-        if (feof( file) == 0)
+        if (fread( waste, 1, 1, file) == 1 || feof( file) == 0)
         {
           /* Not at EOF, but should be.  File too big. */
           ofs = EOF;
@@ -2165,11 +2163,9 @@ int readlocal(localz, z)
 
 #ifndef UTIL
   ulg start_disk = 0;
-  uzoff_t start_offset = 0;
   char *split_path;
 
   start_disk = z->dsk;
-  start_offset = z->off;
 
   /* don't assume reading the right disk */
 
@@ -3220,9 +3216,11 @@ local int scanzipf_fixnew()
   char *in_path_ext;
   int in_central_directory = 0; /* found a central directory record */
   struct zlist far *cz;
-  uzoff_t cd_total_entries = 0; /* number of entries according to EOCDR */
   ulg     in_cd_start_disk;     /* central directory start disk */
-  uzoff_t in_cd_start_offset;   /* offset of start of cd on cd start disk */
+
+  x = &zfiles;
+  while (*x != NULL)
+    x = &(*x)->nxt;
 
 
   total_disks = 1000000;
@@ -3357,8 +3355,6 @@ local int scanzipf_fixnew()
 
         /* Central Directory disk, offset, and total entries */
         in_cd_start_disk = (ulg)SH(scbuf + 2);
-        in_cd_start_offset = (uzoff_t)LG(scbuf + 12);
-        cd_total_entries = (uzoff_t)SH(scbuf + 6);
 
         /* the in_cd_start_disk should always be less than the total_disks,
            unless the -1 flags are being used */
@@ -4049,6 +4045,10 @@ local int scanzipf_regnew()
   struct zlist far * far *x;  /* pointer last entry's link */
   struct zlist far *z;        /* current zip entry structure */
 
+  x = &zfiles;
+  while (*x != NULL)
+    x = &(*x)->nxt;
+
 
   /* open the zipfile */
   if ((in_file = zfopen(in_path, FOPR)) == NULL) {
@@ -4150,6 +4150,13 @@ local int scanzipf_regnew()
 
   /* read the EOCDR */
   s = fread(scbuf, 1, ENDHEAD, in_file);
+
+  if (s < ENDHEAD) {
+    fclose(in_file);
+    in_file = NULL;
+    zipwarn("End Of Central Directory record truncated", "");
+    return ZE_READ;
+  }
 
   /* the first field should be number of this (the last) disk */
   eocdr_disk = (ulg)SH(scbuf);
@@ -5821,6 +5828,9 @@ int putend( OFT( uzoff_t) n,
   char *z;                  /* zip file comment if m != 0 */
 #endif /* def NO_PROTO */
 {
+#ifndef HANDLE_AMIGA_SFX
+  (void)c;
+#endif
 #ifdef ZIP64_SUPPORT        /* zip64 support 09/05/2003 R.Nausedat */
   ush vem;          /* version made by */
   int iNeedZip64 = 0;

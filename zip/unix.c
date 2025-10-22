@@ -6,6 +6,7 @@
 #ifndef UTIL    /* the companion #endif is a bit of ways down ... */
 
 #include <time.h>
+#include <limits.h>
 
 #if defined(MINIX) || defined(__mpexl)
 #  ifdef S_IWRITE
@@ -456,9 +457,11 @@ int set_new_unix_extra_field(struct zlist far *z, z_stat *s)
    */
   ef_data_size = 1 + 1 + uid_size + 1 + gid_size;
 
-  /* Guard and size computations (treat negative ext/cext as 0). */
-  if ((int)z->ext  < 0) z->ext  = 0;
-  if ((int)z->cext < 0) z->cext = 0;
+  /* Guard and size computations (treat sentinel values as 0 when no data yet). */
+  if (z->ext == (ush)USHRT_MAX && z->extra == NULL)
+    z->ext = 0;
+  if (z->cext == (ush)USHRT_MAX && z->cextra == NULL)
+    z->cext = 0;
 
   need_local   = (size_t)z->ext  + 4u + ef_data_size;
   need_central = (size_t)z->cext + 4u + ef_data_size;
@@ -520,6 +523,7 @@ int set_extra_field(z, z_utim)
   /* store full data in local header but just modification time stamp info
      in central header */
 {
+  (void)z_utim;
   z_stat s;
   char *name;
   int len = strlen(z->name);

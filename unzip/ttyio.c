@@ -383,9 +383,6 @@ int* tt_cols;
  */
 int zgetch(__G__ f) __GDEF int f; /* file descriptor from which to read */
 {
-#if (defined(USE_SYSV_TERMIO) || defined(USE_POSIX_TERMIOS))
-    char oldmin, oldtim;
-#endif
     char c = 0;
     struct sgttyb sg;       /* tty device structure */
     struct sgttyb sg_saved; /* original settings */
@@ -395,8 +392,6 @@ int zgetch(__G__ f) __GDEF int f; /* file descriptor from which to read */
     sg = sg_saved;
 
 #if (defined(USE_SYSV_TERMIO) || defined(USE_POSIX_TERMIOS))
-    oldmin = sg.c_cc[VMIN];
-    oldtim = sg.c_cc[VTIME];
     sg.c_cc[VMIN] = 1;      /* single char */
     sg.c_cc[VTIME] = 0;     /* no timeout */
     sg.sg_flags &= ~ICANON; /* canonical mode off */

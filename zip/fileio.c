@@ -3714,9 +3714,6 @@ static ZCONST char Far num_req_val_err[] = "option %s requires number value";
 static ZCONST char Far long_op_ambig_err[] = "long option '%s' ambiguous";
 static ZCONST char Far long_op_not_sup_err[] = "long option '%s' not supported";
 
-static ZCONST char Far no_arg_files_err[] = "argument files not enabled\n";
-
-
 /* below removed as only used for processing argument files */
 
 /* get_nextarg */
