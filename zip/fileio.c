@@ -2686,6 +2686,8 @@ char *wide_to_local_string(wide_string)
   size_t i;
   wchar_t wc;
   int b;
+  int reset_status;
+  int stateful_encoding;
   size_t wsize = 0;
   int max_bytes = MB_CUR_MAX;
   char buf[9];
@@ -2704,11 +2706,19 @@ char *wide_to_local_string(wide_string)
   /* convert it */
   buffer[0] = '\0';
   /* reset conversion state if the encoding is stateful */
-  (void)wctomb(NULL, 0);
+  reset_status = wctomb(NULL, 0);
+  if (reset_status == -1) {
+    stateful_encoding = 0;
+  } else {
+    stateful_encoding = (reset_status != 0);
+  }
   for (i = 0; i < wsize; i++) {
     if (sizeof(wchar_t) < 4 && wide_string[i] > 0xFFFF) {
       /* wchar_t probably 2 bytes */
-      /* could do surrogates if the multibyte encoding supports them */
+      /* reset state so subsequent conversions stay in sync */
+      if (stateful_encoding) {
+        (void)wctomb(NULL, 0);
+      }
       wc = zwchar_to_wchar_t_default_char;
     } else {
       wc = (wchar_t)wide_string[i];

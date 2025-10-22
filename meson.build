@@ -4,7 +4,7 @@ project(
   version: '6.0-custom',
   default_options: [
     'c_std=c99',
-    'warning_level=2',
+    'warning_level=3',
     'optimization=2'
   ]
 )
