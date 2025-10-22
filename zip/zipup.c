@@ -1065,12 +1065,17 @@ local unsigned file_read(buf, size)
          } while (--size != 0);
       }
       if (len == 0) {
-         zread(ifile, buf, 1); len = 1; /* keep single \r if EOF */
+         int read_res = (int)zread(ifile, buf, 1);
+         if (read_res == 1) {
+            len = 1; /* keep single \r if EOF */
 #ifdef EBCDIC
-         if (aflag == ASCII) {
-            *buf = (char)(*buf == '\n' ? LF : ascii[(uch)(*buf)]);
-         }
+            if (aflag == ASCII) {
+               *buf = (char)(*buf == '\n' ? LF : ascii[(uch)(*buf)]);
+            }
 #endif
+         } else if (read_res < 0) {
+            ZIPERR(ZE_READ, "error reading input file");
+         }
       } else {
          buf -= len;
          if (buf[len-1] == CTRLZ) len--; /* suppress final ^Z */
