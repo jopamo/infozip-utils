@@ -106,11 +106,6 @@ freely, subject to the above disclaimer and the following restrictions:
 #define CMS_MVS
 #endif
 
-
-
-
-
-
 #ifdef __COMPILER_KCC__
 #include <c-env.h>
 #ifdef SYS_T20
@@ -126,14 +121,12 @@ freely, subject to the above disclaimer and the following restrictions:
 #define MSDOS
 #endif /* __POWERC */
 
-
 /* RSXNTDJ (at least up to v1.3) compiles for WIN32 (RSXNT) using a derivate
    of the EMX environment, but defines MSDOS and __GO32__. ARG !!! */
 
 #if (defined(linux) && !defined(LINUX))
 #define LINUX
 #endif
-
 
 #if (defined(THINK_C) || defined(MPW))
 #define MACOS
@@ -245,14 +238,12 @@ freely, subject to the above disclaimer and the following restrictions:
 #include "wince/punzip.h" /* must appear before windows.h */
 #endif
 
-
 /*---------------------------------------------------------------------------
     Grab system-dependent definition of EXPENTRY for prototypes below.
   ---------------------------------------------------------------------------*/
 
 #if 0
 #endif /* 0 */
-
 
 #if (defined(WINDLL) || defined(USE_UNZIP_LIB))
 #ifndef EXPENTRY
@@ -277,8 +268,8 @@ extern "C" {
 #ifndef _IZ_TYPES_DEFINED
 #ifdef MODERN
 typedef void zvoid;
-#else          /* !MODERN */
-#ifndef VAXC   /* not fully modern, but has knows 'void' */
+#else        /* !MODERN */
+#ifndef VAXC /* not fully modern, but has knows 'void' */
 #define void int
 #endif                      /* !VAXC */
 typedef char zvoid;
@@ -346,23 +337,23 @@ typedef struct _UzpOpts {
     char* pwdarg;     /* pointer to command-line password (-P option) */
     int zipinfo_mode; /* behave like ZipInfo or like normal UnZip? */
     int aflag;        /* -a: do ASCII-EBCDIC and/or end-of-line translation */
-    int B_flag; /* -B: back up existing files by renaming to *~##### */
-    int cflag;  /* -c: output to stdout */
-    int C_flag; /* -C: match filenames case-insensitively */
-    int D_flag; /* -D: don't restore directory (-DD: any) timestamps */
-    int fflag; /* -f: "freshen" (extract only newer files) */
-    int hflag; /* -h: header line (zipinfo) */
-    int jflag; /* -j: junk pathnames (unzip) */
+    int B_flag;       /* -B: back up existing files by renaming to *~##### */
+    int cflag;        /* -c: output to stdout */
+    int C_flag;       /* -C: match filenames case-insensitively */
+    int D_flag;       /* -D: don't restore directory (-DD: any) timestamps */
+    int fflag;        /* -f: "freshen" (extract only newer files) */
+    int hflag;        /* -h: header line (zipinfo) */
+    int jflag;        /* -j: junk pathnames (unzip) */
 #if (defined(__ATHEOS__) || defined(__BEOS__) || defined(MACOS))
     int J_flag; /* -J: ignore AtheOS/BeOS/MacOS e. f. info (unzip) */
 #endif
-    int K_flag; /* -K: keep setuid/setgid/tacky permissions */
+    int K_flag;         /* -K: keep setuid/setgid/tacky permissions */
     int lflag;          /* -12slmv: listing format (zipinfo) */
     int L_flag;         /* -L: convert filenames from some OSes to lowercase */
     int overwrite_none; /* -n: never overwrite files (no prompting) */
-    int overwrite_all; /* -o: OK to overwrite files without prompting */
-#endif                 /* !FUNZIP */
-    int qflag;         /* -q: produce a lot less output */
+    int overwrite_all;  /* -o: OK to overwrite files without prompting */
+#endif                  /* !FUNZIP */
+    int qflag;          /* -q: produce a lot less output */
 #ifndef FUNZIP
 #if (defined(MSDOS) || defined(FLEXOS) || defined(OS2) || defined(WIN32))
     int sflag; /* -s: convert spaces in filenames to underscores */
@@ -381,12 +372,12 @@ typedef struct _UzpOpts {
     int V_flag; /* -V: don't strip VMS version numbers */
     int W_flag; /* -W: wildcard '*' won't match '/' dir separator */
     int X_flag; /* -X: restore owner/protection or UID/GID or ACLs */
-    int zflag; /* -z: display the zipfile comment (only, for unzip) */
+    int zflag;  /* -z: display the zipfile comment (only, for unzip) */
 #if (!defined(RISCOS) && !defined(CMS_MVS) && !defined(TANDEM))
     int ddotflag; /* -:: don't skip over "../" path elements */
 #endif
     int cflxflag; /* -^: allow control chars in extracted filenames */
-#endif /* !FUNZIP */
+#endif            /* !FUNZIP */
 } UzpOpts;
 
 /* intended to be a private struct: */

@@ -80,8 +80,6 @@ typedef struct stat z_stat;
 #endif
 #endif /* !NO_PARAM_H */
 
-
-
 #ifdef BSD
 #include <sys/time.h>
 #include <sys/timeb.h>

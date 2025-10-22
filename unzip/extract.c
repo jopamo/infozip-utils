@@ -170,8 +170,7 @@ static ZCONST char Far SymLnkDeferred[] = "finishing deferred symbolic links:\n"
 static ZCONST char Far SymLnkFinish[] = "  %-22s -> %s\n";
 #endif
 
-static ZCONST char Far ReplaceQuery[] =
-    "replace %s? [y]es, [n]o, [A]ll, [N]one, [r]ename: ";
+static ZCONST char Far ReplaceQuery[] = "replace %s? [y]es, [n]o, [A]ll, [N]one, [r]ename: ";
 static ZCONST char Far AssumeNone[] = " NULL\n(EOF or read error, treating as \"[N]one\" ...)\n";
 static ZCONST char Far NewNameQuery[] = "new name: ";
 static ZCONST char Far InvalidResponse[] = "error:  invalid response [%s]\n";
@@ -1972,7 +1971,6 @@ ulg size;
 
 } /* end function memflush() */
 
-
 #ifdef SYMLINKS
 /***********************************/
 /* Function set_deferred_symlink() */
@@ -2058,7 +2056,7 @@ extent size;
          */
 #define UZ_FNFILTER_REPLACECHAR '?'
 #endif
-            if (!isprint(*r)) {
+        if (!isprint(*r)) {
             if (*r < 32) {
                 /* ASCII control codes are escaped as "^{letter}". */
                 if (se != NULL && (s > (space + (size - 4)))) {
@@ -2111,7 +2109,6 @@ extent size;
     else {
         *s = '\0';
     }
-
 
     return (char*)space;
 

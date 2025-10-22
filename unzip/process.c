@@ -227,7 +227,6 @@ int process_zipfiles(__G) /* return PK-type error code */
         of whether the function does anything, should be removed from the ifdefs.
       ---------------------------------------------------------------------------*/
 
-
 #if (defined(IZ_CHECK_TZ) && defined(USE_EF_UT_TIME))
 #ifndef VALID_TIMEZONE
 #define VALID_TIMEZONE(tmp) (((tmp = getenv("TZ")) != NULL) && (*tmp != '\0'))
@@ -355,8 +354,7 @@ int process_zipfiles(__G) /* return PK-type error code */
              * do_seekable() again with the same zipfile name (and the
              * lastchance flag set), just to trigger the error report...
              */
-            char* p =
-                strcpy(lastzipfn + strlen(lastzipfn), ZSUFX);
+            char* p = strcpy(lastzipfn + strlen(lastzipfn), ZSUFX);
 
             G.zipfn = lastzipfn;
 
@@ -567,8 +565,7 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
 #ifndef SFX
     if (G.statbuf.st_mode & S_IEXEC) /* no extension on Unix exes:  might */
         maybe_exe = TRUE;            /*  find unzip, not unzip.zip; etc. */
-#endif /* !SFX */
-
+#endif                               /* !SFX */
 
     if (open_input_file(__G)) /* this should never happen, given */
         return PK_NOZIP;      /*  the stat() test above, but... */
@@ -611,9 +608,9 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
         || (uO.zipinfo_mode && uO.hflag)
 #endif
     )
-#else        /* not (!WINDLL && !SFX) ==> !NO_ZIPINFO !! */
+#else  /* not (!WINDLL && !SFX) ==> !NO_ZIPINFO !! */
     if (uO.zipinfo_mode && uO.hflag)
-#endif       /* if..else..: (!WINDLL && !SFX) */
+#endif /* if..else..: (!WINDLL && !SFX) */
         Info(slide, 0, ((char*)slide, LoadFarString(LogInitline), G.zipfn));
 #endif /* (!WINDLL && !SFX) || !NO_ZIPINFO */
 
@@ -1015,8 +1012,7 @@ static int check_ecrec_zip64(__G)
 /* Function find_ecrec64() */
 /***************************/
 
-static int find_ecrec64(__G__)
-{
+static int find_ecrec64(__G__) {
     ec_byte_rec64 byterec;       /* buf for ecrec64 */
     ec_byte_loc64 byterecL;      /* buf for ecrec64 locator */
     zoff_t ecloc64_start_offset; /* start offset of ecrec64 locator */
@@ -1354,7 +1350,6 @@ static int process_zip_cmmnt(__G) /* return PK-type error code */
         Get the zipfile comment (up to 64KB long), if any, and print it out.
       ---------------------------------------------------------------------------*/
 
-
 #ifndef NO_ZIPINFO
     /* ZipInfo, verbose format */
     if (uO.zipinfo_mode && uO.lflag > 9) {
@@ -1387,16 +1382,14 @@ static int process_zip_cmmnt(__G) /* return PK-type error code */
     }
     else
 #endif /* !NO_ZIPINFO */
-        if (G.ecrec.zipfile_comment_length && (uO.zflag > 0
-                                               || (uO.zflag == 0
+        if (G.ecrec.zipfile_comment_length && (uO.zflag > 0 || (uO.zflag == 0
 #ifndef NO_ZIPINFO
-                                                   && !uO.zipinfo_mode
+                                                                && !uO.zipinfo_mode
 #endif
 #ifdef TIMESTAMP
-                                                   && !uO.T_flag
+                                                                && !uO.T_flag
 #endif
-                                                   && !uO.qflag)
-                                                   )) {
+                                                                && !uO.qflag))) {
             if (do_string(__G__ G.ecrec.zipfile_comment_length,
 #if (defined(SFX) && defined(CHEAP_SFX_AUTORUN))
 #ifndef NO_ZIPINFO

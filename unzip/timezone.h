@@ -18,7 +18,7 @@
  */
 #define TZ_MAX_TIMES 272 /* (=2*(LastGoodYr + 1 - FirstGoodYr) */
 #define TZ_MAX_TYPES 2   /* We only support basic standard and daylight */
-#define TZ_MAX_CHARS 50 /* Maximum number of abbreviation characters */
+#define TZ_MAX_CHARS 50  /* Maximum number of abbreviation characters */
 
 /* supported types of transition rules */
 #define JULIAN_DAY 0            /* Jn - Julian day */

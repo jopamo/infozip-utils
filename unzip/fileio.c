@@ -597,7 +597,6 @@ int seek_zipf(__G__ abs_offset) __GDEF zoff_t abs_offset;
     return (PK_OK);
 } /* end function seek_zipf() */
 
-
 /********************/
 /* Function flush() */ /* returns PK error codes: */
 /********************/ /* if tflag => always 0; PK_DISK if write error */
@@ -715,7 +714,6 @@ int unshrink;
             G.newfile = FALSE;
         }
 
-
         /*-----------------------------------------------------------------------
             Algorithm:  CR/LF => native; lone CR => native; lone LF => native.
             This routine is only for non-raw-VMS, non-raw-VM/CMS files (i.e.,
@@ -735,10 +733,9 @@ int unshrink;
                     else if (p[1] == LF) /* get rid of accompanying LF */
                         ++ p;
                 }
-                else if (*p == LF) /* lone LF */
-                    PutNativeEOL else
-                        if (*p != CTRLZ) /* lose all ^Z's */
-                            * q++ = native(*p);
+                else if (*p == LF)                     /* lone LF */
+                    PutNativeEOL else if (*p != CTRLZ) /* lose all ^Z's */
+                        * q++ = native(*p);
 
 #if (defined(SMALL_MEM) || defined(MED_MEM))
 #if (lenEOL == 1) /* don't check unshrink:  both buffers small but equal */
@@ -782,7 +779,6 @@ int unshrink;
 
 } /* end function flush() [resp. partflush() for 16-bit Deflate64 support] */
 
-
 /*************************/
 /* Function disk_error() */
 /*************************/
@@ -796,7 +792,6 @@ static int disk_error(__G) __GDEF {
     return PK_DISK;
 
 } /* end function disk_error() */
-
 
 /*****************************/
 /* Function UzpMessagePrnt() */
@@ -833,7 +828,6 @@ int flag;  /* flag bits */
         To turn off *all* messages, use the UzpMessageNull() function instead
         of this one.
       ---------------------------------------------------------------------------*/
-
 
 /*
 #ifdef ACORN_GUI
@@ -1030,7 +1024,6 @@ int flag;  /* flag bits (bit 0: no echo) */
 
 } /* end function UzpInput() */
 
-
 /***************************/
 /* Function UzpMorePause() */
 /***************************/
@@ -1086,8 +1079,6 @@ int flag;            /* 0 = any char OK; 1 = accept only '\n', ' ', q */
 #endif /* MORE */
 
 } /* end function UzpMorePause() */
-
-
 
 /**************************/
 /* Function UzpPassword() */
@@ -1207,7 +1198,6 @@ void handler(signal) /* upon interrupt, turn on echo and exit cleanly */
     EXIT(IZ_CTRLC); /* was EXIT(0), then EXIT(PK_ERR) */
 }
 
-
 #if (!defined(VMS) && !defined(CMS_MVS))
 
 #if (!defined(HAVE_MKTIME) || defined(WIN32))
@@ -1321,33 +1311,33 @@ ulg dosdatetime;
         m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
     if ((tm = localtime(&m_time)) != (struct tm*)NULL)
         m_time -= tm->tm_gmtoff; /* sec. EAST of GMT: subtr. */
-#else            /* !(BSD4_4 */
+#else  /* !(BSD4_4 */
     ftime(&tbp);                  /* get `timezone' */
     m_time += tbp.timezone * 60L; /* seconds WEST of GMT:  add */
-#endif           /* ?(BSD4_4 || __EMX__) */
-#else            /* !(BSD || MTS || __GO32__) */
+#endif /* ?(BSD4_4 || __EMX__) */
+#else  /* !(BSD || MTS || __GO32__) */
     /* tzset was already called at start of process_zipfiles() */
-    /* tzset(); */ /* set `timezone' variable */
+    /* tzset(); */      /* set `timezone' variable */
     m_time += timezone; /* seconds WEST of GMT:  add */
 #endif /* ?(BSD || MTS || __GO32__) */
-        TTrace((stderr, "  m_time after timezone =  %lu\n", (ulg)m_time));
+    TTrace((stderr, "  m_time after timezone =  %lu\n", (ulg)m_time));
 
-        /*---------------------------------------------------------------------------
-            Adjust for local daylight savings (summer) time.
-          ---------------------------------------------------------------------------*/
+    /*---------------------------------------------------------------------------
+        Adjust for local daylight savings (summer) time.
+      ---------------------------------------------------------------------------*/
 
 #ifndef BSD4_4 /* (DST already added to tm_gmtoff, so skip tm_isdst) */
-        if ((dosdatetime >= DOSTIME_2038_01_18) && (m_time < (time_t)0x70000000L))
-            m_time = U_TIME_T_MAX; /* saturate in case of (unsigned) overflow */
-        if (m_time < (time_t)0L)   /* a converted DOS time cannot be negative */
-            m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
-        TIMET_TO_NATIVE(m_time)    /* NOP unless MSC 7.0 or Macintosh */
-        if (((tm = localtime((time_t*)&m_time)) != NULL) && tm->tm_isdst)
-            m_time -= 60L * 60L; /* adjust for daylight savings time */
-        NATIVE_TO_TIMET(m_time) /* NOP unless MSC 7.0 or Macintosh */
-        TTrace((stderr, "  m_time after DST =       %lu\n", (ulg)m_time));
-#endif /* !BSD4_4 */
-#endif /* ?TOPS20 */
+    if ((dosdatetime >= DOSTIME_2038_01_18) && (m_time < (time_t)0x70000000L))
+        m_time = U_TIME_T_MAX; /* saturate in case of (unsigned) overflow */
+    if (m_time < (time_t)0L)   /* a converted DOS time cannot be negative */
+        m_time = S_TIME_T_MAX; /*  -> saturate at max signed time_t value */
+    TIMET_TO_NATIVE(m_time)    /* NOP unless MSC 7.0 or Macintosh */
+    if (((tm = localtime((time_t*)&m_time)) != NULL) && tm->tm_isdst)
+        m_time -= 60L * 60L; /* adjust for daylight savings time */
+    NATIVE_TO_TIMET(m_time)  /* NOP unless MSC 7.0 or Macintosh */
+    TTrace((stderr, "  m_time after DST =       %lu\n", (ulg)m_time));
+#endif         /* !BSD4_4 */
+#endif         /* ?TOPS20 */
 
 #endif /* ?HAVE_MKTIME */
 
@@ -1569,7 +1559,7 @@ int option;
 
 #ifdef NOANSIFILT /* GRR:  can ANSI be used with EBCDIC? */
                 (*G.message)((zvoid*)&G, G.outbuf, (ulg)(q - G.outbuf), 0);
-#else             /* ASCII, filter out ANSI escape sequences and handle ^S (pause) */
+#else  /* ASCII, filter out ANSI escape sequences and handle ^S (pause) */
                 p = G.outbuf - 1;
                 q = slide;
                 while (*++p) {
@@ -1598,7 +1588,7 @@ int option;
                     }
                 }
                 (*G.message)((zvoid*)&G, slide, (ulg)(q - slide), 0);
-#endif            /* ?NOANSIFILT */
+#endif /* ?NOANSIFILT */
             }
             /* add '\n' if not at start of line */
             (*G.message)((zvoid*)&G, slide, 0L, 0x40);
@@ -1773,7 +1763,6 @@ int option;
 #endif /* UNICODE_SUPPORT */
             }
             break;
-
 
     } /* end switch (option) */
 

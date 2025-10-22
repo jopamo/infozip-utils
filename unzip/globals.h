@@ -360,7 +360,6 @@ typedef struct Globals {
     int incnt_leftover; /* so improved NEXTBYTE does not waste input */
     uch* inptr_leftover;
 
-
 #if (defined(SFX) && defined(CHEAP_SFX_AUTORUN))
     char autorun_command[FILNAMSIZ];
 #endif

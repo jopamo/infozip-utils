@@ -214,8 +214,7 @@ FILE* zfile;                                            /* where to write header
     static unsigned calls = 0; /* ensure different rand() header if used */
 
     /* 1) Make RAND_HEAD_LEN-2 random bytes (plaintext). Prefer strong RNG. */
-    if (unix_fill_random(header, RAND_HEAD_LEN - 2) != 0)
-    {
+    if (unix_fill_random(header, RAND_HEAD_LEN - 2) != 0) {
         /* Fallback: srand/rand() */
         if (++calls == 1) {
             srand((unsigned)time(NULL) ^ ZCR_SEED2);
