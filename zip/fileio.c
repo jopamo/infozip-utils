@@ -2924,7 +2924,9 @@ zwchar *local_to_wide_string(local_string)
   zwchar *wide_string;
 
   /* for now try to convert as string - fails if a bad char in string */
-  wsize = mbstowcs(NULL, local_string, MB_CUR_MAX );
+  /* Query the number of wide chars we need so the follow-up call can
+     bound the conversion properly (prevents FORTIFY overrun checks). */
+  wsize = mbstowcs(NULL, local_string, 0);
   if (wsize == (size_t)-1) {
     /* could not convert */
     return NULL;
@@ -2934,7 +2936,9 @@ zwchar *local_to_wide_string(local_string)
   if ((wc_string = (wchar_t *)malloc((wsize + 1) * sizeof(wchar_t))) == NULL) {
     ZIPERR(ZE_MEM, "local_to_wide_string");
   }
-  wsize = mbstowcs(wc_string, local_string, strlen(local_string) + 1);
+  /* Use the computed character count (not the byte length) to keep
+     glibc's __mbstowcs_chk happy even for multi-byte sequences. */
+  wsize = mbstowcs(wc_string, local_string, wsize + 1);
   wc_string[wsize] = (wchar_t) 0;
 
   /* in case wchar_t is not zwchar */
