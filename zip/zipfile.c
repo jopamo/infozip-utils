@@ -5777,9 +5777,13 @@ int zipcopy(z)
         r = ask_for_split_read_path(start_disk);
         if (r == ZE_ABORT) {
           /* user abort */
+          free(split_path);
+          split_path = NULL;
           return ZE_ABORT;
         } else if ((fix == 1 || fix == 2) && r == ZE_FORM) {
           /* user asks to skip this disk */
+          free(split_path);
+          split_path = NULL;
           return ZE_FORM;
         }
         free(split_path);
@@ -5790,9 +5794,13 @@ int zipcopy(z)
     if (zfseeko(in_file, start_offset, SEEK_SET) != 0) {
       fclose(in_file);
       in_file = NULL;
+      free(split_path);
+      split_path = NULL;
       zipwarn("reading archive fseek: ", strerror(errno));
       return ZE_READ;
     }
+    free(split_path);
+    split_path = NULL;
   } /* fix != 2 */
 
   if (fix != 2 && !at_signature(in_file, "PK\03\04")) {
