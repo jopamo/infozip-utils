@@ -25,6 +25,16 @@
 #include <strings.h>
 #include <string.h>
 
+/* Remember the duplicated argv for later cleanup (see finish()/ziperr()). */
+static char **copied_args_for_cleanup = NULL;
+
+static void release_copied_args(void) {
+  if (copied_args_for_cleanup != NULL) {
+    free_args(copied_args_for_cleanup);
+    copied_args_for_cleanup = NULL;
+  }
+}
+
 /* Fast-path writer for log/console streams. The newline_mode parameter uses
  * the following semantics:
  *   0 -> no newline
@@ -289,6 +299,7 @@ int e;                  /* exit code */
     free((zvoid *)out_path);
     out_path = NULL;
   }
+  release_copied_args();
   if (zcomment != NULL)
   {
     free((zvoid *)zcomment);
@@ -403,6 +414,8 @@ ZCONST char *h;         /* message about how it happened */
     free((zvoid *)zcomment);
     zcomment = NULL;
   }
+
+  release_copied_args();
 
   freeup();
   EXIT(c);
@@ -2326,7 +2339,9 @@ char **argv;            /* command line tokens */
 
 
   /* make copy of args that can use with insert_arg() used by get_option() */
+  release_copied_args();
   args = copy_args(argv, 0);
+  copied_args_for_cleanup = args;
 
   kk = 0;                       /* Next non-option argument type */
   s = 0;                        /* set by -@ */
@@ -2357,6 +2372,7 @@ char **argv;            /* command line tokens */
                               &optchar, &value, &negated,
                               &fna, &optnum, 0)))
   {
+    copied_args_for_cleanup = args;
     switch (option)
     {
 #ifdef EBCDIC
@@ -2888,6 +2904,9 @@ char **argv;            /* command line tokens */
             }
 
             /* just ignore as just marks what follows as non-option arguments */
+            free(value);
+            value = NULL;
+            break;
 
           } else if (kk == 6) {
             /* value is R pattern */
@@ -2903,6 +2922,7 @@ char **argv;            /* command line tokens */
               if (strcmp(value, "-") == 0) {  /* output zipfile is dash */
                 /* just a dash */
                 zipstdout();
+                free(value);
               } else
               {
                 /* name of zipfile */
@@ -2987,6 +3007,7 @@ char **argv;            /* command line tokens */
               }
               /* add name to list for later processing */
               add_name(value);
+              free(value);
               /*
               if ((r = PROCNAME(value)) != ZE_OK) {
                 if (r == ZE_MISS)
@@ -3012,6 +3033,8 @@ char **argv;            /* command line tokens */
 
      }  /* switch */
   }
+
+  copied_args_for_cleanup = args;
 
 
   /* do processing of command line and one-time tasks */
