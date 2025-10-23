@@ -2,9 +2,9 @@
   <img src="zip-utils.svg" alt="InfoZIP Utils logo" width="220">
 </p>
 
-# InfoZIP Utils
+# ZIP Utils
 
-Modernized, Linux-first builds of Info-ZIP’s classic `zip` and `unzip` utilities. This fork keeps the battle-tested core, removes decades of legacy platform baggage, adds a shared `common/` layer, and ships reproducible Meson builds for contemporary toolchains.
+Modernized, Linux optimized builds of Info-ZIP’s classic `zip` and `unzip` utilities. This fork keeps the battle-tested core, removes decades of legacy platform baggage, adds a shared `common/` layer, and ships reproducible Meson builds for contemporary toolchains.
 
 ---
 
@@ -49,6 +49,10 @@ Run the functional and performance checks via:
 ```
 
 The harness builds sample archives with `zip`, verifies them with `unzip` and Python’s `zipfile` module, validates Unicode/symlink handling, and optionally runs throughput benchmarks (`PERF_SIZE_MB`, `PERF_ITERS`, `PERF_TMPFS` environment knobs).
+
+Export `PERF_REPORT=perf/report.tsv` (or any path) to capture the average MiB/s numbers from each performance case in a tab-separated file for later comparisons.
+
+The script auto-detects locally built binaries in `build/` and falls back to the system `zip`/`unzip` if they are not present; override via `ZIP_BIN=` or `UNZIP_BIN=` when needed.
 
 ---
 
