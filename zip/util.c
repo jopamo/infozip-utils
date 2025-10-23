@@ -169,16 +169,17 @@ int cs;                 /* flag: force case-sensitive matching */
       /* then just compare the literal string at the end */
 
       ZCONST char *srest;
+      size_t s_len = strlen(s);
+      size_t p_len = strlen(p);
 
-      srest = s + (strlen(s) - strlen(p));
-      if (srest - s < 0)
+      if (p_len > s_len)
         /* remaining literal string from pattern is longer than rest of
            test string, there can't be a match
          */
         return 0;
-      else
-        /* compare the remaining literal pattern string with the last bytes
-           of the test string to check for a match */
+      srest = s + (s_len - p_len);
+      /* compare the remaining literal pattern string with the last bytes
+         of the test string to check for a match */
 #ifdef _MBCS
       {
         ZCONST char *q = s;
