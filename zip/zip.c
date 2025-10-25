@@ -545,7 +545,12 @@ local void help()
 
   /* help array */
   static ZCONST char *text[] = {
-"Zip %s (%s). Usage:",
+"zip-utils %s (%s) - Info-ZIP derived Linux build",
+"  Based on Info-ZIP's Zip; not an official Info-ZIP release.",
+"  Maintains the classic CLI with Zip64 and UTF-8 always enabled.",
+"  Documentation: README.md and the zip(1) man page.",
+"",
+"Usage:",
 #ifdef VM_CMS
 "zip [-options] [-b fm] [-t mmddyyyy] [-n suffixes] [zipfile list] [-xi list]",
 #else  /* !VM_CMS */
@@ -592,7 +597,8 @@ local void help()
 "  -h   show this help               -n   don't compress these suffixes"
 #  endif
 ,"  -h2  show more help"
-,"  "
+,""
+,"For extended examples run \"zip -h2\" or consult the man page."
   };
 
   for (i = 0; i < sizeof(copyright)/sizeof(char *); i++)
@@ -618,10 +624,10 @@ local void help_extended()
 
   /* help array */
   static ZCONST char *text[] = {
+"zip-utils extended help (Info-ZIP derived; unofficial).",
+"Based on Info-ZIP's Zip; see README.md and the man page for details.",
 "",
-"Extended Help for Zip",
-"",
-"See the Zip Manual for more detailed help",
+"See the Zip manual for more detailed help.",
 "",
 "",
 "Zip stores files in zip archives.  The default action is to add or replace",
@@ -1057,10 +1063,27 @@ local void version_info()
     putchar('\n');
   }
 
-  for (i = 0; i < sizeof(versinfolines)/sizeof(char *); i++)
   {
-    printf(versinfolines[i], "Zip", VERSION, REVDATE);
-    putchar('\n');
+    const char *brand = "zip-utils";
+    const char *upstream = "Info-ZIP";
+    for (i = 0; i < sizeof(versinfolines)/sizeof(char *); i++)
+    {
+      switch (i) {
+        case 0:
+          printf(versinfolines[i], brand, VERSION, REVDATE, upstream);
+          break;
+        case 1:
+          printf(versinfolines[i], brand, upstream);
+          break;
+        case 2:
+          printf(versinfolines[i], upstream);
+          break;
+        default:
+          fputs(versinfolines[i], stdout);
+          break;
+      }
+      putchar('\n');
+    }
   }
 
   version_local();

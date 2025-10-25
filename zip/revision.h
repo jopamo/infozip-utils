@@ -55,12 +55,12 @@ ZCONST char *copyright[] = {
 };
 
 ZCONST char * far versinfolines[] = {
-"This is %s %s (%s), by Info-ZIP.",
-"Currently maintained by E. Gordon.  Please send bug reports to",
-"the authors using the web page at www.info-zip.org; see README for details.",
+"%s %s (%s) derived from %s Zip.",
+"%s is maintained by the zip-utils project; not an official %s release.",
+"Original Zip code remains copyrighted by %s contributors.",
+"See README.md and the zip(1) man page for project details.",
 "",
-"Latest sources and executables are at ftp://ftp.info-zip.org/pub/infozip,",
-"as of above date; see http://www.info-zip.org/ for other sites.",
+"",
 ""
 };
 

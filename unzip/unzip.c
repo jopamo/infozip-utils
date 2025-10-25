@@ -176,7 +176,8 @@ static ZCONST char Far ZipInfoExample[] = "*, ?, [] (e.g., \"[a-j]*.zip\")";
 
 static ZCONST char Far ZipInfoUsageLine1[] =
     "\
-ZipInfo %d.%d%d%s of %s, by Greg Roelofs and the Info-ZIP group.\n\
+zip-utils zipinfo %d.%d%d%s of %s (derived from Info-ZIP ZipInfo).\n\
+Not an official Info-ZIP release; see README.md for support notes.\n\
 \n\
 List name, date/time, attribute, size, compression method, etc., about files\n\
 in list (excluding those in xlist) contained in the specified .zip archive(s).\
@@ -224,7 +225,7 @@ ZCONST char Far UnzipSFXBanner[] =
 #else
 static ZCONST char Far UnzipSFXBanner[] =
 #endif
-    "UnZipSFX %d.%d%d%s of %s, by Info-ZIP (http://www.info-zip.org).\n";
+    "zip-utils unzipsfx %d.%d%d%s of %s (derived from Info-ZIP UnZip; unofficial).\n";
 #ifdef SFX_EXDIR
 static ZCONST char Far UnzipSFXOpts[] = "Valid options are -tfupcz and -d <exdir>; modifiers are -abjnoqCL%sV%s.\n";
 #else
@@ -374,22 +375,21 @@ static ZCONST char Far EnvGO32TMP[] = "GO32TMP";
 #ifdef COPYRIGHT_CLEAN
 static ZCONST char Far UnzipUsageLine1[] =
     "\
-UnZip %d.%d%d%s of %s, by Info-ZIP.\
-\n\n";
+zip-utils unzip %d.%d%d%s of %s (derived from Info-ZIP UnZip).\n\
+Not an official Info-ZIP release; see README.md for support details.\n\n";
 #else
 static ZCONST char Far UnzipUsageLine1[] =
     "\
-UnZip %d.%d%d%s of %s, by Info-ZIP.  UnReduce (c) 1989 by S. H. Smith.\n\
-Send bug reports using //www.info-zip.org/zip-bug.html; see README for details.\
-\n\n";
+zip-utils unzip %d.%d%d%s of %s (derived from Info-ZIP UnZip).\n\
+Not an official Info-ZIP release; see README.md for support details.\n\
+Original Info-ZIP notice: UnReduce (c) 1989 by S. H. Smith.\n\n";
 #endif /* ?COPYRIGHT_CLEAN */
 #define UnzipUsageLine1v UnzipUsageLine1
 
 static ZCONST char Far UnzipUsageLine2v[] =
     "\
-Latest sources and executables are at ftp://ftp.info-zip.org/pub/infozip/ ;\
-\nsee ftp://ftp.info-zip.org/pub/infozip/UnZip.html for other sites.\
-\n\n";
+Project documentation: README.md and the unzip(1) man page.\n\
+Original Info-ZIP sources and notices remain covered by LICENSE.\n\n";
 
 #ifdef VM_CMS
 static ZCONST char Far UnzipUsageLine2[] =
@@ -1598,11 +1598,10 @@ static void help_extended(__G) __GDEF {
     extent i; /* counter for help array */
 
     /* help array */
-    static ZCONST char* text[] = {"",
-                                  "Extended Help for UnZip",
+    static ZCONST char* text[] = {"zip-utils extended help for unzip (Info-ZIP derived; unofficial).",
+                                  "Based on Info-ZIP UnZip; see README.md and the man page for details.",
                                   "",
-                                  "See the UnZip Manual for more detailed help",
-                                  "",
+                                  "See the UnZip manual for more detailed help.",
                                   "",
                                   "UnZip lists and extracts files in zip archives.  The default action is to",
                                   "extract zipfile entries to the current directory, creating directories as",
