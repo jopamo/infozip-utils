@@ -65,6 +65,3 @@ jobs:
           --wrap='valgrind --leak-check=full --show-leak-kinds=all
           --errors-for-leak-kinds=all --error-exitcode=1'
           || (cat build-valgrind/meson-logs/testlog.txt && false)
-
-      - name: Run repository test script
-        run: ./test.sh

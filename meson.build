@@ -117,3 +117,16 @@ zip_exe = executable(
 
 install_data('man/unzip.1', install_dir: get_option('mandir') / 'man1')
 install_data('man/zip.1',   install_dir: get_option('mandir') / 'man1')
+
+test_script = find_program('test.sh', dirs: meson.source_root())
+
+test_env = environment()
+test_env.set('ZIP_BIN', zip_exe.full_path())
+test_env.set('UNZIP_BIN', unzip_exe.full_path())
+
+test(
+  'integration-test-script',
+  test_script,
+  env: test_env,
+  workdir: meson.build_root()
+)
