@@ -472,9 +472,7 @@ See \"unzip -hh\" or unzip.txt for more help.  Examples:\n\
 /*  main() / UzpMain() stub  */
 /*****************************/
 
-int MAIN(argc, argv) /* return PK-type error code (except under VMS) */
-int argc;
-char* argv[];
+int MAIN(int argc, char* argv[]) /* return PK-type error code (except under VMS) */
 {
     int r;
 
@@ -488,10 +486,7 @@ char* argv[];
 /*  Primary UnZip entry point  */
 /*******************************/
 
-int unzip(__G__ argc, argv)
-__GDEF
-int argc;
-char* argv[];
+int unzip(__GPRO__ int argc, char** argv)
 {
 #ifndef NO_ZIPINFO
     char* p;
@@ -965,11 +960,7 @@ cleanup_and_exit:
 /* Function setsignalhandler() */
 /*******************************/
 
-static int setsignalhandler(__G__ p_savedhandler_chain, signal_type, newhandler)
-__GDEF
-savsigs_info** p_savedhandler_chain;
-int signal_type;
-void (*newhandler)(int);
+static int setsignalhandler(__GPRO__ savsigs_info** p_savedhandler_chain, int signal_type, void (*newhandler)(int))
 {
     savsigs_info* savsig;
 
@@ -998,10 +989,7 @@ void (*newhandler)(int);
 /* Function uz_opts() */
 /**********************/
 
-int uz_opts(__G__ pargc, pargv)
-__GDEF
-int* pargc;
-char*** pargv;
+int uz_opts(__GPRO__ int* pargc, char*** pargv)
 {
     char **argv, *s;
     int argc, c, error = FALSE, negative = 0, showhelp = 0;
@@ -1520,8 +1508,7 @@ opts_done: /* yes, very ugly...but only used by UnZipSFX with -x xlist */
 #endif
 #endif
 
-int usage(__G__ error) /* return PK-type error code */
-    __GDEF int error;
+int usage(__GPRO__ int error) /* return PK-type error code */
 {
     Info(slide, error ? 1 : 0, ((char*)slide, LoadFarString(UnzipSFXBanner), UZ_MAJORVER, UZ_MINORVER, UZ_PATCHLEVEL, UZ_BETALEVEL, LoadFarStringSmall(VersionDate)));
     Info(slide, error ? 1 : 0, ((char*)slide, LoadFarString(UnzipSFXOpts), SFXOPT1, LOCAL));
@@ -1540,8 +1527,7 @@ int usage(__G__ error) /* return PK-type error code */
 #define QUOT ' '
 #define QUOTS ""
 
-int usage(__G__ error) /* return PK-type error code */
-    __GDEF int error;
+int usage(__GPRO__ int error) /* return PK-type error code */
 {
     int flag = (error ? 1 : 0);
 
