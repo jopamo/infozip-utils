@@ -34,24 +34,18 @@
 #define BEG_RANGE '['
 #define END_RANGE ']'
 
-/* Protos (keep OF/__WDL* compatibility with the tree) */
-static int recmatch OF((ZCONST uch * pattern, ZCONST uch* string, int ignore_case));
-static char* isshexp OF((ZCONST char* p));
-static int namecmp OF((ZCONST char* s1, ZCONST char* s2));
+/* Core recursive matcher (Unix semantics) */
+static int recmatch(ZCONST uch* p, ZCONST uch* s, int ic);
+static char* isshexp(ZCONST char* p);
+static int namecmp(ZCONST char* s1, ZCONST char* s2);
 
 /* Public shell: booleanize recmatch() */
-int match(string, pattern, ignore_case)
-ZCONST char *string, *pattern;
-int ignore_case;
+int match(ZCONST char* string, ZCONST char* pattern, int ignore_case)
 {
     return recmatch((ZCONST uch*)pattern, (ZCONST uch*)string, ignore_case) == 1;
 }
 
-/* Core recursive matcher (Unix semantics) */
-static int recmatch(p, s, ic)
-ZCONST uch* p; /* pattern */
-ZCONST uch* s; /* string  */
-int ic;        /* ignore case? */
+static int recmatch(ZCONST uch* p, ZCONST uch* s, int ic)
 {
     unsigned int c;
 
@@ -190,8 +184,7 @@ int ic;        /* ignore case? */
 }
 
 /* return pointer to first special shell char in p, else NULL */
-static char* isshexp(p)
-ZCONST char* p;
+static char* isshexp(ZCONST char* p)
 {
     for (; *p; INCSTR(p)) {
         if (*p == '\\' && *(p + 1)) {
@@ -205,8 +198,7 @@ ZCONST char* p;
 }
 
 /* case-insensitive strcmp using safe ToLower on unsigned char */
-static int namecmp(s1, s2)
-ZCONST char *s1, *s2;
+static int namecmp(ZCONST char* s1, ZCONST char* s2)
 {
     for (;;) {
         int d = (int)ToLower((uch)*s1) - (int)ToLower((uch)*s2);
@@ -218,8 +210,7 @@ ZCONST char *s1, *s2;
 }
 
 /* simple “does it contain any wildcards?” helper for Unix */
-int iswild(p)
-ZCONST char* p;
+int iswild(ZCONST char* p)
 {
     for (; *p; INCSTR(p)) {
         if (*p == '\\' && *(p + 1)) {
