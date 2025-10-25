@@ -303,8 +303,8 @@ int list_files(__G) /* return PK-type error code */
 /* Function fn_is_dir() */
 /************************/
 
-static int fn_is_dir(__G) /* returns TRUE if G.filename is directory */
-    __GDEF {
+static int fn_is_dir(__GPRO) /* returns TRUE if G.filename is directory */
+{
     extent fn_len = strlen(G.filename);
     char endc;
 
@@ -315,10 +315,7 @@ static int fn_is_dir(__G) /* returns TRUE if G.filename is directory */
 /* Function get_time_stamp() */
 /*****************************/
 
-int get_time_stamp(__G__ last_modtime, nmember) /* return PK-type error code */
-__GDEF
-time_t* last_modtime;
-ulg* nmember;
+int get_time_stamp(__GPRO__ time_t* last_modtime, ulg* nmember) /* return PK-type error code */
 {
     int do_this_file = FALSE, error, error_in_archive = PK_COOL;
     ulg j;
