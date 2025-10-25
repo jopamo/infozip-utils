@@ -525,8 +525,7 @@ void free_G_buffers(__G) /* releases all memory allocated in global vars */
 /* Function do_seekable() */
 /**************************/
 
-static int do_seekable(__G__ lastchance) /* return PK-type error code */
-    __GDEF int lastchance;
+static int do_seekable(__GPRO__ int lastchance) /* return PK-type error code */
 {
 #ifndef SFX
     /* static int no_ecrec = FALSE;  SKM: moved to globals.h */
@@ -834,14 +833,12 @@ static int do_seekable(__G__ lastchance) /* return PK-type error code */
    The file has to be opened previously
 */
 #ifdef USE_STRM_INPUT
-static zoff_t file_size(file)
-FILE* file;
+static zoff_t file_size(FILE* file)
 {
     int sts;
     size_t siz;
 #else  /* !USE_STRM_INPUT */
-static zoff_t file_size(fh)
-int fh;
+static zoff_t file_size(int fh)
 {
     int siz;
 #endif /* ?USE_STRM_INPUT */
@@ -919,12 +916,8 @@ int fh;
 /* Function rec_find() */
 /***********************/
 
-static int rec_find(__G__ searchlen, signature, rec_size)
+static int rec_find(__GPRO__ zoff_t searchlen, char* signature, int rec_size)
 /* return 0 when rec found, 1 when not found, 2 in case of read error */
-__GDEF
-zoff_t searchlen;
-char* signature;
-int rec_size;
 {
     int i, numblks, found = FALSE;
     zoff_t tail_len;
@@ -1219,8 +1212,7 @@ static int find_ecrec64(__G__) {
 /* Function find_ecrec() */
 /*************************/
 
-static int find_ecrec(__G__ searchlen) /* return PK-class error */
-    __GDEF zoff_t searchlen;
+static int find_ecrec(__GPRO__ zoff_t searchlen) /* return PK-class error */
 {
     int found = FALSE;
     int error_in_archive;
@@ -1584,10 +1576,7 @@ int process_local_file_hdr(__G) /* return PK-type error code */
 /* Function getZip64Data() */
 /*******************************/
 
-int getZip64Data(__G__ ef_buf, ef_len)
-__GDEF
-ZCONST uch* ef_buf; /* buffer containing extra field */
-unsigned ef_len;    /* total length of extra field */
+int getZip64Data(__GPRO__ ZCONST uch* ef_buf, unsigned ef_len)
 {
     unsigned eb_id;
     unsigned eb_len;
@@ -2353,13 +2342,7 @@ ulg* p_uidgid;      /* return storage: uid or gid value */
 /* Function ef_scan_for_izux() */
 /*******************************/
 
-unsigned ef_scan_for_izux(ef_buf, ef_len, ef_is_c, dos_mdatetime, z_utim, z_uidgid)
-ZCONST uch* ef_buf; /* buffer containing extra field */
-unsigned ef_len;    /* total length of extra field */
-int ef_is_c;        /* flag indicating "is central extra field" */
-ulg dos_mdatetime;  /* last_mod_file_date_time in DOS format */
-iztimes* z_utim;    /* return storage: atime, mtime, ctime */
-ulg* z_uidgid;      /* return storage: uid and gid */
+unsigned ef_scan_for_izux(ZCONST uch* ef_buf, unsigned ef_len, int ef_is_c, ulg dos_mdatetime, iztimes* z_utim, ulg* z_uidgid)
 {
     unsigned flags = 0;
     unsigned eb_id;
