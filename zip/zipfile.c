@@ -2060,7 +2060,7 @@ int readlocal(localz, z)
 
 #ifndef UTIL
   ulg start_disk = 0;
-  char *split_path;
+  char *split_path = NULL;
 
   start_disk = z->dsk;
 
@@ -2084,6 +2084,10 @@ int readlocal(localz, z)
 
       /* Ask for directory with split.  Updates in_path */
       if (ask_for_split_read_path(start_disk) != ZE_OK) {
+#ifndef UTIL
+        if (split_path != NULL)
+          free(split_path);
+#endif
         return ZE_ABORT;
       }
       free(split_path);
@@ -2098,12 +2102,20 @@ int readlocal(localz, z)
     fclose(in_file);
     in_file = NULL;
     zipwarn("reading archive fseek: ", strerror(errno));
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
     return ZE_READ;
   }
   if (!at_signature(in_file, "PK\03\04")) {
     fclose(in_file);
     in_file = NULL;
     zipwarn("Did not find entry for ", z->iname);
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
     return ZE_FORM;
   }
 
@@ -2112,6 +2124,10 @@ int readlocal(localz, z)
     int f = ferror(in_file);
     zipwarn("reading local entry: ", strerror(errno));
     fclose(in_file);
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
     return f ? ZE_READ : ZE_EOF;
   }
 
@@ -2135,6 +2151,10 @@ int readlocal(localz, z)
   if ((locz = (struct zlist far *)farmalloc(sizeof(struct zlist))) == NULL) {
     zipwarn("reading entry", "");
     fclose(in_file);
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
     return ZE_MEM;
   }
 
@@ -2157,18 +2177,52 @@ int readlocal(localz, z)
 
   /* Read file name, extra field and comment field */
   if ((locz->iname = malloc(locz->nam+1)) ==  NULL ||
-      (locz->ext && (locz->extra = malloc(locz->ext)) == NULL))
+      (locz->ext && (locz->extra = malloc(locz->ext)) == NULL)) {
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
+    if (locz->iname != NULL) {
+      free(locz->iname);
+      locz->iname = NULL;
+    }
+    if (locz->extra != NULL) {
+      free(locz->extra);
+      locz->extra = NULL;
+    }
+    farfree((zvoid far *)locz);
     return ZE_MEM;
+  }
   if (fread(locz->iname, locz->nam, 1, in_file) != 1 ||
-      (locz->ext && fread(locz->extra, locz->ext, 1, in_file) != 1))
+      (locz->ext && fread(locz->extra, locz->ext, 1, in_file) != 1)) {
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
+    if (locz->extra != NULL) {
+      free(locz->extra);
+      locz->extra = NULL;
+    }
+    free(locz->iname);
+    farfree((zvoid far *)locz);
     return ferror(in_file) ? ZE_READ : ZE_EOF;
+  }
   locz->iname[z->nam] = '\0';                  /* terminate name */
 #ifdef UNICODE_SUPPORT
   if (unicode_mismatch != 3)
     read_Unicode_Path_local_entry(locz);
 #endif
-  if ((locz->name = malloc(locz->nam+1)) ==  NULL)
+  if ((locz->name = malloc(locz->nam+1)) ==  NULL) {
+#ifndef UTIL
+    if (split_path != NULL)
+      free(split_path);
+#endif
+    free(locz->iname);
+    if (locz->extra != NULL)
+      free(locz->extra);
+    farfree((zvoid far *)locz);
     return ZE_MEM;
+  }
   strcpy(locz->name, locz->iname);
 
 #ifdef ZIP64_SUPPORT
@@ -2193,6 +2247,10 @@ int readlocal(localz, z)
 
   *localz = locz;
 
+#ifndef UTIL
+  if (split_path != NULL)
+    free(split_path);
+#endif
   return ZE_OK;
 } /* end function readlocal() */
 
@@ -3069,7 +3127,14 @@ local int scanzipf_fixnew()
 # endif
 
   char    scbuf[FIXSCAN_BUFSIZE];  /* buffer big enough for headers */
-  char   *split_path;
+  char   *split_path = NULL;
+#define RETURN_SC(code) do { \
+    if (split_path != NULL) { \
+      free(split_path); \
+      split_path = NULL; \
+    } \
+    return (code); \
+  } while (0)
   ulg     eocdr_disk;
   uzoff_t eocdr_offset;
 
@@ -3904,7 +3969,7 @@ local int scanzipf_regnew()
   /* open the zipfile */
   if ((in_file = zfopen(in_path, FOPR)) == NULL) {
     zipwarn("could not open input archive", in_path);
-    return ZE_OPEN;
+    RETURN_SC(ZE_OPEN);
   }
 
 #ifndef ZIP64_SUPPORT
@@ -3915,7 +3980,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     zipwarn("input file requires Zip64 support: ", in_path);
-    return ZE_ZIP64;
+    RETURN_SC(ZE_ZIP64);
   }
 #endif /* ndef ZIP64_SUPPORT */
 
@@ -3937,7 +4002,7 @@ local int scanzipf_regnew()
       fclose(in_file);
       in_file = NULL;
       zipwarn("unable to seek in input file ", in_path);
-      return ZE_READ;
+      RETURN_SC(ZE_READ);
     }
   }
 
@@ -3956,7 +4021,7 @@ local int scanzipf_regnew()
       zipwarn("remember to use binary mode when you transferred it?)", "");
       zipwarn("(if you are trying to read a damaged archive try -F)", "");
     }
-    return ZE_FORM;
+    RETURN_SC(ZE_FORM);
   }
 
   /* at start of data after EOCDR signature */
@@ -3996,7 +4061,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     zipwarn("unable to seek in input file ", in_path);
-    return ZE_READ;
+    RETURN_SC(ZE_READ);
   }
 
   /* read the EOCDR */
@@ -4006,7 +4071,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     zipwarn("End Of Central Directory record truncated", "");
-    return ZE_READ;
+    RETURN_SC(ZE_READ);
   }
 
   /* the first field should be number of this (the last) disk */
@@ -4030,12 +4095,12 @@ local int scanzipf_regnew()
   if (zcomlen)
   {
     if ((zcomment = malloc(zcomlen + 1)) == NULL)
-      return ZE_MEM;
+      RETURN_SC(ZE_MEM);
     if (fread(zcomment, zcomlen, 1, in_file) != 1)
     {
       free((zvoid *)zcomment);
       zcomment = NULL;
-      return ferror(in_file) ? ZE_READ : ZE_EOF;
+      RETURN_SC(ferror(in_file) ? ZE_READ : ZE_EOF);
     }
     zcomment[zcomlen] = '\0';
 #ifdef EBCDIC
@@ -4049,7 +4114,7 @@ local int scanzipf_regnew()
 
     fclose(in_file);
     in_file = NULL;
-    return ZE_OK;
+    RETURN_SC(ZE_OK);
   }
 
   /* if total disks is other than 1 then multi-disk archive */
@@ -4060,7 +4125,7 @@ local int scanzipf_regnew()
 
     if (adjust) {
       zipwarn("Adjusting split archives not yet supported", "");
-      return ZE_FORM;
+      RETURN_SC(ZE_FORM);
     }
 
     in_path_ext = zipfile + plen - 4;
@@ -4073,7 +4138,7 @@ local int scanzipf_regnew()
       zipwarn("archive name must end in .zip for splits", "");
       fclose(in_file);
       in_file = NULL;
-      return ZE_PARMS;
+      RETURN_SC(ZE_PARMS);
     }
   }
 
@@ -4083,7 +4148,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     zipwarn("cannot update a split archive (use --out option)", "");
-    return ZE_PARMS;
+    RETURN_SC(ZE_PARMS);
   }
 
   /* if fixing archive, input and output must be different archives */
@@ -4091,7 +4156,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     zipwarn("must use --out when fixing an archive", "");
-    return ZE_PARMS;
+    RETURN_SC(ZE_PARMS);
   }
 
 
@@ -4120,7 +4185,7 @@ local int scanzipf_regnew()
         } else {
           zipwarn("reading archive fseek: ", strerror(errno));
         }
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
       if (find_signature(in_file, "PK\01\02")) {
         /* Should now be after first central directory header signature in archive */
@@ -4128,7 +4193,7 @@ local int scanzipf_regnew()
       } else {
         zipwarn("central dir not where expected - could not adjust offsets", "");
         zipwarn("(try -FF)", "");
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
     } else {
 
@@ -4159,7 +4224,7 @@ local int scanzipf_regnew()
         } else {
           zipwarn("reading archive fseek: ", strerror(errno));
         }
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
       if (at_signature(in_file, "PK\06\07"))
 #ifndef ZIP64_SUPPORT
@@ -4169,7 +4234,7 @@ local int scanzipf_regnew()
         zipwarn("found Zip64 signature - this may be a Zip64 archive", "");
         zipwarn("Need PKZIP 4.5 or later compatible zip", "");
         zipwarn("Set ZIP64_SUPPORT in Zip 3", "");
-        return ZE_ZIP64;
+        RETURN_SC(ZE_ZIP64);
       }
 #else /* ZIP64_SUPPORT */
       {
@@ -4180,14 +4245,14 @@ local int scanzipf_regnew()
           fclose(in_file);
           in_file = NULL;
           zipwarn("reading archive: ", strerror(errno));
-          return ZE_READ;
+          RETURN_SC(ZE_READ);
         }
         /* now should be back at the EOCD signature */
         if (!at_signature(in_file, "PK\05\06")) {
           fclose(in_file);
           in_file = NULL;
           zipwarn("unable to read EOCD after seek: ", in_path);
-          return ZE_READ;
+          RETURN_SC(ZE_READ);
         }
 
         /* read disk and offset to Zip64 EOCDR and total disks */
@@ -4199,7 +4264,7 @@ local int scanzipf_regnew()
         if (total_disks != 1) {
           zipwarn("Adjusting split archives not supported:  ", in_path);
           zipwarn("(try -FF)", "");
-          return ZE_FORM;
+          RETURN_SC(ZE_FORM);
         }
 
         /* go to the Zip64 EOCDR */
@@ -4207,7 +4272,7 @@ local int scanzipf_regnew()
           fclose(in_file);
           in_file = NULL;
           zipwarn("reading archive fseek: ", strerror(errno));
-          return ZE_FORM;
+          RETURN_SC(ZE_FORM);
         }
         /* Should be at Zip64 EOCDR signature */
         if (at_signature(in_file, "PK\06\06")) {
@@ -4226,7 +4291,7 @@ local int scanzipf_regnew()
             } else {
               zipwarn("reading archive fseek: ", strerror(errno));
             }
-            return ZE_FORM;
+            RETURN_SC(ZE_FORM);
           }
           if (find_next_signature(in_file) && is_signature(sigbuf, "PK\06\06")) {
             /* Should now be after Zip64 EOCDR signature in archive */
@@ -4234,7 +4299,7 @@ local int scanzipf_regnew()
           } else {
             zipwarn("Could not determine offset of entries", "");
             zipwarn("(try -FF)", "");
-            return ZE_FORM;
+            RETURN_SC(ZE_FORM);
           }
         }
       }
@@ -4277,7 +4342,7 @@ local int scanzipf_regnew()
     } else {
       zipwarn("reading archive fseek: ", strerror(errno));
     }
-    return ZE_FORM;
+    RETURN_SC(ZE_FORM);
   }
   if (at_signature(in_file, "PK\06\07"))
 #ifndef ZIP64_SUPPORT
@@ -4287,7 +4352,7 @@ local int scanzipf_regnew()
     zipwarn("found Zip64 signature - this may be a Zip64 archive", "");
     zipwarn("Need PKZIP 4.5 or later compatible zip", "");
     zipwarn("Set ZIP64_SUPPORT in Zip 3", "");
-    return ZE_ZIP64;
+    RETURN_SC(ZE_ZIP64);
   }
 #else /* ZIP64_SUPPORT */
   {
@@ -4297,14 +4362,14 @@ local int scanzipf_regnew()
       fclose(in_file);
       in_file = NULL;
       zipwarn("reading archive: ", strerror(errno));
-      return ZE_READ;
+      RETURN_SC(ZE_READ);
     }
     /* now should be back at the EOCD signature */
     if (!at_signature(in_file, "PK\05\06")) {
       fclose(in_file);
       in_file = NULL;
       zipwarn("unable to read EOCD after seek: ", in_path);
-      return ZE_READ;
+      RETURN_SC(ZE_READ);
     }
 
     /* read disk and offset to Zip64 EOCDR and total disks */
@@ -4334,12 +4399,14 @@ local int scanzipf_regnew()
 
         /* Ask where this split is.  This call also updates global in_path. */
         if (ask_for_split_read_path(z64eocdr_disk) != ZE_OK) {
-          return ZE_ABORT;
+          RETURN_SC(ZE_ABORT);
         }
         free(split_path);
+    split_path = NULL;
         split_path = get_in_split_path(in_path, z64eocdr_disk);
       }
       free(split_path);
+    split_path = NULL;
     }
 
     current_in_disk = z64eocdr_disk;
@@ -4349,7 +4416,7 @@ local int scanzipf_regnew()
       fclose(in_file);
       in_file = NULL;
       zipwarn("reading archive fseek: ", strerror(errno));
-      return ZE_FORM;
+      RETURN_SC(ZE_FORM);
     }
     /* Should be at Zip64 EOCDR signature */
     if (!at_signature(in_file, "PK\06\06")) {
@@ -4364,7 +4431,7 @@ local int scanzipf_regnew()
         } else {
           zipwarn("reading archive fseek: ", strerror(errno));
         }
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
       if (find_next_signature(in_file) && is_signature(sigbuf, "PK\06\06")) {
         /* Should now be after Zip64 EOCDR signature in archive */
@@ -4380,7 +4447,7 @@ local int scanzipf_regnew()
         } else {
           zipwarn("Zip64 End Of Central Directory Record not found:  ", in_path);
         }
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
     }
 
@@ -4423,7 +4490,7 @@ local int scanzipf_regnew()
       }
       fclose(in_file);
       in_file = NULL;
-      return ZE_FORM;
+      RETURN_SC(ZE_FORM);
     }
     z64eocdr_size = LLG(scbuf);
     version_made = SH(scbuf + 8);
@@ -4447,7 +4514,7 @@ local int scanzipf_regnew()
         zipwarn("Try -F to attempt to read anyway", "");
         fclose(in_file);
         in_file = NULL;
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
       }
     }
   }
@@ -4481,7 +4548,7 @@ local int scanzipf_regnew()
       /* last disk is archive.zip */
       if ((split_path = malloc(strlen(in_path) + 1)) == NULL) {
         zipwarn("reading archive: ", in_path);
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       }
       strcpy(split_path, in_path);
     } else {
@@ -4500,7 +4567,7 @@ local int scanzipf_regnew()
         result = ask_for_split_read_path(current_in_disk);
         if (result == ZE_ABORT) {
           zipwarn("could not find split: ", split_path);
-          return ZE_ABORT;
+          RETURN_SC(ZE_ABORT);
         } else if (result == ZE_FORM) {
           /* user asked to skip this disk */
           sprintf(errbuf, "skipping disk %lu ...\n", current_in_disk);
@@ -4513,7 +4580,7 @@ local int scanzipf_regnew()
           /* last disk is archive.zip */
           if ((split_path = malloc(strlen(in_path) + 1)) == NULL) {
             zipwarn("reading archive: ", in_path);
-            return ZE_MEM;
+            RETURN_SC(ZE_MEM);
           }
           strcpy(split_path, in_path);
         } else {
@@ -4540,7 +4607,7 @@ local int scanzipf_regnew()
           fclose(in_file);
           in_file = NULL;
           zipwarn("unable to seek in input file ", split_path);
-          return ZE_READ;
+          RETURN_SC(ZE_READ);
         }
         first_CD = 0;
         x = &zfiles;                        /* first link */
@@ -4595,7 +4662,7 @@ local int scanzipf_regnew()
           zipwarn("(try -F to attempt recovery)", "");
           fclose(in_file);
           in_file = NULL;
-          return ZE_FORM;
+          RETURN_SC(ZE_FORM);
         }
       }
 
@@ -4636,13 +4703,13 @@ local int scanzipf_regnew()
           zipwarn("skipping this entry...", "");
           continue;
         } else {
-          return ferror(in_file) ? ZE_READ : ZE_EOF;
+          RETURN_SC(ferror(in_file) ? ZE_READ : ZE_EOF);
         }
       }
 
       if ((z = (struct zlist far *)farmalloc(sizeof(struct zlist))) == NULL) {
         zipwarn("reading central directory", "");
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       }
 
       z->vem = SH(CENVEM + scbuf);
@@ -4679,13 +4746,13 @@ local int scanzipf_regnew()
           continue;
         }
 #ifndef DEBUG
-        return ZE_FORM;
+        RETURN_SC(ZE_FORM);
 #endif
       }
       if ((z->iname = malloc(z->nam+1)) ==  NULL ||
           (z->cext && (z->cextra = malloc(z->cext)) == NULL) ||
           (z->com && (z->comment = malloc(z->com)) == NULL))
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       if (fread(z->iname, z->nam, 1, in_file) != 1 ||
           (z->cext && fread(z->cextra, z->cext, 1, in_file) != 1) ||
           (z->com && fread(z->comment, z->com, 1, in_file) != 1)) {
@@ -4694,7 +4761,7 @@ local int scanzipf_regnew()
           zipwarn("skipping this entry...", "");
           continue;
         }
-        return ferror(in_file) ? ZE_READ : ZE_EOF;
+        RETURN_SC(ferror(in_file) ? ZE_READ : ZE_EOF);
       }
       z->iname[z->nam] = '\0';                  /* terminate name */
 #ifdef UNICODE_SUPPORT
@@ -4704,7 +4771,7 @@ local int scanzipf_regnew()
           /* path is UTF-8 */
           if ((z->uname = malloc(strlen(z->iname) + 1)) == NULL) {
             zipwarn("could not allocate memory: scanzipf_reg", "");
-            return ZE_MEM;
+            RETURN_SC(ZE_MEM);
           }
           strcpy(z->uname, z->iname);
           /* Create a local name.  If UTF-8 system this should also be UTF-8 */
@@ -4758,10 +4825,10 @@ local int scanzipf_regnew()
 #if defined(UNICODE_SUPPORT) && !defined(UTIL)
       z->zname = in2ex(z->iname);       /* convert to external name */
       if (z->zname == NULL)
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       if ((z->name = malloc(strlen(z->zname) + 1)) == NULL) {
         zipwarn("could not allocate memory: scanzipf_reg", "");
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       }
       strcpy(z->name, z->zname);
       z->oname = local_to_display_string(z->iname);
@@ -4783,18 +4850,26 @@ local int scanzipf_regnew()
             /* not able to convert name, so use iname */
             if ((name = malloc(strlen(z->iname) + 1)) == NULL) {
               zipwarn("could not allocate memory: scanzipf_reg", "");
-              return ZE_MEM;
+              RETURN_SC(ZE_MEM);
             }
             strcpy(name, z->iname);
           }
 
 # ifdef EBCDIC
           /* z->zname is used for printing and must be coded in native charset */
+          if ((z->zuname = malloc(strlen(name) + 1)) == NULL) {
+            zipwarn("could not allocate memory: scanzipf_reg", "");
+            free(name);
+            RETURN_SC(ZE_MEM);
+          }
           strtoebc(z->zuname, name);
+          free(name);
+          name = NULL;
 # else /* !EBCDIC */
           if ((z->zuname = malloc(strlen(name) + 1)) == NULL) {
             zipwarn("could not allocate memory: scanzipf_reg", "");
-            return ZE_MEM;
+            free(name);
+            RETURN_SC(ZE_MEM);
           }
           strcpy(z->zuname, name);
           /* For output to terminal */
@@ -4807,17 +4882,21 @@ local int scanzipf_regnew()
             else {
               if ((z->ouname = malloc(strlen(name) + 1)) == NULL) {
                 zipwarn("could not allocate memory: scanzipf_reg", "");
-                return ZE_MEM;
+                free(name);
+                RETURN_SC(ZE_MEM);
               }
               strcpy(z->ouname, name);
             }
           } else {
             if ((z->ouname = malloc(strlen(name) + 1)) == NULL) {
               zipwarn("could not allocate memory: scanzipf_reg", "");
-              return ZE_MEM;
+              free(name);
+              RETURN_SC(ZE_MEM);
             }
             strcpy(z->ouname, name);
           }
+          free(name);
+          name = NULL;
 # endif /* ?EBCDIC */
         } else {
           /* no uname */
@@ -4831,7 +4910,7 @@ local int scanzipf_regnew()
 /* z->zname is used for printing and must be coded in native charset */
       if ((z->zname = malloc(z->nam+1)) ==  NULL) {
         zipwarn("could not allocate memory: scanzipf_reg", "");
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       }
       strtoebc(z->zname, z->iname);
 #  else
@@ -4840,12 +4919,12 @@ local int scanzipf_regnew()
 # else /* !UTIL */
       z->zname = in2ex(z->iname);       /* convert to external name */
       if (z->zname == NULL)
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       z->name = z->zname;
 # endif /* ?UTIL */
       if ((z->oname = malloc(strlen(z->zname) + 1)) == NULL) {
         zipwarn("could not allocate memory: scanzipf_reg", "");
-        return ZE_MEM;
+        RETURN_SC(ZE_MEM);
       }
       strcpy(z->oname, z->zname);
 #endif /* ?(UNICODE_SUPPORT && !UTIL) */
@@ -4866,6 +4945,7 @@ local int scanzipf_regnew()
     fclose(in_file);
     in_file = NULL;
     free(split_path);
+    split_path = NULL;
 
     if (!is_signature(sigbuf, "PK\01\02")) {
       /* if the last signature is not a CD signature and we get here then
@@ -4880,11 +4960,13 @@ local int scanzipf_regnew()
       zip_fzofft(cd_total_entries, NULL, "u"),
       zip_fzofft(zcount, NULL, "u"));
     zipwarn(errbuf, "");
-    return ZE_FORM;
+    RETURN_SC(ZE_FORM);
   }
 
-  return ZE_OK;
+  RETURN_SC(ZE_OK);
 
+
+#undef RETURN_SC
 } /* end of function scanzipf_regnew() */
 
 
