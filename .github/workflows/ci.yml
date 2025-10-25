@@ -17,18 +17,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          # toolchain + sanitizers stack
           sudo apt-get install -y \
-            clang \
-            meson \
-            ninja-build \
-            valgrind \
-            pkg-config \
-            cmake \
-            # compression libs for feature autodetect
-            zlib1g-dev \
-            libbz2-dev \
-            liblzma-dev
+            clang meson ninja-build valgrind pkg-config cmake \
+            zlib1g-dev libbz2-dev liblzma-dev
 
       - name: Configure build with Meson (Clang + sanitizers)
         run: |
