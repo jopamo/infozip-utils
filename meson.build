@@ -9,12 +9,27 @@ project(
   ]
 )
 
-bz2_dep = dependency('bzip2', required: true)
+cc = meson.get_compiler('c')
+
+# try to find bzip2 in a portable way
+bz2_dep = dependency('bzip2', required: false)
+
+if not bz2_dep.found()
+  # pkg-config / cmake didn't work, try bare -lbz2
+  bz2_lib = cc.find_library('bz2', required: false)
+  if bz2_lib.found()
+    bz2_dep = bz2_lib
+  endif
+endif
+
+if not bz2_dep.found()
+  error('fatal: libbz2 (bzip2) dev headers/libs not found. Install libbz2-dev / bzip2-devel')
+endif
 
 # common flags for both targets
 common_defs = [
   '-DUNIX',
-  '-DUSE_BZIP2',
+  '-DUSE_BZIP2',          # we only define this because we just verified bz2_dep exists
   '-D_XOPEN_SOURCE=700',
   '-D_DEFAULT_SOURCE'
 ]
@@ -39,9 +54,9 @@ zip_defs = common_defs + [
   '-DUNICODE_SUPPORT'
 ]
 
-inc_unzip = include_directories('unzip')
-inc_zip   = include_directories('zip')
-inc_common = include_directories('common')
+inc_unzip   = include_directories('unzip')
+inc_zip     = include_directories('zip')
+inc_common  = include_directories('common')
 
 unzip_sources = files(
   'unzip/unzip.c',

@@ -16,10 +16,25 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang meson ninja-build valgrind pkg-config cmake \
-            zlib1g-dev bzip2 libbz2-dev liblzma-dev
+          set -eux
+
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y \
+              clang meson ninja-build valgrind pkg-config cmake \
+              zlib1g-dev libbz2-dev liblzma-dev
+          elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y \
+              clang meson ninja-build valgrind pkg-config cmake \
+              zlib-devel bzip2-devel xz-devel
+          elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y \
+              clang meson ninja-build valgrind pkg-config cmake \
+              zlib-devel bzip2-devel xz-devel
+          else
+            echo "error: unknown distro, please install zlib/bzip2/xz dev headers manually" >&2
+            exit 1
+          fi
 
       - name: Configure build with Meson (Clang + sanitizers)
         run: |
