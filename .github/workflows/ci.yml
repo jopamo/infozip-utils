@@ -17,12 +17,21 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          # Install Clang, Meson, Ninja, and Valgrind for leak checking
-          sudo apt-get install -y clang meson ninja-build valgrind
+          # toolchain + sanitizers stack
+          sudo apt-get install -y \
+            clang \
+            meson \
+            ninja-build \
+            valgrind \
+            pkg-config \
+            cmake \
+            # compression libs for feature autodetect
+            zlib1g-dev \
+            libbz2-dev \
+            liblzma-dev
 
       - name: Configure build with Meson (Clang + sanitizers)
         run: |
-          # Override compiler and enable ASan + UBSan for better coverage
           CC=clang meson setup builddir \
             --buildtype=debug \
             -Db_sanitize=address,undefined \
