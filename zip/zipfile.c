@@ -3932,7 +3932,7 @@ local int scanzipf_regnew()
 #endif
 
   char    scbuf[SCAN_BUFSIZE];  /* buffer just enough for all header types */
-  char   *split_path;
+  char   *split_path = NULL;
   ulg     eocdr_disk;
   uzoff_t eocdr_offset;
 # ifdef ZIP64_SUPPORT

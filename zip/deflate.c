@@ -39,6 +39,7 @@
 typedef unsigned Pos;
 typedef unsigned IPos;
 
+/* global sliding window, hash chains, etc */
 static uch  window[2L * WSIZE];
 static Pos  prev[WSIZE];
 static Pos  head[HASH_SIZE];
@@ -78,6 +79,7 @@ typedef struct config {
    ush max_chain;
 } config;
 
+/* tuning table by compression level */
 static const config configuration_table[10] = {
  /* good  lazy  nice  chain */
  {  0,     0,    0,     0 },
@@ -107,6 +109,19 @@ local void   check_match   OF((IPos start, IPos match, int length));
    (UPDATE_HASH(ins_h, window[(s) + (MIN_MATCH - 1)]), \
     prev[(s) & WMASK] = match_head = head[ins_h],     \
     head[ins_h] = (s))
+
+/* safe unaligned 16-bit load from arbitrary uch* p */
+static inline ush load16(const uch *p)
+/* does not assume alignment, preserves little/big endian correctness */
+{
+    ush v
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        = (ush)((ush)p[0] | ((ush)p[1] << 8));
+#else
+        = (ush)((ush)p[1] | ((ush)p[0] << 8));
+#endif
+    return v;
+}
 
 void lm_init (pack_level, flags)
     int pack_level;
@@ -178,15 +193,12 @@ int HOT longest_match(cur_match)
 #  error Code too clever
 #endif
 
-#ifdef UNALIGNED_OK
+    /* strend points to last byte we'll compare against */
     register uch *strend = window + strstart + MAX_MATCH - 1;
-    register ush scan_start = *(ush *)scan;
-    register ush scan_end   = *(ush *)(scan + best_len - 1);
-#else
-    register uch *strend = window + strstart + MAX_MATCH;
-    register uch scan_end1  = scan[best_len - 1];
-    register uch scan_end   = scan[best_len];
-#endif
+
+    /* prefetch the first 2 bytes and the current best tail */
+    register ush scan_start = load16(scan);                          /* was *(ush *)scan */
+    register ush scan_end   = load16(scan + best_len - 1);           /* was *(ush *)(scan + best_len - 1) */
 
     if (prev_length >= good_match) {
         chain_length >>= 2;
@@ -200,52 +212,37 @@ int HOT longest_match(cur_match)
 
         PREFETCH_R(match + best_len + 8);
 
-#if (defined(UNALIGNED_OK) && MAX_MATCH == 258)
-        if (*(ush *)(match + best_len - 1) != scan_end ||
-            *(ush *)match != scan_start) continue;
+        /* quick rejection: tail and head check */
+        if (load16(match + best_len - 1) != scan_end ||  /* was *(ush *)(match + best_len - 1) */
+            load16(match) != scan_start)                 /* was *(ush *)match */
+            continue;
 
+        /* main compare loop, 2 bytes at a time, unrolled */
         scan++, match++;
         do {
-        } while (*(ush *)(scan += 2) == *(ush *)(match += 2) &&
-                 *(ush *)(scan += 2) == *(ush *)(match += 2) &&
-                 *(ush *)(scan += 2) == *(ush *)(match += 2) &&
-                 *(ush *)(scan += 2) == *(ush *)(match += 2) &&
+        } while (load16(scan += 2) == load16(match += 2) &&
+                 load16(scan += 2) == load16(match += 2) &&
+                 load16(scan += 2) == load16(match += 2) &&
+                 load16(scan += 2) == load16(match += 2) &&
                  scan < strend);
+
         Assert(scan <= window + (unsigned)(window_size - 1), "wild scan");
+
+        /* final byte check if we broke because scan >= strend-? */
         if (*scan == *match) scan++;
+
         len = (MAX_MATCH - 1) - (int)(strend - scan);
+
+        /* rewind scan back to canonical base for next iter */
         scan = strend - (MAX_MATCH - 1);
-#else
-        if (match[best_len]   != scan_end  ||
-            match[best_len-1] != scan_end1 ||
-            *match            != *scan     ||
-            *++match          != scan[1])      continue;
-
-        scan += 2; match++;
-
-        do {
-        } while (*++scan == *++match && *++scan == *++match &&
-                 *++scan == *++match && *++scan == *++match &&
-                 *++scan == *++match && *++scan == *++match &&
-                 *++scan == *++match && *++scan == *++match &&
-                 scan < strend);
-
-        Assert(scan <= window + (unsigned)(window_size - 1), "wild scan");
-
-        len = MAX_MATCH - (int)(strend - scan);
-        scan = strend - MAX_MATCH;
-#endif
 
         if (len > best_len) {
             match_start = cur_match;
             best_len = len;
             if (len >= nice_match) break;
-#ifdef UNALIGNED_OK
-            scan_end = *(ush *)(scan + best_len - 1);
-#else
-            scan_end1  = scan[best_len - 1];
-            scan_end   = scan[best_len];
-#endif
+
+            /* update scan_end with new best_len for faster reject */
+            scan_end = load16(scan + best_len - 1);  /* was *(ush *)(scan + best_len - 1) */
         }
     } while ((cur_match = prev[cur_match & WMASK]) > limit
              && --chain_length != 0);
@@ -370,7 +367,7 @@ local uzoff_t HOT deflate_fast()
                 ins_h = window[strstart];
                 UPDATE_HASH(ins_h, window[strstart + 1]);
 #if MIN_MATCH != 3
-                Call UPDATE_HASH() MIN_MATCH-3 more times
+                /* Call UPDATE_HASH() MIN_MATCH-3 more times if MIN_MATCH changes */
 #endif
             }
         } else {
