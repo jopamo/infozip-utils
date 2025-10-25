@@ -122,6 +122,8 @@ struct flist far *f;    /* entry to delete */
     free((zvoid *)(f->zname));
   if (f->iname != NULL)
     free((zvoid *)(f->iname));
+  if (f->oname != NULL)
+    free((zvoid *)(f->oname));
 #ifdef UNICODE_SUPPORT
   if (f->uname)
     free((zvoid *)f->uname);
@@ -486,12 +488,16 @@ int newname(name, isdir, casesensitive)
 /* Add (or exclude) the name of an existing disk file.  Return an error
    code in the ZE_ class. */
 {
-  char *iname, *zname;  /* internal name, external version of iname */
-  char *undosm;         /* zname version with "-j" and "-k" options disabled */
-  char *oname;          /* iname converted for display */
-  struct flist far *f;  /* where in found, or new found entry */
-  struct zlist far *z;  /* where in zfiles (if found) */
+  char *iname = NULL;     /* internal name */
+  char *zname = NULL;     /* external version of iname */
+  char *undosm = NULL;    /* zname variant with "-j"/"-k" disabled */
+  char *oname = NULL;     /* display version of iname */
+  char *undosm_tmp = NULL;
+  int undosm_owned = 0;   /* true when undosm needs explicit free */
+  struct flist far *f;    /* where in found, or new found entry */
+  struct zlist far *z;    /* where in zfiles (if found) */
   int dosflag;
+  int ret = ZE_OK;
 
   /* Scanning files ...
    *
@@ -524,8 +530,10 @@ int newname(name, isdir, casesensitive)
 
   /* Search for name in zip file.  If there, mark it, else add to
      list of new names to do (or remove from that list). */
-  if ((iname = ex2in(name, isdir, &dosflag)) == NULL)
-    return ZE_MEM;
+  if ((iname = ex2in(name, isdir, &dosflag)) == NULL) {
+    ret = ZE_MEM;
+    goto cleanup;
+  }
 
   /* Discard directory names with zip -rj */
   if (*iname == '\0') {
@@ -538,34 +546,50 @@ int newname(name, isdir, casesensitive)
 
     if (pathput && !recurse) error("empty name without -j or -r");
 
-    free((zvoid *)iname);
-    return ZE_OK;
+    ret = ZE_OK;
+    goto cleanup;
   }
-  undosm = NULL;
   if (dosflag || !pathput) {
     int save_dosify = dosify, save_pathput = pathput;
     dosify = 0;
     pathput = 1;
-    /* zname is temporarly mis-used as "undosmode" iname pointer */
-    if ((zname = ex2in(name, isdir, NULL)) != NULL) {
-      undosm = in2ex(zname);
-      free(zname);
+    if ((undosm_tmp = ex2in(name, isdir, NULL)) != NULL) {
+      undosm = in2ex(undosm_tmp);
+      if (undosm == NULL) {
+        free(undosm_tmp);
+        dosify = save_dosify;
+        pathput = save_pathput;
+        ret = ZE_MEM;
+        goto cleanup;
+      }
+      undosm_owned = 1;
+      free(undosm_tmp);
+      undosm_tmp = NULL;
     }
     dosify = save_dosify;
     pathput = save_pathput;
   }
-  if ((zname = in2ex(iname)) == NULL)
-    return ZE_MEM;
+  if ((zname = in2ex(iname)) == NULL) {
+    ret = ZE_MEM;
+    goto cleanup;
+  }
 #ifdef UNICODE_SUPPORT
   /* Convert name to display or OEM name */
   oname = local_to_display_string(iname);
+  if (oname == NULL) {
+    ret = ZE_MEM;
+    goto cleanup;
+  }
 #else
-  if ((oname = malloc(strlen(zname) + 1)) == NULL)
-    return ZE_MEM;
+  if ((oname = malloc(strlen(zname) + 1)) == NULL) {
+    ret = ZE_MEM;
+    goto cleanup;
+  }
   strcpy(oname, zname);
 #endif
-  if (undosm == NULL)
+  if (undosm == NULL) {
     undosm = zname;
+  }
   if ((z = zsearch(zname)) != NULL) {
     if (pcount && !filter(undosm, casesensitive)) {
       /* Do not clear z->mark if "exclude", because, when "dosify || !pathput"
@@ -574,44 +598,56 @@ int newname(name, isdir, casesensitive)
        */
       if (verbose)
         fprintf(mesg, "excluding %s\n", oname);
-      free((zvoid *)iname);
-      free((zvoid *)zname);
-    } else {
-      z->mark = 1;
-      if ((z->name = malloc(strlen(name) + 1 + PAD)) == NULL) {
-        if (undosm != zname)
-          free((zvoid *)undosm);
-        free((zvoid *)iname);
-        free((zvoid *)zname);
-        return ZE_MEM;
+      ret = ZE_OK;
+      goto cleanup;
+    }
+
+    z->mark = 1;
+    if (z->name == NULL || strcmp(z->name, name) != 0) {
+      char *new_name = malloc(strlen(name) + 1 + PAD);
+      if (new_name == NULL) {
+        ret = ZE_MEM;
+        goto cleanup;
       }
-      strcpy(z->name, name);
-      z->oname = oname;
-      z->dosflag = dosflag;
+      strcpy(new_name, name);
+      if (z->name != NULL)
+        free((zvoid *)z->name);
+      z->name = new_name;
+    }
+    if (z->oname != NULL)
+      free((zvoid *)z->oname);
+    z->oname = oname;
+    oname = NULL;
+    z->dosflag = dosflag;
 
 #ifdef FORCE_NEWNAME
-      free((zvoid *)(z->iname));
-      z->iname = iname;
+    free((zvoid *)(z->iname));
+    z->iname = iname;
+    iname = NULL;
 #else
-      /* Better keep the old name. Useful when updating on MSDOS a zip file
-       * made on Unix.
-       */
-      free((zvoid *)iname);
-      free((zvoid *)zname);
+    free((zvoid *)iname);
+    iname = NULL;
 #endif /* ? FORCE_NEWNAME */
-    }
-    if (name == label) {
-       label = z->name;
-    }
-  } else if (pcount == 0 || filter(undosm, casesensitive)) {
+    free((zvoid *)zname);
+    zname = NULL;
 
-    /* Check that we are not adding the zip file to itself. This
-     * catches cases like "zip -m foo ../dir/foo.zip".
-     */
+    if (name == label)
+      label = z->name;
+
+    ret = ZE_OK;
+    goto cleanup;
+  }
+
+  if (!(pcount == 0 || filter(undosm, casesensitive))) {
+    ret = ZE_OK;
+    goto cleanup;
+  }
+
+  /* Check that we are not adding the zip file to itself. This
+   * catches cases like "zip -m foo ../dir/foo.zip".
+   */
 #ifndef CMS_MVS
-/* Version of stat() for CMS/MVS isn't complete enough to see if       */
-/* files match.  Just let ZIP.C compare the filenames.  That's good    */
-/* enough for CMS anyway since there aren't paths to worry about.      */
+  {
     z_stat statb;      /* now use structure z_stat and function zstat globally 7/24/04 EG */
 
     if (zipstate == -1)
@@ -630,53 +666,67 @@ int newname(name, isdir, casesensitive)
       /* Don't compare a_time since we are reading the file */
          if (verbose)
            fprintf(mesg, "file matches zip file -- skipping\n");
-         if (undosm != zname)
-           free((zvoid *)zname);
-         if (undosm != iname)
-           free((zvoid *)undosm);
-         free((zvoid *)iname);
-         free(oname);
-         return ZE_OK;
-    }
-#endif  /* CMS_MVS */
-
-    /* allocate space and add to list */
-    if ((f = (struct flist far *)farmalloc(sizeof(struct flist))) == NULL ||
-        fcount + 1 < fcount ||
-        (f->name = malloc(strlen(name) + 1 + PAD)) == NULL)
-    {
-      if (f != NULL)
-        farfree((zvoid far *)f);
-      if (undosm != zname)
-        free((zvoid *)undosm);
-      free((zvoid *)iname);
-      free((zvoid *)zname);
-      free(oname);
-      return ZE_MEM;
-    }
-    strcpy(f->name, name);
-    f->iname = iname;
-    f->zname = zname;
-#ifdef UNICODE_SUPPORT
-    /* Unicode */
-    f->uname = local_to_utf8_string(iname);
-
-#endif
-    f->oname = oname;
-    f->dosflag = dosflag;
-
-    *fnxt = f;
-    f->lst = fnxt;
-    f->nxt = NULL;
-    fnxt = &f->nxt;
-    fcount++;
-    if (name == label) {
-      label = f->name;
+         ret = ZE_OK;
+         goto cleanup;
     }
   }
-  if (undosm != zname)
+#endif  /* CMS_MVS */
+
+  if ((f = (struct flist far *)farmalloc(sizeof(struct flist))) == NULL ||
+      fcount + 1 < fcount ||
+      (f->name = malloc(strlen(name) + 1 + PAD)) == NULL)
+  {
+    if (f != NULL)
+      farfree((zvoid far *)f);
+    ret = ZE_MEM;
+    goto cleanup;
+  }
+  strcpy(f->name, name);
+  f->iname = iname;
+#ifdef UNICODE_SUPPORT
+  /* Unicode */
+  f->uname = local_to_utf8_string(iname);
+#endif
+  iname = NULL;
+  f->zname = zname;
+  zname = NULL;
+  f->oname = oname;
+  oname = NULL;
+  f->dosflag = dosflag;
+
+  *fnxt = f;
+  f->lst = fnxt;
+  f->nxt = NULL;
+  fnxt = &f->nxt;
+  fcount++;
+  if (name == label)
+    label = f->name;
+
+  ret = ZE_OK;
+
+cleanup:
+  if (undosm_tmp != NULL) {
+    free((zvoid *)undosm_tmp);
+    undosm_tmp = NULL;
+  }
+  if (undosm_owned && undosm != NULL) {
     free((zvoid *)undosm);
-  return ZE_OK;
+    undosm = NULL;
+    undosm_owned = 0;
+  }
+  if (oname != NULL) {
+    free(oname);
+    oname = NULL;
+  }
+  if (zname != NULL) {
+    free((zvoid *)zname);
+    zname = NULL;
+  }
+  if (iname != NULL) {
+    free((zvoid *)iname);
+    iname = NULL;
+  }
+  return ret;
 }
 
 ulg dostime(y, n, d, h, m, s)
