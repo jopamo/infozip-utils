@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Check out repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -36,32 +36,34 @@ jobs:
             exit 1
           fi
 
-      - name: Configure build with Meson (Clang + sanitizers)
+      # sanitizer build (clang + asan/ubsan)
+      - name: Configure (asan/ubsan)
         run: |
-          CC=clang meson setup builddir \
+          CC=clang meson setup build-sanitize \
             --buildtype=debug \
-            -Db_sanitize=address,undefined \
-            -Db_lundef=false
+            -Ddebug_sanitize=true
 
-      - name: Build
-        run: meson compile -C builddir
+      - name: Build (asan/ubsan)
+        run: meson compile -C build-sanitize
 
-      - name: Test
+      - name: Test (asan/ubsan)
         run: |
-          meson test -C builddir || (cat builddir/meson-logs/testlog.txt && false)
+          meson test -C build-sanitize --timeout-multiplier 5 \
+            || (cat build-sanitize/meson-logs/testlog.txt && false)
 
-      - name: Configure build for Valgrind run
+      # separate build without sanitizers, so Valgrind isn't fighting ASan
+      - name: Configure (valgrind)
         run: |
           meson setup build-valgrind \
             --buildtype=debug \
-            -Db_sanitize=none
+            -Ddebug_sanitize=false
 
-      - name: Build (Valgrind)
+      - name: Build (valgrind)
         run: meson compile -C build-valgrind
 
       - name: Test under Valgrind
-        run: >
-          meson test -C build-valgrind
-          --wrap='valgrind --leak-check=full --show-leak-kinds=all
-          --errors-for-leak-kinds=all --error-exitcode=1'
-          || (cat build-valgrind/meson-logs/testlog.txt && false)
+        run: |
+          meson test -C build-valgrind \
+            --timeout-multiplier 10 \
+            --wrap='valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=all --error-exitcode=1' \
+            || (cat build-valgrind/meson-logs/testlog.txt && false)
