@@ -88,7 +88,6 @@ typedef struct stat z_stat;
 #endif
 #else
 #include <time.h>
-struct tm *gmtime(), *localtime();
 #endif
 
 #if (defined(BSD4_4) || (defined(SYSV) && defined(MODERN)))
