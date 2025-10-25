@@ -4724,6 +4724,8 @@ char **argv;            /* command line tokens */
           v = z->nxt;                     /* delete entry from list */
           free((zvoid *)(z->iname));
           free((zvoid *)(z->zname));
+          if (z->name != z->zname && z->name != NULL)
+            free((zvoid *)(z->name));
           free(z->oname);
 #ifdef UNICODE_SUPPORT
           if (z->uname) free(z->uname);
@@ -4775,6 +4777,8 @@ char **argv;            /* command line tokens */
         v = z->nxt;                     /* delete entry from list */
         free((zvoid *)(z->iname));
         free((zvoid *)(z->zname));
+        if (z->name != z->zname && z->name != NULL)
+          free((zvoid *)(z->name));
         free(z->oname);
 #ifdef UNICODE_SUPPORT
         if (z->uname) free(z->uname);
@@ -4797,6 +4801,8 @@ char **argv;            /* command line tokens */
         v = z->nxt;                     /* delete entry from list */
         free((zvoid *)(z->iname));
         free((zvoid *)(z->zname));
+        if (z->name != z->zname && z->name != NULL)
+          free((zvoid *)(z->name));
         free(z->oname);
 #ifdef UNICODE_SUPPORT
         if (z->uname) free(z->uname);
