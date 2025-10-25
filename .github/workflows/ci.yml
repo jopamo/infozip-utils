@@ -1,0 +1,55 @@
+name: CI with Clang + Sanitizers
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # Install Clang, Meson, Ninja, and Valgrind for leak checking
+          sudo apt-get install -y clang meson ninja-build valgrind
+
+      - name: Configure build with Meson (Clang + sanitizers)
+        run: |
+          # Override compiler and enable ASan + UBSan for better coverage
+          CC=clang meson setup builddir \
+            --buildtype=debug \
+            -Db_sanitize=address,undefined \
+            -Db_lundef=false
+
+      - name: Build
+        run: meson compile -C builddir
+
+      - name: Test
+        run: |
+          meson test -C builddir || (cat builddir/meson-logs/testlog.txt && false)
+
+      - name: Configure build for Valgrind run
+        run: |
+          meson setup build-valgrind \
+            --buildtype=debug \
+            -Db_sanitize=none
+
+      - name: Build (Valgrind)
+        run: meson compile -C build-valgrind
+
+      - name: Test under Valgrind
+        run: >
+          meson test -C build-valgrind
+          --wrap='valgrind --leak-check=full --show-leak-kinds=all
+          --errors-for-leak-kinds=all --error-exitcode=1'
+          || (cat build-valgrind/meson-logs/testlog.txt && false)
+
+      - name: Run repository test script
+        run: ./test.sh
